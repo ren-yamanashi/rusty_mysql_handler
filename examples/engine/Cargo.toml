@@ -1,0 +1,17 @@
+[package]
+name = "engine"
+version = "0.1.0"
+description = "Minimal storage engine for testing mysql-handler"
+authors = ["ren-yamanashi"]
+license = "GPL-2.0-only"
+edition = "2024"
+rust-version = "1.85"
+
+[lib]
+crate-type = ["staticlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+mysql-handler = { path = "../.." }

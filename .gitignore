@@ -1,0 +1,15 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# C++ build
+/build/
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+
+# Agent
+.claude/

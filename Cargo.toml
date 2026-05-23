@@ -1,0 +1,42 @@
+[package]
+name = "mysql-handler"
+version = "0.1.0"
+description = "Rust bindings for the MySQL handler"
+readme = "README.md"
+authors = ["ren-yamanashi"]
+license = "GPL-2.0-only"
+edition = "2024"
+repository = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+rust-version = "1.85"
+
+[workspace]
+members = ["examples/engine"]
+
+[build-dependencies]
+bindgen = "0.71"
+
+[lints]
+workspace = true
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unsafe_code = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+undocumented_unsafe_blocks = "deny"
+redundant_pub_crate = "warn"
+
+[profile.release]
+lto = true
+codegen-units = 1

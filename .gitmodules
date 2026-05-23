@@ -1,0 +1,5 @@
+[submodule "mysql-server"]
+	path = mysql-server
+	url = https://github.com/mysql/mysql-server.git
+	branch = 8.4
+	shallow = true
