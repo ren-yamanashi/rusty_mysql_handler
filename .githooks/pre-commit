@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+mapfile -t files < <(git diff --cached --name-only --diff-filter=ACM)
+"$REPO_ROOT/scripts/check-license.sh" --fix "${files[@]}"
