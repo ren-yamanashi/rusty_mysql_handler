@@ -45,7 +45,7 @@ $(MYSQL_BUILD_DIR)/include/my_config.h:
 	cd $(MYSQL_BUILD_DIR) && cmake $(MYSQL_SOURCE_DIR) \
 		-DDOWNLOAD_BOOST=1 \
 		-DWITH_BOOST=$(MYSQL_SOURCE_DIR)/extra/boost \
-		-DWITHOUT_SERVER=OFF \
+		-DWITHOUT_SERVER=ON \
 		-DCMAKE_BUILD_TYPE=Release
 
 mysql-configure: $(MYSQL_BUILD_DIR)/include/my_config.h ## Generate MySQL build headers

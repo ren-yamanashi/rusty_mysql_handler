@@ -4,6 +4,7 @@
 
 # C++ build
 /build/
+compile_commands.json
 
 # IDE
 .vscode/
@@ -13,3 +14,6 @@
 
 # Agent
 .claude/
+
+# Cache
+.cache/
