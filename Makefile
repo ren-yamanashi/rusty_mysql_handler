@@ -72,10 +72,11 @@ lint: ## Run clippy
 fmt: ## Format Rust code
 	@cargo fmt --all
 
-check: ## Run check + clippy + fmt check
+check: ## Run check + clippy + fmt check + license check
 	@cargo check --workspace
 	@cargo clippy --workspace -- -D warnings
 	@cargo fmt --all --check
+	@bash scripts/check-license.sh
 
 test: ## Run tests
 	@cargo test --workspace
