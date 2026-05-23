@@ -24,11 +24,10 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")"
-cd ../
+cd "$(dirname "$0")/.."
 
-LICENSE_TEMPLATE="scripts/license-header.txt"
-LICENSE_PATTERN=$(head -1 "$LICENSE_TEMPLATE")
+readonly LICENSE_TEMPLATE="scripts/license-header.txt"
+readonly LICENSE_PATTERN=$(head -1 "$LICENSE_TEMPLATE")
 
 comment_prefix() {
   case "$1" in
@@ -49,20 +48,36 @@ build_header() {
   done < "$LICENSE_TEMPLATE"
 }
 
-missing=()
+fix=false
+files=()
+for arg in "$@"; do
+  if [[ "$arg" == "--fix" ]]; then
+    fix=true
+  else
+    files+=("$arg")
+  fi
+done
 
-while IFS= read -r file; do
+if [[ ${#files[@]} -eq 0 ]]; then
+  while IFS= read -r f; do
+    files+=("$f")
+  done < <(git ls-files)
+fi
+
+missing=()
+for file in "${files[@]}"; do
   [[ -z "$file" ]] && continue
   [[ -z $(comment_prefix "$file") ]] && continue
+  [[ ! -f "$file" ]] && continue
 
-  if ! git show ":$file" 2>/dev/null | head -n 15 | grep -q "$LICENSE_PATTERN"; then
+  if ! head -n 15 "$file" | grep -qF "$LICENSE_PATTERN"; then
     missing+=("$file")
   fi
-done < <(git diff --cached --name-only --diff-filter=ACM)
+done
 
 [[ ${#missing[@]} -eq 0 ]] && exit 0
 
-if [[ "${1:-}" != "--fix" ]]; then
+if ! "$fix"; then
   echo "ERROR: GPL-2.0 license header missing:"
   printf "  %s\n" "${missing[@]}"
   exit 1
@@ -71,7 +86,7 @@ fi
 for file in "${missing[@]}"; do
   license_block=$(build_header "$(comment_prefix "$file")")
 
-  if head -1 "$file" | grep -q '^#!'; then
+  if [[ $(head -c 2 "$file") == '#!' ]]; then
     { head -1 "$file"; echo "$license_block"; echo ""; tail -n +2 "$file"; } > "$file.tmp"
   else
     { echo "$license_block"; echo ""; cat "$file"; } > "$file.tmp"
