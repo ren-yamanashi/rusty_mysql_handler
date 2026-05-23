@@ -178,15 +178,20 @@ Source: `mysql-server/sql/handler.h:2734`
 | 91 | `get_tablespace_statistics` | Get tablespace statistics |
 | 92 | `post_ddl` | Post-DDL callback |
 | 93 | `post_recover` | Post-recovery callback |
-| 94 | `clone_interface` | Clone data transfer interface |
+
+## Clone Interface
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `clone_interface` | `Clone_interface_t` | Clone data transfer interface (struct with `clone_capability`, `clone_begin`, `clone_copy`, `clone_ack`, `clone_end`, `clone_apply_begin`, `clone_apply`, `clone_apply_end`) |
 
 ## Page Tracking
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| `page_track` | `Page_track_t` | Page tracking interface (struct with start/stop/purge/get_page_ids/get_num_page_ids/get_status) |
+| `page_track` | `Page_track_t` | Page tracking interface (struct with `start`, `stop`, `purge`, `get_page_ids`, `get_num_page_ids`, `get_status`) |
 
-## Total: 94 callbacks + `page_track` struct
+## Total: 93 callbacks + `clone_interface` struct + `page_track` struct
 
 Only `create` is required. All others default to NULL.
 

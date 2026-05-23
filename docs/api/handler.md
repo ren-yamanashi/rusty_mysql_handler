@@ -20,8 +20,8 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 | 7 | `truncate` | 6960 | D | `int(dd::Table*)` | Truncate table |
 | 8 | `change_table_ptr` | 5169 | D | `void(TABLE*, TABLE_SHARE*)` | Update internal table/share pointers |
 | 9 | `get_se_private_data` | 7055 | D | `bool(dd::Table*, bool)` | Set SE private data in DD |
-| 10 | `get_extra_columns_and_keys` | 7078 | D | `int(const HA_CREATE_INFO*, const List<Create_field>*, uint, dd::Table*)` | Add hidden columns/keys |
-| 11 | `upgrade_table` | 6806 | D | `bool(THD*, const char*, TABLE*, dd::Table*)` | Upgrade table for new version |
+| 10 | `get_extra_columns_and_keys` | 7078 | D | `int(const HA_CREATE_INFO*, const List<Create_field>*, const KEY*, uint, dd::Table*)` | Add hidden columns/keys |
+| 11 | `upgrade_table` | 6806 | D | `bool(THD*, const char*, const char*, dd::Table*)` | Upgrade table for new version |
 
 ## Full Table Scan
 
@@ -40,9 +40,9 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 | - | ------ | ---- | -- | --------- | ----------- |
 | 18 | `index_init` | 6664 | D | `int(uint idx, bool sorted)` | Begin index scan |
 | 19 | `index_end` | 6668 | D | `int()` | End index scan |
-| 20 | `index_read` | 6878 | D | `int(uchar*, const uchar*, uint, ha_rkey_function)` | Index read (raw key) |
-| 21 | `index_read_map` | 5617 | D | `int(uchar*, const uchar*, key_part_map, ha_rkey_function)` | Index read (key part map) |
-| 22 | `index_read_idx_map` | 5629 | D | `int(uchar*, uint, const uchar*, key_part_map, ha_rkey_function)` | Index read on specific index |
+| 20 | `index_read` | 6878 | D | `int(uchar*, const uchar*, uint, enum ha_rkey_function)` | Index read (raw key) |
+| 21 | `index_read_map` | 5617 | D | `int(uchar*, const uchar*, key_part_map, enum ha_rkey_function)` | Index read (key part map) |
+| 22 | `index_read_idx_map` | 5629 | D | `int(uchar*, uint, const uchar*, key_part_map, enum ha_rkey_function)` | Index read on specific index |
 | 23 | `index_read_last` | 6884 | D | `int(uchar*, const uchar*, uint)` | Read last matching key |
 | 24 | `index_read_last_map` | 5657 | D | `int(uchar*, const uchar*, key_part_map)` | Read last (key part map) |
 | 25 | `index_next` | 5638 | D | `int(uchar*)` | Next in index order |
@@ -95,14 +95,14 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
 | 54 | `parallel_scan_init` | 4981 | D | `int(void*&, size_t*, bool, size_t)` | Init parallel scan |
-| 55 | `parallel_scan` | 5046 | D | `int(void*, void**, Reader::Init_fn, Reader::Row_fn, Reader::End_fn)` | Execute parallel scan |
+| 55 | `parallel_scan` | 5046 | D | `int(void*, void**, Load_init_cbk, Load_cbk, Load_end_cbk)` | Execute parallel scan |
 | 56 | `parallel_scan_end` | 5058 | D | `void(void*)` | End parallel scan |
 
 ## Sampling
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 57 | `sample_init` | 6822 | D | `int(void*&, double, int, enum_sampling_method)` | Init sampling |
+| 57 | `sample_init` | 6822 | D | `int(void*&, double, int, enum_sampling_method, const bool)` | Init sampling |
 | 58 | `sample_next` | 6831 | D | `int(void*, uchar*)` | Next sample row |
 | 59 | `sample_end` | 6836 | D | `int(void*)` | End sampling |
 
@@ -119,8 +119,8 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 64 | `multi_range_read_info_const` | 5397 | D | `ha_rows(uint, RANGE_SEQ_IF*, void*, uint, uint*, ha_rows*, Cost_estimate*)` | MRR cost estimate (const) |
-| 65 | `multi_range_read_info` | 5400 | D | `ha_rows(uint, uint, uint, uint*, Cost_estimate*)` | MRR cost estimate |
+| 64 | `multi_range_read_info_const` | 5397 | D | `ha_rows(uint, RANGE_SEQ_IF*, void*, uint, uint*, uint*, bool*, Cost_estimate*)` | MRR cost estimate (const) |
+| 65 | `multi_range_read_info` | 5400 | D | `ha_rows(uint, uint, uint, uint*, uint*, Cost_estimate*)` | MRR cost estimate |
 | 66 | `multi_range_read_init` | 5403 | D | `int(RANGE_SEQ_IF*, void*, uint, uint, HANDLER_BUFFER*)` | Init MRR scan |
 | 67 | `multi_range_read_next` | 5457 | D | `int(char**)` | Next MRR result |
 
@@ -144,7 +144,7 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 | 81 | `primary_key_is_clustered` | 6094 | D | `bool() const` | Is PK clustered? |
 | 82 | `get_real_row_type` | 5530 | D | `enum row_type(const HA_CREATE_INFO*) const` | Actual row format |
 | 83 | `get_default_index_algorithm` | 5543 | D | `enum ha_key_alg() const` | Default index algorithm |
-| 84 | `is_index_algorithm_supported` | 5554 | D | `bool(ha_key_alg) const` | Is index algo supported? |
+| 84 | `is_index_algorithm_supported` | 5554 | D | `bool(enum ha_key_alg) const` | Is index algo supported? |
 | 85 | `extra_rec_buf_length` | 5416 | D | `uint() const` | Extra record buffer space needed |
 | 86 | `get_memory_buffer_size` | 5313 | D | `longlong() const` | Memory buffer size |
 | 87 | `is_record_buffer_wanted` | 6800 | D | `bool(ha_rows*) const` | Wants record buffer? |
@@ -173,7 +173,7 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 103 | `store_lock` | 6083 | PV | `THR_LOCK_DATA**(THD*, THR_LOCK_DATA**, thr_lock_type)` | Provide lock data |
+| 103 | `store_lock` | 6083 | PV | `THR_LOCK_DATA**(THD*, THR_LOCK_DATA**, enum thr_lock_type)` | Provide lock data |
 | 104 | `external_lock` | 6763 | D | `int(THD*, int)` | Statement-level lock/unlock |
 | 105 | `lock_count` | 6050 | D | `uint() const` | Number of locks needed |
 | 106 | `unlock_row` | 5908 | D | `void()` | Unlock current row |
@@ -201,7 +201,7 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 | - | ------ | ---- | -- | --------- | ----------- |
 | 114 | `print_error` | 5135 | D | `void(int, myf)` | Print error message |
 | 115 | `get_error_message` | 5136 | D | `bool(int, String*)` | Get error message text |
-| 116 | `get_foreign_dup_key` | 5156 | D | `bool(char*, size_t, char*, size_t)` | FK duplicate key info |
+| 116 | `get_foreign_dup_key` | 5156 | D | `bool(char*, uint, char*, uint)` | FK duplicate key info |
 | 117 | `is_ignorable_error` | 5437 | D | `bool(int)` | Can error be ignored? |
 | 118 | `is_fatal_error` | 5454 | D | `bool(int)` | Is error fatal? |
 
@@ -209,8 +209,8 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 119 | `extra` | 5802 | D | `int(ha_extra_function)` | Server hint to engine |
-| 120 | `extra_opt` | 5807 | D | `int(ha_extra_function, ulong)` | Server hint with cache size |
+| 119 | `extra` | 5802 | D | `int(enum ha_extra_function)` | Server hint to engine |
+| 120 | `extra_opt` | 5807 | D | `int(enum ha_extra_function, ulong)` | Server hint with cache size |
 | 121 | `reset` | 6727 | D | `int()` | Reset state between statements |
 | 122 | `column_bitmaps_signal` | 5565 | D | `void()` | Column bitmap changed |
 | 123 | `init_table_handle_for_HANDLER` | 5980 | D | `void()` | Init for HANDLER command |

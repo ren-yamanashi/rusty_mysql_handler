@@ -2,7 +2,7 @@
 
 Source: `mysql-server/sql/handler.h`, `mysql-server/sql/lock.cc`, `mysql-server/sql/handler.cc`
 
-See also: [handler](handler.md) (158 virtual methods), [handlerton](handlerton.md) (94 callbacks)
+See also: [handler](handler.md) (158 virtual methods), [handlerton](handlerton.md) (93 callbacks)
 
 ## Statement Lifecycle (outer framing)
 
@@ -737,6 +737,6 @@ Key flags and when they are sent:
 
 | Interface | Total | Pure Virtual / Required | With Default |
 | --------- | ----- | ----------------------- | ------------ |
-| handlerton | 94 | 1 (`create`) | 93 |
+| handlerton | 93 | 1 (`create`) | 92 |
 | handler | 158 | 12 | 146 |
-| **Total** | **252** | **13** | **239** |
+| **Total** | **251** | **13** | **238** |
