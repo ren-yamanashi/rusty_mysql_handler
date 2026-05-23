@@ -14,6 +14,9 @@ Source: `mysql-server/sql/handler.h:2734`
 | `slot` | `uint` | Per-connection data slot (set by MySQL) |
 | `savepoint_offset` | `uint` | Size of per-savepoint data |
 | `flags` | `uint32` | Engine flags (e.g. `HTON_CAN_RECREATE`) |
+| `foreign_keys_flags` | `uint32` | FK support detail flags |
+| `fk_name_suffix` | `LEX_CSTRING` | Suffix for auto-generated FK names |
+| `secondary_engine_flags` | `SecondaryEngineFlags` | Hypergraph optimizer support flags |
 | `file_extensions` | `const char**` | NULL-terminated array of file extensions |
 
 ## Callbacks — Core
@@ -108,29 +111,80 @@ Source: `mysql-server/sql/handler.h:2734`
 | 56 | `sdi_set` | Set SDI data |
 | 57 | `sdi_delete` | Delete SDI entry |
 
+## Callbacks — Logging
+
+| # | Callback | Description |
+| - | -------- | ----------- |
+| 58 | `lock_hton_log` | Lock engine log |
+| 59 | `unlock_hton_log` | Unlock engine log |
+| 60 | `collect_hton_log_info` | Collect engine log info |
+
+## Callbacks — Foreign Keys
+
+| # | Callback | Description |
+| - | -------- | ----------- |
+| 61 | `check_fk_column_compat` | Check FK column compatibility |
+
+## Callbacks — Secondary Engine
+
+| # | Callback | Description |
+| - | -------- | ----------- |
+| 62 | `prepare_secondary_engine` | Prepare statement for secondary engine |
+| 63 | `optimize_secondary_engine` | Optimize for secondary engine |
+| 64 | `compare_secondary_engine_cost` | Compare join cost in secondary engine |
+| 65 | `external_engine_explain_check` | Check if table loaded for EXPLAIN |
+| 66 | `secondary_engine_modify_access_path_cost` | Modify access path cost |
+| 67 | `get_secondary_engine_offload_or_exec_fail_reason` | Get offload/exec fail reason |
+| 68 | `find_secondary_engine_offload_fail_reason` | Find offload fail reason |
+| 69 | `set_secondary_engine_offload_fail_reason` | Set offload fail reason |
+| 70 | `secondary_engine_check_optimizer_request` | Check optimizer request |
+| 71 | `secondary_engine_pre_prepare_hook` | Pre-prepare hook |
+
+## Callbacks — Transaction Hooks
+
+| # | Callback | Description |
+| - | -------- | ----------- |
+| 72 | `se_before_commit` | Hook before commit |
+| 73 | `se_after_commit` | Hook after commit |
+| 74 | `se_before_rollback` | Hook before rollback |
+
+## Callbacks — Event Notifications
+
+| # | Callback | Description |
+| - | -------- | ----------- |
+| 75 | `notify_after_select` | Notification after SELECT |
+| 76 | `notify_create_table` | Notification on CREATE TABLE |
+| 77 | `notify_drop_table` | Notification on DROP TABLE |
+
 ## Callbacks — Misc
 
 | # | Callback | Description |
 | - | -------- | ----------- |
-| 58 | `push_to_engine` | Push conditions to engine |
-| 59 | `is_dict_readonly` | Is dictionary read-only? |
-| 60 | `rm_tmp_tables` | Remove temporary tables |
-| 61 | `get_cost_constants` | Provide cost constants |
-| 62 | `replace_native_transaction_in_thd` | Replace native transaction |
-| 63 | `notify_exclusive_mdl` | Exclusive MDL notification |
-| 64 | `notify_alter_table` | ALTER TABLE notification |
-| 65 | `notify_rename_table` | RENAME TABLE notification |
-| 66 | `notify_truncate_table` | TRUNCATE notification |
-| 67 | `rotate_encryption_master_key` | Rotate encryption key |
-| 68 | `redo_log_set_state` | Set redo log state |
-| 69 | `get_table_statistics` | Get table statistics |
-| 70 | `get_index_column_cardinality` | Get index cardinality |
-| 71 | `get_tablespace_statistics` | Get tablespace statistics |
-| 72 | `post_ddl` | Post-DDL callback |
-| 73 | `post_recover` | Post-recovery callback |
-| 74 | `clone_interface` | Clone data transfer interface |
+| 78 | `push_to_engine` | Push conditions to engine |
+| 79 | `is_dict_readonly` | Is dictionary read-only? |
+| 80 | `rm_tmp_tables` | Remove temporary tables |
+| 81 | `get_cost_constants` | Provide cost constants |
+| 82 | `replace_native_transaction_in_thd` | Replace native transaction |
+| 83 | `notify_exclusive_mdl` | Exclusive MDL notification |
+| 84 | `notify_alter_table` | ALTER TABLE notification |
+| 85 | `notify_rename_table` | RENAME TABLE notification |
+| 86 | `notify_truncate_table` | TRUNCATE notification |
+| 87 | `rotate_encryption_master_key` | Rotate encryption key |
+| 88 | `redo_log_set_state` | Set redo log state |
+| 89 | `get_table_statistics` | Get table statistics |
+| 90 | `get_index_column_cardinality` | Get index cardinality |
+| 91 | `get_tablespace_statistics` | Get tablespace statistics |
+| 92 | `post_ddl` | Post-DDL callback |
+| 93 | `post_recover` | Post-recovery callback |
+| 94 | `clone_interface` | Clone data transfer interface |
 
-## Total: 74 callbacks
+## Page Tracking
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `page_track` | `Page_track_t` | Page tracking interface (struct with start/stop/purge/get_page_ids/get_num_page_ids/get_status) |
+
+## Total: 94 callbacks + `page_track` struct
 
 Only `create` is required. All others default to NULL.
 

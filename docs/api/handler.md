@@ -13,7 +13,7 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 | - | ------ | ---- | -- | --------- | ----------- |
 | 1 | `open` | 6661 | PV | `int(const char *name, int mode, uint test_if_locked, const dd::Table*)` | Open a table |
 | 2 | `close` | 6663 | PV | `int()` | Close a table |
-| 3 | `create` | 7052 | D | `int(const char *name, TABLE*, HA_CREATE_INFO*, dd::Table*)` | Create a table |
+| 3 | `create` | 7052 | PV | `int(const char *name, TABLE*, HA_CREATE_INFO*, dd::Table*)` | Create a table |
 | 4 | `delete_table` | 6650 | D | `int(const char *name, const dd::Table*)` | Drop a table |
 | 5 | `rename_table` | 6630 | D | `int(const char *from, const char *to, const dd::Table*, dd::Table*)` | Rename a table |
 | 6 | `drop_table` | 7031 | D | `void(const char *name)` | Drop table (called from handler) |
@@ -84,198 +84,224 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 | - | ------ | ---- | -- | --------- | ----------- |
 | 47 | `bulk_load_check` | 5063 | D | `bool(THD*) const` | Check if bulk load is possible |
 | 48 | `bulk_load_available_memory` | 5070 | D | `size_t(THD*) const` | Available memory for bulk load |
-| 49 | `bulk_load_execute` | 5094 | D | `int(THD*, size_t, const uchar*, size_t*)` | Execute bulk load |
-| 50 | `bulk_load_end` | 5109 | D | `int(THD*, bool)` | End bulk load |
-| 51 | `load_table` | 6848 | D | `int(const TABLE&, bool*)` | Load table into engine |
-| 52 | `unload_table` | 6868 | D | `int(const char*, const char*, bool)` | Unload table from engine |
+| 49 | `bulk_load_begin` | 5080 | D | `void*(THD*, size_t, size_t, size_t)` | Begin bulk load |
+| 50 | `bulk_load_execute` | 5094 | D | `int(THD*, void*, size_t, const Rows_mysql&, Bulk_load::Stat_callbacks&)` | Execute bulk load |
+| 51 | `bulk_load_end` | 5109 | D | `int(THD*, void*, bool)` | End bulk load |
+| 52 | `load_table` | 6848 | D | `int(const TABLE&, bool*)` | Load table into engine |
+| 53 | `unload_table` | 6868 | D | `int(const char*, const char*, bool)` | Unload table from engine |
 
 ## Parallel Scan
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 53 | `parallel_scan_init` | 4981 | D | `int(void*&, size_t*, bool, size_t)` | Init parallel scan |
-| 54 | `parallel_scan` | 5046 | D | `int(void*, void**, Reader::Init_fn, Reader::Row_fn, Reader::End_fn)` | Execute parallel scan |
-| 55 | `parallel_scan_end` | 5058 | D | `void(void*)` | End parallel scan |
+| 54 | `parallel_scan_init` | 4981 | D | `int(void*&, size_t*, bool, size_t)` | Init parallel scan |
+| 55 | `parallel_scan` | 5046 | D | `int(void*, void**, Reader::Init_fn, Reader::Row_fn, Reader::End_fn)` | Execute parallel scan |
+| 56 | `parallel_scan_end` | 5058 | D | `void(void*)` | End parallel scan |
 
 ## Sampling
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 56 | `sample_init` | 6822 | D | `int(void*&, double, int, enum_sampling_method)` | Init sampling |
-| 57 | `sample_next` | 6831 | D | `int(void*, uchar*)` | Next sample row |
-| 58 | `sample_end` | 6836 | D | `int(void*)` | End sampling |
+| 57 | `sample_init` | 6822 | D | `int(void*&, double, int, enum_sampling_method)` | Init sampling |
+| 58 | `sample_next` | 6831 | D | `int(void*, uchar*)` | Next sample row |
+| 59 | `sample_end` | 6836 | D | `int(void*)` | End sampling |
 
 ## Full-Text Search
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 59 | `ft_init` | 5682 | D | `int()` | Init full-text search |
-| 60 | `ft_read` | 5697 | D | `int(uchar*)` | Read next full-text result |
+| 60 | `ft_init` | 5682 | D | `int()` | Init full-text search |
+| 61 | `ft_init_ext` | 5683 | D | `FT_INFO*(uint, uint, String*)` | Init FT with flags |
+| 62 | `ft_init_ext_with_hints` | 5684 | D | `FT_INFO*(uint, String*, Ft_hints*)` | Init FT with hints |
+| 63 | `ft_read` | 5697 | D | `int(uchar*)` | Read next full-text result |
 
 ## Multi-Range Read (MRR)
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 61 | `multi_range_read_info_const` | 5397 | D | `ha_rows(uint, RANGE_SEQ_IF*, void*, uint, uint*, ha_rows*, Cost_estimate*)` | MRR cost estimate (const) |
-| 62 | `multi_range_read_info` | 5400 | D | `ha_rows(uint, uint, uint, uint*, Cost_estimate*)` | MRR cost estimate |
-| 63 | `multi_range_read_init` | 5403 | D | `int(RANGE_SEQ_IF*, void*, uint, uint, HANDLER_BUFFER*)` | Init MRR scan |
-| 64 | `multi_range_read_next` | 5457 | D | `int(char**)` | Next MRR result |
+| 64 | `multi_range_read_info_const` | 5397 | D | `ha_rows(uint, RANGE_SEQ_IF*, void*, uint, uint*, ha_rows*, Cost_estimate*)` | MRR cost estimate (const) |
+| 65 | `multi_range_read_info` | 5400 | D | `ha_rows(uint, uint, uint, uint*, Cost_estimate*)` | MRR cost estimate |
+| 66 | `multi_range_read_init` | 5403 | D | `int(RANGE_SEQ_IF*, void*, uint, uint, HANDLER_BUFFER*)` | Init MRR scan |
+| 67 | `multi_range_read_next` | 5457 | D | `int(char**)` | Next MRR result |
 
 ## Engine Properties & Metadata
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 65 | `table_type` | 5984 | PV | `const char*() const` | Engine name string |
-| 66 | `table_flags` | 6728 | PV | `Table_flags() const` | Engine capability bitmap |
-| 67 | `index_flags` | 5986 | PV | `ulong(uint, uint, bool) const` | Per-index capabilities |
-| 68 | `max_supported_record_length` | 6004 | D | `uint() const` | Max row size |
-| 69 | `max_supported_keys` | 6005 | D | `uint() const` | Max number of indexes |
-| 70 | `max_supported_key_parts` | 6006 | D | `uint() const` | Max key parts |
-| 71 | `max_supported_key_length` | 6007 | D | `uint() const` | Max key length in bytes |
-| 72 | `max_supported_key_part_length` | 6008 | D | `uint(HA_CREATE_INFO*) const` | Max single key part length |
-| 73 | `min_record_length` | 6012 | D | `uint(uint) const` | Min row size |
-| 74 | `low_byte_first` | 6016 | D | `bool() const` | Little-endian storage? |
-| 75 | `checksum` | 6017 | D | `ha_checksum() const` | Table checksum |
-| 76 | `is_crashed` | 6026 | D | `bool() const` | Is table crashed? |
-| 77 | `auto_repair` | 6035 | D | `bool() const` | Auto-repair on open? |
-| 78 | `primary_key_is_clustered` | 6094 | D | `bool() const` | Is PK clustered? |
-| 79 | `get_real_row_type` | 5530 | D | `enum row_type(const HA_CREATE_INFO*) const` | Actual row format |
-| 80 | `get_default_index_algorithm` | 5543 | D | `enum ha_key_alg() const` | Default index algorithm |
-| 81 | `is_index_algorithm_supported` | 5554 | D | `bool(ha_key_alg) const` | Is index algo supported? |
-| 82 | `extra_rec_buf_length` | 5416 | D | `uint() const` | Extra record buffer space needed |
-| 83 | `get_memory_buffer_size` | 5313 | D | `longlong() const` | Memory buffer size |
-| 84 | `is_record_buffer_wanted` | 6800 | D | `bool(ha_rows*) const` | Wants record buffer? |
-| 85 | `explain_extra` | 4842 | D | `std::string() const` | Extra EXPLAIN output |
-| 86 | `indexes_are_disabled` | 5978 | D | `int()` | Are indexes disabled? |
+| 68 | `table_type` | 5984 | PV | `const char*() const` | Engine name string |
+| 69 | `table_flags` | 6728 | PV | `Table_flags() const` | Engine capability bitmap |
+| 70 | `index_flags` | 5986 | PV | `ulong(uint, uint, bool) const` | Per-index capabilities |
+| 71 | `max_supported_record_length` | 6004 | D | `uint() const` | Max row size |
+| 72 | `max_supported_keys` | 6005 | D | `uint() const` | Max number of indexes |
+| 73 | `max_supported_key_parts` | 6006 | D | `uint() const` | Max key parts |
+| 74 | `max_supported_key_length` | 6007 | D | `uint() const` | Max key length in bytes |
+| 75 | `max_supported_key_part_length` | 6008 | D | `uint(HA_CREATE_INFO*) const` | Max single key part length |
+| 76 | `min_record_length` | 6012 | D | `uint(uint) const` | Min row size |
+| 77 | `low_byte_first` | 6016 | D | `bool() const` | Little-endian storage? |
+| 78 | `checksum` | 6017 | D | `ha_checksum() const` | Table checksum |
+| 79 | `is_crashed` | 6026 | D | `bool() const` | Is table crashed? |
+| 80 | `auto_repair` | 6035 | D | `bool() const` | Auto-repair on open? |
+| 81 | `primary_key_is_clustered` | 6094 | D | `bool() const` | Is PK clustered? |
+| 82 | `get_real_row_type` | 5530 | D | `enum row_type(const HA_CREATE_INFO*) const` | Actual row format |
+| 83 | `get_default_index_algorithm` | 5543 | D | `enum ha_key_alg() const` | Default index algorithm |
+| 84 | `is_index_algorithm_supported` | 5554 | D | `bool(ha_key_alg) const` | Is index algo supported? |
+| 85 | `extra_rec_buf_length` | 5416 | D | `uint() const` | Extra record buffer space needed |
+| 86 | `get_memory_buffer_size` | 5313 | D | `longlong() const` | Memory buffer size |
+| 87 | `is_record_buffer_wanted` | 6800 | D | `bool(ha_rows*) const` | Wants record buffer? |
+| 88 | `explain_extra` | 4842 | D | `std::string() const` | Extra EXPLAIN output |
+| 89 | `indexes_are_disabled` | 5978 | D | `int()` | Are indexes disabled? |
 
-## Cost Estimation
+## Statistics & Cost Estimation
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 87 | `scan_time` | 5183 | D | `double()` | Full scan cost |
-| 88 | `read_time` | 5202 | D | `double(uint, uint, ha_rows)` | Index read cost |
-| 89 | `index_only_read_time` | 5212 | D | `double(uint, double)` | Covering index cost |
-| 90 | `table_scan_cost` | 5223 | D | `Cost_estimate()` | Full scan cost (Cost_estimate) |
-| 91 | `index_scan_cost` | 5245 | D | `Cost_estimate(uint, double, double)` | Index scan cost |
-| 92 | `read_cost` | 5261 | D | `Cost_estimate(uint, double, double)` | Read cost |
-| 93 | `page_read_cost` | 5295 | D | `double(uint, double)` | Page read cost |
-| 94 | `worst_seek_times` | 5306 | D | `double(double)` | Worst-case seek cost |
-| 95 | `records` | 5467 | D | `int(ha_rows*)` | Exact row count |
-| 96 | `records_from_index` | 5478 | D | `int(ha_rows*, uint)` | Row count from index |
-| 97 | `estimate_rows_upper_bound` | 5522 | D | `ha_rows()` | Upper bound row estimate |
-| 98 | `calculate_key_hash_value` | 5775 | D | `uint32(Field**)` | Key hash for partitioning |
+| 90 | `info` | 5774 | PV | `int(uint flag)` | Get table statistics (rows, sizes, etc.) |
+| 91 | `scan_time` | 5183 | D | `double()` | Full scan cost |
+| 92 | `read_time` | 5202 | D | `double(uint, uint, ha_rows)` | Index read cost |
+| 93 | `index_only_read_time` | 5212 | D | `double(uint, double)` | Covering index cost |
+| 94 | `table_scan_cost` | 5223 | D | `Cost_estimate()` | Full scan cost (Cost_estimate) |
+| 95 | `index_scan_cost` | 5245 | D | `Cost_estimate(uint, double, double)` | Index scan cost |
+| 96 | `read_cost` | 5261 | D | `Cost_estimate(uint, double, double)` | Read cost |
+| 97 | `page_read_cost` | 5295 | D | `double(uint, double)` | Page read cost |
+| 98 | `worst_seek_times` | 5306 | D | `double(double)` | Worst-case seek cost |
+| 99 | `records` | 5467 | D | `int(ha_rows*)` | Exact row count |
+| 100 | `records_from_index` | 5478 | D | `int(ha_rows*, uint)` | Row count from index |
+| 101 | `estimate_rows_upper_bound` | 5522 | D | `ha_rows()` | Upper bound row estimate |
+| 102 | `calculate_key_hash_value` | 5775 | D | `uint32(Field**)` | Key hash for partitioning |
 
 ## Locking
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 99 | `store_lock` | 6083 | PV | `THR_LOCK_DATA**(THD*, THR_LOCK_DATA**, thr_lock_type)` | Provide lock data |
-| 100 | `external_lock` | 6763 | D | `int(THD*, int)` | Statement-level lock/unlock |
-| 101 | `lock_count` | 6050 | D | `uint() const` | Number of locks needed |
-| 102 | `unlock_row` | 5908 | D | `void()` | Unlock current row |
-| 103 | `start_stmt` | 5923 | D | `int(THD*, thr_lock_type)` | Start statement in transaction |
-| 104 | `was_semi_consistent_read` | 5892 | D | `bool()` | Semi-consistent read occurred? |
-| 105 | `try_semi_consistent_read` | 5899 | D | `void(bool)` | Enable semi-consistent read |
+| 103 | `store_lock` | 6083 | PV | `THR_LOCK_DATA**(THD*, THR_LOCK_DATA**, thr_lock_type)` | Provide lock data |
+| 104 | `external_lock` | 6763 | D | `int(THD*, int)` | Statement-level lock/unlock |
+| 105 | `lock_count` | 6050 | D | `uint() const` | Number of locks needed |
+| 106 | `unlock_row` | 5908 | D | `void()` | Unlock current row |
+| 107 | `start_stmt` | 5923 | D | `int(THD*, thr_lock_type)` | Start statement in transaction |
+| 108 | `was_semi_consistent_read` | 5892 | D | `bool()` | Semi-consistent read occurred? |
+| 109 | `try_semi_consistent_read` | 5899 | D | `void(bool)` | Enable semi-consistent read |
 
 ## Read Removal
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 106 | `start_read_removal` | 5834 | D | `bool()` | Start read-free replication |
-| 107 | `end_read_removal` | 5844 | D | `ha_rows()` | End read-free replication |
+| 110 | `start_read_removal` | 5834 | D | `bool()` | Start read-free replication |
+| 111 | `end_read_removal` | 5844 | D | `ha_rows()` | End read-free replication |
 
 ## Auto-Increment
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 108 | `get_auto_increment` | 5927 | D | `void(ulonglong, ulonglong, ulonglong, ulonglong*, ulonglong*)` | Get next auto-inc value |
-| 109 | `release_auto_increment` | 6767 | D | `void()` | Release unused auto-inc values |
+| 112 | `get_auto_increment` | 5927 | D | `void(ulonglong, ulonglong, ulonglong, ulonglong*, ulonglong*)` | Get next auto-inc value |
+| 113 | `release_auto_increment` | 6767 | D | `void()` | Release unused auto-inc values |
 
 ## Error Handling
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 110 | `print_error` | 5135 | D | `void(int, myf)` | Print error message |
-| 111 | `get_error_message` | 5136 | D | `bool(int, String*)` | Get error message text |
-| 112 | `get_foreign_dup_key` | 5156 | D | `bool(char*, size_t, char*, size_t)` | FK duplicate key info |
-| 113 | `is_ignorable_error` | 5437 | D | `bool(int)` | Can error be ignored? |
-| 114 | `is_fatal_error` | 5454 | D | `bool(int)` | Is error fatal? |
+| 114 | `print_error` | 5135 | D | `void(int, myf)` | Print error message |
+| 115 | `get_error_message` | 5136 | D | `bool(int, String*)` | Get error message text |
+| 116 | `get_foreign_dup_key` | 5156 | D | `bool(char*, size_t, char*, size_t)` | FK duplicate key info |
+| 117 | `is_ignorable_error` | 5437 | D | `bool(int)` | Can error be ignored? |
+| 118 | `is_fatal_error` | 5454 | D | `bool(int)` | Is error fatal? |
 
 ## Hints & Extras
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 115 | `extra` | 5802 | D | `int(ha_extra_function)` | Server hint to engine |
-| 116 | `extra_opt` | 5807 | D | `int(ha_extra_function, ulong)` | Server hint with cache size |
-| 117 | `reset` | 6727 | D | `int()` | Reset state between statements |
-| 118 | `column_bitmaps_signal` | 5565 | D | `void()` | Column bitmap changed |
-| 119 | `init_table_handle_for_HANDLER` | 5980 | D | `void()` | Init for HANDLER command |
+| 119 | `extra` | 5802 | D | `int(ha_extra_function)` | Server hint to engine |
+| 120 | `extra_opt` | 5807 | D | `int(ha_extra_function, ulong)` | Server hint with cache size |
+| 121 | `reset` | 6727 | D | `int()` | Reset state between statements |
+| 122 | `column_bitmaps_signal` | 5565 | D | `void()` | Column bitmap changed |
+| 123 | `init_table_handle_for_HANDLER` | 5980 | D | `void()` | Init for HANDLER command |
 
 ## ALTER TABLE (In-Place)
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 120 | `check_if_supported_inplace_alter` | 6378 | D | `enum_alter_inplace_result(TABLE*, Alter_inplace_info*)` | Check in-place alter support |
-| 121 | `prepare_inplace_alter_table` | 6460 | D | `bool(TABLE*, Alter_inplace_info*, const dd::Table*, dd::Table*)` | Prepare in-place alter |
-| 122 | `inplace_alter_table` | 6497 | D | `bool(TABLE*, Alter_inplace_info*, const dd::Table*, dd::Table*)` | Execute in-place alter |
-| 123 | `commit_inplace_alter_table` | 6555 | D | `bool(TABLE*, Alter_inplace_info*, bool, const dd::Table*, dd::Table*)` | Commit in-place alter |
-| 124 | `notify_table_changed` | 6585 | D | `void(Alter_inplace_info*)` | Post-alter notification |
-| 125 | `set_shared_data` | 3340 | D | `void(const inplace_alter_handler_ctx*)` | Share data between old/new handler |
-| 126 | `check_if_incompatible_data` | 6210 | D | `bool(HA_CREATE_INFO*, uint)` | Check data compatibility |
+| 124 | `check_if_supported_inplace_alter` | 6378 | D | `enum_alter_inplace_result(TABLE*, Alter_inplace_info*)` | Check in-place alter support |
+| 125 | `prepare_inplace_alter_table` | 6460 | D | `bool(TABLE*, Alter_inplace_info*, const dd::Table*, dd::Table*)` | Prepare in-place alter |
+| 126 | `inplace_alter_table` | 6497 | D | `bool(TABLE*, Alter_inplace_info*, const dd::Table*, dd::Table*)` | Execute in-place alter |
+| 127 | `commit_inplace_alter_table` | 6555 | D | `bool(TABLE*, Alter_inplace_info*, bool, const dd::Table*, dd::Table*)` | Commit in-place alter |
+| 128 | `notify_table_changed` | 6585 | D | `void(Alter_inplace_info*)` | Post-alter notification |
+| 129 | `set_shared_data` | 3340 | D | `void(const inplace_alter_handler_ctx*)` | Share data between old/new handler |
+| 130 | `check_if_incompatible_data` | 6210 | D | `bool(HA_CREATE_INFO*, uint)` | Check data compatibility |
 
 ## Table Maintenance
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 127 | `check` | 6770 | D | `int(THD*, HA_CHECK_OPT*)` | CHECK TABLE |
-| 128 | `repair` | 6777 | D | `int(THD*, HA_CHECK_OPT*)` | REPAIR TABLE |
-| 129 | `optimize` | 6963 | D | `int(THD*, HA_CHECK_OPT*)` | OPTIMIZE TABLE |
-| 130 | `analyze` | 6966 | D | `int(THD*, HA_CHECK_OPT*)` | ANALYZE TABLE |
-| 131 | `check_and_repair` | 6981 | D | `bool(THD*)` | Auto check and repair |
-| 132 | `check_for_upgrade` | 6769 | D | `int(HA_CHECK_OPT*)` | Check for upgrade needs |
-| 133 | `assign_to_keycache` | 5963 | D | `int(THD*, HA_CHECK_OPT*)` | Assign to key cache |
-| 134 | `preload_keys` | 5966 | D | `int(THD*, HA_CHECK_OPT*)` | Preload keys into cache |
-| 135 | `disable_indexes` | 6992 | D | `int(uint)` | Disable indexes |
-| 136 | `enable_indexes` | 7005 | D | `int(uint)` | Enable indexes |
-| 137 | `discard_or_import_tablespace` | 7024 | D | `int(bool, dd::Table*)` | Discard/import tablespace |
+| 131 | `check` | 6770 | D | `int(THD*, HA_CHECK_OPT*)` | CHECK TABLE |
+| 132 | `repair` | 6777 | D | `int(THD*, HA_CHECK_OPT*)` | REPAIR TABLE |
+| 133 | `optimize` | 6963 | D | `int(THD*, HA_CHECK_OPT*)` | OPTIMIZE TABLE |
+| 134 | `analyze` | 6966 | D | `int(THD*, HA_CHECK_OPT*)` | ANALYZE TABLE |
+| 135 | `check_and_repair` | 6981 | D | `bool(THD*)` | Auto check and repair |
+| 136 | `check_for_upgrade` | 6769 | D | `int(HA_CHECK_OPT*)` | Check for upgrade needs |
+| 137 | `assign_to_keycache` | 5963 | D | `int(THD*, HA_CHECK_OPT*)` | Assign to key cache |
+| 138 | `preload_keys` | 5966 | D | `int(THD*, HA_CHECK_OPT*)` | Preload keys into cache |
+| 139 | `disable_indexes` | 6992 | D | `int(uint)` | Disable indexes |
+| 140 | `enable_indexes` | 7005 | D | `int(uint)` | Enable indexes |
+| 141 | `discard_or_import_tablespace` | 7024 | D | `int(bool, dd::Table*)` | Discard/import tablespace |
 
-## Pushed Joins & Conditions
+## Condition & Index Pushdown
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 138 | `cancel_pushed_idx_cond` | 6166 | D | `void()` | Cancel pushed index condition |
-| 139 | `number_of_pushed_joins` | 6176 | D | `uint() const` | Count of pushed joins |
-| 140 | `tables_in_pushed_join` | 6192 | D | `table_map() const` | Tables in pushed join |
+| 142 | `cond_push` | 6131 | D | `const Item*(const Item*)` | Push condition to engine |
+| 143 | `idx_cond_push` | 6161 | D | `Item*(uint, Item*)` | Push index condition |
+| 144 | `cancel_pushed_idx_cond` | 6166 | D | `void()` | Cancel pushed index condition |
+| 145 | `hton_supporting_engine_pushdown` | 5826 | D | `const handlerton*()` | Get handlerton for pushdown |
+
+## Pushed Joins
+
+| # | Method | Line | PV | Signature | Description |
+| - | ------ | ---- | -- | --------- | ----------- |
+| 146 | `number_of_pushed_joins` | 6176 | D | `uint() const` | Count of pushed joins |
+| 147 | `member_of_pushed_join` | 6182 | D | `const TABLE*() const` | Root table of pushed join |
+| 148 | `parent_of_pushed_join` | 6188 | D | `const TABLE*() const` | Parent table in pushed join |
+| 149 | `tables_in_pushed_join` | 6192 | D | `table_map() const` | Tables in pushed join |
 
 ## CREATE INFO & Metadata
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 141 | `update_create_info` | 5961 | D | `void(HA_CREATE_INFO*)` | Update create info from table |
-| 142 | `append_create_info` | 5979 | D | `void(String*)` | Append to SHOW CREATE |
-| 143 | `use_hidden_primary_key` | 6596 | D | `void()` | Use hidden PK |
-| 144 | `set_ha_share_ref` | 7086 | D | `bool(Handler_share**)` | Set shared handler data |
-| 145 | `cmp_ref` | 6107 | D | `int(const uchar*, const uchar*) const` | Compare row references |
+| 150 | `update_create_info` | 5961 | D | `void(HA_CREATE_INFO*)` | Update create info from table |
+| 151 | `append_create_info` | 5979 | D | `void(String*)` | Append to SHOW CREATE |
+| 152 | `use_hidden_primary_key` | 6596 | D | `void()` | Use hidden PK |
+| 153 | `set_ha_share_ref` | 7086 | D | `bool(Handler_share**)` | Set shared handler data |
+| 154 | `cmp_ref` | 6107 | D | `int(const uchar*, const uchar*) const` | Compare row references |
 
 ## External Table Offload
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 146 | `set_external_table_offload_error` | 7187 | D | `void(const char*)` | Set offload error |
-| 147 | `external_table_offload_error` | 7193 | D | `void() const` | Report offload error |
+| 155 | `set_external_table_offload_error` | 7187 | D | `void(const char*)` | Set offload error |
+| 156 | `external_table_offload_error` | 7193 | D | `void() const` | Report offload error |
+
+## Handler Management
+
+| # | Method | Line | PV | Signature | Description |
+| - | ------ | ---- | -- | --------- | ----------- |
+| 157 | `clone` | 4847 | D | `handler*(const char*, MEM_ROOT*)` | Clone handler for same table |
 
 ## Multi-Valued Index
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 148 | `mv_key_capacity` | 7201 | D | `void(uint*, size_t*) const` | Multi-valued key capacity |
+| 158 | `mv_key_capacity` | 7201 | D | `void(uint*, size_t*) const` | Multi-valued key capacity |
 
-## Total: 148 virtual methods
+## Partitioning
+
+| # | Method | Line | PV | Signature | Description |
+| - | ------ | ---- | -- | --------- | ----------- |
+| 159 | `get_partition_handler` | 7140 | D | `Partition_handler*()` | Get partition handler |
+
+## Total: 159 virtual methods
 
 - **Pure virtual (must override)**: 12
   - `table_type`, `table_flags`, `index_flags`
-  - `open`, `close`
+  - `open`, `close`, `create`
   - `rnd_init`, `rnd_next`, `rnd_pos`, `position`
   - `info`
   - `store_lock`
-- **With default implementation**: 136
+- **With default implementation**: 147
