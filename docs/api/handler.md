@@ -224,79 +224,78 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
 | 126 | `inplace_alter_table` | 6497 | D | `bool(TABLE*, Alter_inplace_info*, const dd::Table*, dd::Table*)` | Execute in-place alter |
 | 127 | `commit_inplace_alter_table` | 6555 | D | `bool(TABLE*, Alter_inplace_info*, bool, const dd::Table*, dd::Table*)` | Commit in-place alter |
 | 128 | `notify_table_changed` | 6585 | D | `void(Alter_inplace_info*)` | Post-alter notification |
-| 129 | `set_shared_data` | 3340 | D | `void(const inplace_alter_handler_ctx*)` | Share data between old/new handler |
-| 130 | `check_if_incompatible_data` | 6210 | D | `bool(HA_CREATE_INFO*, uint)` | Check data compatibility |
+| 129 | `check_if_incompatible_data` | 6210 | D | `bool(HA_CREATE_INFO*, uint)` | Check data compatibility |
 
 ## Table Maintenance
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 131 | `check` | 6770 | D | `int(THD*, HA_CHECK_OPT*)` | CHECK TABLE |
-| 132 | `repair` | 6777 | D | `int(THD*, HA_CHECK_OPT*)` | REPAIR TABLE |
-| 133 | `optimize` | 6963 | D | `int(THD*, HA_CHECK_OPT*)` | OPTIMIZE TABLE |
-| 134 | `analyze` | 6966 | D | `int(THD*, HA_CHECK_OPT*)` | ANALYZE TABLE |
-| 135 | `check_and_repair` | 6981 | D | `bool(THD*)` | Auto check and repair |
-| 136 | `check_for_upgrade` | 6769 | D | `int(HA_CHECK_OPT*)` | Check for upgrade needs |
-| 137 | `assign_to_keycache` | 5963 | D | `int(THD*, HA_CHECK_OPT*)` | Assign to key cache |
-| 138 | `preload_keys` | 5966 | D | `int(THD*, HA_CHECK_OPT*)` | Preload keys into cache |
-| 139 | `disable_indexes` | 6992 | D | `int(uint)` | Disable indexes |
-| 140 | `enable_indexes` | 7005 | D | `int(uint)` | Enable indexes |
-| 141 | `discard_or_import_tablespace` | 7024 | D | `int(bool, dd::Table*)` | Discard/import tablespace |
+| 130 | `check` | 6770 | D | `int(THD*, HA_CHECK_OPT*)` | CHECK TABLE |
+| 131 | `repair` | 6777 | D | `int(THD*, HA_CHECK_OPT*)` | REPAIR TABLE |
+| 132 | `optimize` | 6963 | D | `int(THD*, HA_CHECK_OPT*)` | OPTIMIZE TABLE |
+| 133 | `analyze` | 6966 | D | `int(THD*, HA_CHECK_OPT*)` | ANALYZE TABLE |
+| 134 | `check_and_repair` | 6981 | D | `bool(THD*)` | Auto check and repair |
+| 135 | `check_for_upgrade` | 6769 | D | `int(HA_CHECK_OPT*)` | Check for upgrade needs |
+| 136 | `assign_to_keycache` | 5963 | D | `int(THD*, HA_CHECK_OPT*)` | Assign to key cache |
+| 137 | `preload_keys` | 5966 | D | `int(THD*, HA_CHECK_OPT*)` | Preload keys into cache |
+| 138 | `disable_indexes` | 6992 | D | `int(uint)` | Disable indexes |
+| 139 | `enable_indexes` | 7005 | D | `int(uint)` | Enable indexes |
+| 140 | `discard_or_import_tablespace` | 7024 | D | `int(bool, dd::Table*)` | Discard/import tablespace |
 
 ## Condition & Index Pushdown
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 142 | `cond_push` | 6131 | D | `const Item*(const Item*)` | Push condition to engine |
-| 143 | `idx_cond_push` | 6161 | D | `Item*(uint, Item*)` | Push index condition |
-| 144 | `cancel_pushed_idx_cond` | 6166 | D | `void()` | Cancel pushed index condition |
-| 145 | `hton_supporting_engine_pushdown` | 5826 | D | `const handlerton*()` | Get handlerton for pushdown |
+| 141 | `cond_push` | 6131 | D | `const Item*(const Item*)` | Push condition to engine |
+| 142 | `idx_cond_push` | 6161 | D | `Item*(uint, Item*)` | Push index condition |
+| 143 | `cancel_pushed_idx_cond` | 6166 | D | `void()` | Cancel pushed index condition |
+| 144 | `hton_supporting_engine_pushdown` | 5826 | D | `const handlerton*()` | Get handlerton for pushdown |
 
 ## Pushed Joins
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 146 | `number_of_pushed_joins` | 6176 | D | `uint() const` | Count of pushed joins |
-| 147 | `member_of_pushed_join` | 6182 | D | `const TABLE*() const` | Root table of pushed join |
-| 148 | `parent_of_pushed_join` | 6188 | D | `const TABLE*() const` | Parent table in pushed join |
-| 149 | `tables_in_pushed_join` | 6192 | D | `table_map() const` | Tables in pushed join |
+| 145 | `number_of_pushed_joins` | 6176 | D | `uint() const` | Count of pushed joins |
+| 146 | `member_of_pushed_join` | 6182 | D | `const TABLE*() const` | Root table of pushed join |
+| 147 | `parent_of_pushed_join` | 6188 | D | `const TABLE*() const` | Parent table in pushed join |
+| 148 | `tables_in_pushed_join` | 6192 | D | `table_map() const` | Tables in pushed join |
 
 ## CREATE INFO & Metadata
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 150 | `update_create_info` | 5961 | D | `void(HA_CREATE_INFO*)` | Update create info from table |
-| 151 | `append_create_info` | 5979 | D | `void(String*)` | Append to SHOW CREATE |
-| 152 | `use_hidden_primary_key` | 6596 | D | `void()` | Use hidden PK |
-| 153 | `set_ha_share_ref` | 7086 | D | `bool(Handler_share**)` | Set shared handler data |
-| 154 | `cmp_ref` | 6107 | D | `int(const uchar*, const uchar*) const` | Compare row references |
+| 149 | `update_create_info` | 5961 | D | `void(HA_CREATE_INFO*)` | Update create info from table |
+| 150 | `append_create_info` | 5979 | D | `void(String*)` | Append to SHOW CREATE |
+| 151 | `use_hidden_primary_key` | 6596 | D | `void()` | Use hidden PK |
+| 152 | `set_ha_share_ref` | 7086 | D | `bool(Handler_share**)` | Set shared handler data |
+| 153 | `cmp_ref` | 6107 | D | `int(const uchar*, const uchar*) const` | Compare row references |
 
 ## External Table Offload
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 155 | `set_external_table_offload_error` | 7187 | D | `void(const char*)` | Set offload error |
-| 156 | `external_table_offload_error` | 7193 | D | `void() const` | Report offload error |
+| 154 | `set_external_table_offload_error` | 7187 | D | `void(const char*)` | Set offload error |
+| 155 | `external_table_offload_error` | 7193 | D | `void() const` | Report offload error |
 
 ## Handler Management
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 157 | `clone` | 4847 | D | `handler*(const char*, MEM_ROOT*)` | Clone handler for same table |
+| 156 | `clone` | 4847 | D | `handler*(const char*, MEM_ROOT*)` | Clone handler for same table |
 
 ## Multi-Valued Index
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 158 | `mv_key_capacity` | 7201 | D | `void(uint*, size_t*) const` | Multi-valued key capacity |
+| 157 | `mv_key_capacity` | 7201 | D | `void(uint*, size_t*) const` | Multi-valued key capacity |
 
 ## Partitioning
 
 | # | Method | Line | PV | Signature | Description |
 | - | ------ | ---- | -- | --------- | ----------- |
-| 159 | `get_partition_handler` | 7140 | D | `Partition_handler*()` | Get partition handler |
+| 158 | `get_partition_handler` | 7140 | D | `Partition_handler*()` | Get partition handler |
 
-## Total: 159 virtual methods
+## Total: 158 virtual methods
 
 - **Pure virtual (must override)**: 12
   - `table_type`, `table_flags`, `index_flags`
@@ -304,4 +303,4 @@ Legend: **PV** = pure virtual (must override), **D** = has default implementatio
   - `rnd_init`, `rnd_next`, `rnd_pos`, `position`
   - `info`
   - `store_lock`
-- **With default implementation**: 147
+- **With default implementation**: 146

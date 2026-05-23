@@ -17,6 +17,8 @@ Source: `mysql-server/sql/handler.h:2734`
 | `foreign_keys_flags` | `uint32` | FK support detail flags |
 | `fk_name_suffix` | `LEX_CSTRING` | Suffix for auto-generated FK names |
 | `secondary_engine_flags` | `SecondaryEngineFlags` | Hypergraph optimizer support flags |
+| `license` | `uint32` | Engine license flag |
+| `data` | `void*` | Engine private data pointer |
 | `file_extensions` | `const char**` | NULL-terminated array of file extensions |
 
 ## Callbacks — Core
