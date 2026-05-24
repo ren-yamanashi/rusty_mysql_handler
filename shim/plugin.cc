@@ -20,10 +20,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Rust bindings for the MySQL 8.4 storage engine handler API
+#include "binding.hpp"
 
-pub mod engine;
-pub mod ffi;
-pub mod ffi_handler;
-pub mod panic_guard;
-pub mod sys;
+#include "mysql/plugin.h"
+
+// Storage-engine interface tag. Referenced from the Rust-side plugin manifest
+// as an `extern "C"` static. The manifest itself lives in Rust because Rust
+// cdylib's auto-generated linker version script wraps any non-`pub no_mangle`
+// symbol in `local: *;`, which would hide C++ data symbols from dlsym.
+extern "C" st_mysql_storage_engine rusty_storage_engine = {
+    MYSQL_HANDLERTON_INTERFACE_VERSION};

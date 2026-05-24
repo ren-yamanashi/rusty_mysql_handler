@@ -20,16 +20,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-.PHONY: all setup rust-build shim-build install clean lint fmt check test help
+.PHONY: setup rust-build clean lint fmt check test test_e2e help
 
 MYSQL_SOURCE_DIR ?= $(CURDIR)/mysql-server
 MYSQL_BUILD_DIR  ?= $(CURDIR)/build/mysql
-RUST_LIB_DIR     ?= $(CURDIR)/target/release
-BUILD_DIR        ?= $(CURDIR)/build
-ENABLE_RUST      ?= OFF
-PLUGIN_DIR       ?= $(shell mysql -u root -N -e "SHOW VARIABLES LIKE 'plugin_dir'" 2>/dev/null | awk '{print $$2}')
-
-all: rust-build shim-build
 
 setup: ## Initialize submodules, hooks, and generate MySQL headers
 	@git submodule update --init --depth 1
@@ -40,31 +34,21 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
+# WITHOUT_SERVER=ON: skip building the mysqld binary itself; we only need the
+# generated public headers (my_config.h + handler.h chain) for bindgen and the
+# C++ shim. Cuts configure / build time substantially.
 $(MYSQL_BUILD_DIR)/include/my_config.h:
 	@mkdir -p $(MYSQL_BUILD_DIR)
 	cd $(MYSQL_BUILD_DIR) && cmake $(MYSQL_SOURCE_DIR) \
 		-DDOWNLOAD_BOOST=1 \
 		-DWITH_BOOST=$(MYSQL_SOURCE_DIR)/extra/boost \
-		-DWITHOUT_SERVER=OFF \
+		-DWITHOUT_SERVER=ON \
 		-DCMAKE_BUILD_TYPE=Release
 
 mysql-configure: $(MYSQL_BUILD_DIR)/include/my_config.h ## Generate MySQL build headers
 
 rust-build: ## Build all Rust crates (release)
 	@cargo build --release
-
-shim-build: mysql-configure ## Build ha_rusty.so
-	@mkdir -p $(BUILD_DIR)
-	@cd $(BUILD_DIR) && cmake $(CURDIR)/shim \
-		-DMYSQL_SOURCE_DIR=$(MYSQL_SOURCE_DIR) \
-		-DMYSQL_BUILD_DIR=$(MYSQL_BUILD_DIR) \
-		-DENABLE_RUST=$(ENABLE_RUST) \
-		-DRUST_LIB_DIR=$(RUST_LIB_DIR)
-	@$(MAKE) --no-print-directory -C $(BUILD_DIR)
-
-install: ## Copy ha_rusty.so to MySQL plugin_dir
-	@test -n "$(PLUGIN_DIR)" || { echo "ERROR: Set PLUGIN_DIR or start MySQL."; exit 1; }
-	@cp $(BUILD_DIR)/ha_rusty.so "$(PLUGIN_DIR)/"
 
 lint: ## Run clippy
 	@cargo clippy --workspace -- -D warnings
@@ -81,6 +65,8 @@ check: ## Run check + clippy + fmt check + license check
 test: ## Run tests
 	@cargo test --workspace
 
-clean: ## Remove build artifacts
+test_e2e: ## E2E test via Docker (mysql:8.4 + plugin baked into image)
+	@bash tests/e2e/run.sh
+
+clean: ## Remove cargo build artifacts (keeps build/mysql to avoid re-running mysql-configure)
 	@cargo clean
-	@rm -rf $(BUILD_DIR)
