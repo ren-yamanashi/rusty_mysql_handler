@@ -31,16 +31,27 @@
 #include "sql/table.h"
 
 // The Rust-side plugin manifest hand-declares `StMysqlPlugin` to mirror this
-// layout. Pinning the size here catches any C++-side header drift at compile
-// time; the runtime `_mysql_sizeof_struct_st_plugin_` symbol catches the
-// converse (Rust side diverging from the C++ header).
+// layout. Pinning the size and alignment here catches any C++-side header
+// drift at compile time; the runtime `_mysql_sizeof_struct_st_plugin_` symbol
+// catches the converse (Rust side diverging from the C++ header).
 #if defined(__LP64__) || defined(_LP64)
 static_assert(sizeof(st_mysql_plugin) == 112,
               "st_mysql_plugin layout drifted; update plugin_manifest in "
               "examples/engine/src/lib.rs");
+static_assert(alignof(st_mysql_plugin) == 8,
+              "st_mysql_plugin alignment drifted; update plugin_manifest in "
+              "examples/engine/src/lib.rs");
 #endif
 
-static handlerton *rusty_hton = nullptr;
+namespace {
+// Upper bound for MySQL-supplied identifier strings handed to the engine. The
+// handler API contract says they are null-terminated, but reading length with
+// strnlen keeps the scan bounded if that contract is ever violated.
+constexpr std::size_t MAX_NAME_LEN = 4096;
+std::size_t safe_name_len(const char *name) {
+  return ::strnlen(name, MAX_NAME_LEN);
+}
+}  // namespace
 
 static handler *rusty_create_handler(handlerton *hton, TABLE_SHARE *table,
                                      bool, MEM_ROOT *mem_root) {
@@ -50,10 +61,10 @@ static handler *rusty_create_handler(handlerton *hton, TABLE_SHARE *table,
 extern "C" int rusty_init_func(void *p) {
   DBUG_TRACE;
   rust__plugin_init();
-  rusty_hton = static_cast<handlerton *>(p);
-  rusty_hton->state = SHOW_OPTION_YES;
-  rusty_hton->create = rusty_create_handler;
-  rusty_hton->flags = HTON_CAN_RECREATE;
+  auto *hton = static_cast<handlerton *>(p);
+  hton->state = SHOW_OPTION_YES;
+  hton->create = rusty_create_handler;
+  hton->flags = HTON_CAN_RECREATE;
   return 0;
 }
 
@@ -116,7 +127,7 @@ int RustHandlerBase::open(const char *name, int mode, uint, const dd::Table *) {
   if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__open(rust_ctx_,
                              reinterpret_cast<const uint8_t *>(name),
-                             std::strlen(name), mode);
+                             safe_name_len(name), mode);
 }
 
 int RustHandlerBase::close() {
@@ -130,7 +141,7 @@ int RustHandlerBase::create(const char *name, TABLE *, HA_CREATE_INFO *,
   if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__create(rust_ctx_,
                                reinterpret_cast<const uint8_t *>(name),
-                               std::strlen(name));
+                               safe_name_len(name));
 }
 
 int RustHandlerBase::rnd_init(bool scan) {

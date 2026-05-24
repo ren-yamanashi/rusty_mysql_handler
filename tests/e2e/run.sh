@@ -55,7 +55,11 @@ ping_mysqld || {
   exit 1
 }
 
-mysql -e "INSTALL PLUGIN rusty SONAME 'ha_rusty.so';"
+mysql -e "INSTALL PLUGIN rusty SONAME 'ha_rusty.so';" || {
+  echo "e2e: INSTALL PLUGIN failed; mysqld log tail:" >&2
+  docker logs "$CONTAINER" 2>&1 | tail -50 >&2
+  exit 1
+}
 mysql -e "CREATE DATABASE e2e;"
 
 LAST="$(mysql --batch --skip-column-names e2e < tests/e2e/test.sql \

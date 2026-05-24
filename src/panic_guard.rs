@@ -65,9 +65,9 @@ impl FfiBoundary {
     where
         F: FnOnce(),
     {
-        if let Ok(()) = catch_unwind(AssertUnwindSafe(f)) {
-        } else {
-            tracing::error!("{PANIC_LOG_MSG}");
+        match catch_unwind(AssertUnwindSafe(f)) {
+            Ok(()) => {}
+            Err(_) => tracing::error!("{PANIC_LOG_MSG}"),
         }
     }
 
@@ -78,11 +78,12 @@ impl FfiBoundary {
     where
         F: FnOnce() -> T,
     {
-        if let Ok(v) = catch_unwind(AssertUnwindSafe(f)) {
-            v
-        } else {
-            tracing::error!("{PANIC_LOG_MSG}");
-            default
+        match catch_unwind(AssertUnwindSafe(f)) {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::error!("{PANIC_LOG_MSG}");
+                default
+            }
         }
     }
 }

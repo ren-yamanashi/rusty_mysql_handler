@@ -24,9 +24,9 @@
 //!
 //! # Safety (every function below)
 //!
-//! - `ctx` comes from `rust__create_engine` and has not been destroyed.
-//!   `table_type` / `table_flags` / `index_flags` tolerate null with safe
-//!   defaults; all other callbacks require non-null.
+//! - `ctx` comes from `rust__create_engine` and has not been destroyed; the
+//!   C++ shim guards every callback against null on its side, so each Rust
+//!   callback requires non-null.
 //! - The shim never calls a callback for the same `ctx` from two threads
 //!   concurrently, so `&mut *ctx` is sound inside each callback.
 //! - Pointer/length pairs are valid for the call only; engines must not
@@ -42,30 +42,23 @@ use crate::panic_guard::FfiBoundary;
 /// Engine display name; null-terminated `'static`
 ///
 /// # Safety
-/// `ctx` may be null; null returns a null pointer.
+/// `ctx` must be non-null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__table_type(ctx: *mut EngineContext) -> *const c_char {
     FfiBoundary::run_default(std::ptr::null(), || {
-        if ctx.is_null() {
-            return std::ptr::null();
-        }
-        // SAFETY: ctx is non-null (just checked) and points to a live EngineContext.
-        let engine = unsafe { &mut *ctx }.engine_mut();
-        engine.table_type().as_ptr()
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
+        unsafe { &mut *ctx }.engine_mut().table_type().as_ptr()
     })
 }
 
 /// `HA_*` capability bitfield
 ///
 /// # Safety
-/// `ctx` may be null; null returns `0`.
+/// `ctx` must be non-null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__table_flags(ctx: *mut EngineContext) -> u64 {
     FfiBoundary::run_default(0, || {
-        if ctx.is_null() {
-            return 0;
-        }
-        // SAFETY: ctx is non-null (just checked) and points to a live EngineContext.
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         unsafe { &mut *ctx }.engine_mut().table_flags()
     })
 }
@@ -73,7 +66,7 @@ pub unsafe extern "C" fn rust__handler__table_flags(ctx: *mut EngineContext) -> 
 /// Per-index capability bitfield
 ///
 /// # Safety
-/// `ctx` may be null; null returns `0`.
+/// `ctx` must be non-null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__index_flags(
     ctx: *mut EngineContext,
@@ -82,10 +75,7 @@ pub unsafe extern "C" fn rust__handler__index_flags(
     all_parts: bool,
 ) -> u32 {
     FfiBoundary::run_default(0, || {
-        if ctx.is_null() {
-            return 0;
-        }
-        // SAFETY: ctx is non-null (just checked) and points to a live EngineContext.
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         unsafe { &mut *ctx }
             .engine_mut()
             .index_flags(idx, part, all_parts)
@@ -106,10 +96,7 @@ pub unsafe extern "C" fn rust__handler__create(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees name covers name_len readable bytes.
-        let name = match unsafe { FfiPtr::bytes_to_str(name, name_len) } {
-            Ok(s) => s,
-            Err(e) => return Err(e),
-        };
+        let name = unsafe { FfiPtr::bytes_to_str(name, name_len) }?;
         engine.create(name)
     })
 }
@@ -129,10 +116,7 @@ pub unsafe extern "C" fn rust__handler__open(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees name covers name_len readable bytes.
-        let name = match unsafe { FfiPtr::bytes_to_str(name, name_len) } {
-            Ok(s) => s,
-            Err(e) => return Err(e),
-        };
+        let name = unsafe { FfiPtr::bytes_to_str(name, name_len) }?;
         engine.open(name, mode)
     })
 }

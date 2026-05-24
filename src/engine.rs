@@ -66,6 +66,7 @@ pub type EngineResult<T = ()> = Result<T, EngineError>;
 /// so the trait requires `Send`. The `EngineContext` that owns a
 /// `Box<dyn StorageEngine>` crosses the C++ FFI boundary as a raw pointer;
 /// the `Send` bound is the only compile-time guarantee that this stays sound.
+#[allow(clippy::missing_errors_doc)]
 pub trait StorageEngine: Send {
     /// Engine display name shown by `SHOW ENGINES` and used as the `ENGINE=`
     /// value in `CREATE TABLE`. Must be a null-terminated `'static` C string
@@ -80,25 +81,35 @@ pub trait StorageEngine: Send {
     /// including `part`.
     fn index_flags(&self, idx: u32, part: u32, all_parts: bool) -> u32;
 
-    /// Create the on-disk representation for a new table named `name`
+    /// Create the on-disk representation for a new table named `name`.
+    /// Errors are implementation-defined.
     fn create(&mut self, name: &str) -> EngineResult;
 
-    /// Open an existing table named `name` in the given `mode`
+    /// Open an existing table named `name` in the given `mode`.
+    /// Errors are implementation-defined.
     fn open(&mut self, name: &str, mode: i32) -> EngineResult;
 
-    /// Release any resources acquired by [`open`](Self::open)
+    /// Release any resources acquired by [`open`](Self::open).
+    /// Errors are implementation-defined.
     fn close(&mut self) -> EngineResult;
 
     /// Begin a full table scan. `scan == false` indicates the optimizer will
-    /// only use positioned access (`rnd_pos`).
+    /// only use positioned access (`rnd_pos`). Errors are implementation-defined.
     fn rnd_init(&mut self, scan: bool) -> EngineResult;
 
-    /// Fetch the next row into `buf`. Returns [`EngineError::EndOfFile`] once
-    /// the scan is exhausted.
+    /// Fetch the next row into `buf`.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::EndOfFile`] once the scan is exhausted; other
+    /// variants are implementation-defined.
     fn rnd_next(&mut self, buf: &mut [u8]) -> EngineResult;
 
     /// Fetch a row by the position previously recorded with
     /// [`position`](Self::position).
+    ///
+    /// # Errors
+    /// Returns [`EngineError::WrongCommand`] when the engine has no positioned
+    /// access path; other variants are implementation-defined.
     fn rnd_pos(&mut self, buf: &mut [u8], pos: &[u8]) -> EngineResult;
 
     /// Notify the engine of the row just read so a later
@@ -110,6 +121,6 @@ pub trait StorageEngine: Send {
     fn position(&mut self, record: &[u8]);
 
     /// Refresh statistics (rows, deleted rows, data length, ...) for the
-    /// optimizer.
+    /// optimizer. Errors are implementation-defined.
     fn info(&mut self, flag: u32) -> EngineResult;
 }
