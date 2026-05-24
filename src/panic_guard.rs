@@ -30,18 +30,19 @@ use crate::engine::EngineError;
 
 const PANIC_LOG_MSG: &str = "ffi boundary caught panic from storage engine";
 
-/// Panic-safe entry point for every `extern "C"` callback. Zero-sized; the
-/// methods are associated functions grouped by responsibility.
+/// Panic-safe entry point shared by every `extern "C"` callback this crate
+/// exposes. Zero-sized; the methods are associated functions grouped here by
+/// responsibility.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct FfiBoundary;
 
 impl FfiBoundary {
-    /// Run `f` inside `catch_unwind` and project the outcome into a MySQL
-    /// `HA_ERR_*` integer:
+    /// Run `f` inside `catch_unwind` and project the outcome to a MySQL
+    /// `HA_ERR_*` integer suitable for an `extern "C"` return:
     ///
     /// - `Ok(Ok(()))` → `0`
-    /// - `Ok(Err(e))` → `e.to_mysql_errno()`
+    /// - `Ok(Err(e))` → `e.as_mysql_errno()`
     /// - `Err(_)` (panic) → `HA_ERR_INTERNAL_ERROR`
     pub fn run<F>(f: F) -> i32
     where
@@ -49,17 +50,17 @@ impl FfiBoundary {
     {
         match catch_unwind(AssertUnwindSafe(f)) {
             Ok(Ok(())) => 0,
-            Ok(Err(e)) => e.to_mysql_errno(),
+            Ok(Err(e)) => e.as_mysql_errno(),
             Err(_) => {
                 tracing::error!("{PANIC_LOG_MSG}");
-                EngineError::Internal.to_mysql_errno()
+                EngineError::Internal.as_mysql_errno()
             }
         }
     }
 
     /// Variant for callbacks whose C++ signature returns void. Panics are
-    /// swallowed so the server stays alive; errors cannot be reported back
-    /// to MySQL through a void return.
+    /// swallowed (and logged) so the server stays alive; errors cannot be
+    /// reported back to MySQL through a void return.
     pub fn run_void<F>(f: F)
     where
         F: FnOnce(),
@@ -70,9 +71,9 @@ impl FfiBoundary {
         }
     }
 
-    /// Variant for callbacks that return a non-`Result` value (pointer,
-    /// integer flag bitfield, etc.). Returns `default` on panic so the caller
-    /// always sees a well-defined value rather than an unwound stack.
+    /// Variant for callbacks that return a non-`Result` value (pointer, flag
+    /// bitfield, etc.). Returns `default` on panic so the C++ side always
+    /// observes a well-defined value rather than an unwound stack.
     pub fn run_default<T, F>(default: T, f: F) -> T
     where
         F: FnOnce() -> T,

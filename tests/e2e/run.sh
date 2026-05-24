@@ -31,21 +31,32 @@ cd "$(dirname "$0")/../.."
 
 IMAGE="rusty-mysql-handler-e2e"
 CONTAINER="rusty-e2e-$$"
+ROOT_PW="root"
 
 trap 'docker rm -f "$CONTAINER" >/dev/null 2>&1 || true' EXIT
 
-mysql() { docker exec -i "$CONTAINER" mysql -uroot -proot "$@"; }
+# MYSQL_PWD avoids the "Using a password on the command line interface" warning
+# that `-p<pw>` triggers. Container-scoped, never reaches the host process list.
+mysql() { docker exec -i -e MYSQL_PWD="$ROOT_PW" "$CONTAINER" mysql -uroot "$@"; }
+ping_mysqld() {
+  docker exec -e MYSQL_PWD="$ROOT_PW" "$CONTAINER" mysqladmin ping -uroot --silent &>/dev/null
+}
 
 docker build -f tests/e2e/Dockerfile -t "$IMAGE" .
-docker run -d --name "$CONTAINER" -e MYSQL_ROOT_PASSWORD=root "$IMAGE" >/dev/null
+docker run -d --name "$CONTAINER" -e MYSQL_ROOT_PASSWORD="$ROOT_PW" "$IMAGE" >/dev/null
 
 echo "e2e: waiting for mysqld..."
 for _ in {1..60}; do
-  docker exec "$CONTAINER" mysqladmin ping -uroot -proot --silent &>/dev/null && break
+  ping_mysqld && break
   sleep 2
 done
+ping_mysqld || {
+  echo "e2e: mysqld did not become ready within 120s" >&2
+  exit 1
+}
 
-mysql -e "INSTALL PLUGIN rusty SONAME 'ha_rusty.so'; CREATE DATABASE e2e;"
+mysql -e "INSTALL PLUGIN rusty SONAME 'ha_rusty.so';"
+mysql -e "CREATE DATABASE e2e;"
 
 LAST="$(mysql --batch --skip-column-names e2e < tests/e2e/test.sql \
   | awk 'NF{last=$0} END{print last}')"

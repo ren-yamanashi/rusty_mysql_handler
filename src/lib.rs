@@ -20,7 +20,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Rust bindings for the MySQL 8.4 storage engine handler API.
+//! Rust bindings for the MySQL 8.4 storage engine handler API
 
 pub mod engine;
 pub mod ffi;

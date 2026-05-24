@@ -20,24 +20,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `rust__handler__*` callbacks invoked by the C++ shim, one per bound
-//! `handler` virtual method.
+//! `rust__handler__*` callbacks invoked by the C++ shim.
 //!
-//! # Safety (applies to every function below)
+//! # Safety (every function below)
 //!
-//! - `ctx` is a pointer returned by `rust__create_engine` and not yet passed
-//!   to `rust__destroy_engine`. Null is tolerated only by the three
-//!   accessors (`table_type` / `table_flags` / `index_flags`); the other
-//!   callbacks require non-null.
-//! - The C++ shim never calls a callback for the same `ctx` from two threads
-//!   concurrently, so converting `*mut EngineContext` to a unique `&mut` via
-//!   [`EngineContext::engine_mut`] inside the callback is sound.
-//! - Pointer/length pairs (`buf`+`buf_len`, `pos`+`pos_len`, `record`+
-//!   `record_len`) describe a region valid for read or write (per direction)
-//!   for the duration of the call only — the engine must not retain them.
-//! - `name` parameters arrive as `(*const u8, usize)`. The shim measures the
-//!   length before crossing the boundary so this side never performs an
-//!   unbounded scan; the buffer is read for `name_len` bytes only.
+//! - `ctx` comes from `rust__create_engine` and has not been destroyed.
+//!   `table_type` / `table_flags` / `index_flags` tolerate null with safe
+//!   defaults; all other callbacks require non-null.
+//! - The shim never calls a callback for the same `ctx` from two threads
+//!   concurrently, so `&mut *ctx` is sound inside each callback.
+//! - Pointer/length pairs are valid for the call only; engines must not
+//!   retain them.
 
 #![allow(unsafe_code)]
 
@@ -46,11 +39,10 @@ use std::ffi::c_char;
 use crate::ffi::{EngineContext, FfiPtr};
 use crate::panic_guard::FfiBoundary;
 
-/// Engine display name (null-terminated, static).
+/// Engine display name; null-terminated `'static`
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` may be null; null returns a null
-/// pointer so the C++ shim can fall back to a literal name.
+/// `ctx` may be null; null returns a null pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__table_type(ctx: *mut EngineContext) -> *const c_char {
     FfiBoundary::run_default(std::ptr::null(), || {
@@ -63,10 +55,10 @@ pub unsafe extern "C" fn rust__handler__table_type(ctx: *mut EngineContext) -> *
     })
 }
 
-/// `HA_*` capability bitfield.
+/// `HA_*` capability bitfield
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` may be null; null returns `0`.
+/// `ctx` may be null; null returns `0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__table_flags(ctx: *mut EngineContext) -> u64 {
     FfiBoundary::run_default(0, || {
@@ -78,10 +70,10 @@ pub unsafe extern "C" fn rust__handler__table_flags(ctx: *mut EngineContext) -> 
     })
 }
 
-/// Per-index capability bitfield.
+/// Per-index capability bitfield
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` may be null; null returns `0`.
+/// `ctx` may be null; null returns `0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__index_flags(
     ctx: *mut EngineContext,
@@ -100,11 +92,10 @@ pub unsafe extern "C" fn rust__handler__index_flags(
     })
 }
 
-/// Create a new table.
+/// Create a new table
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null; `name` must cover
-/// `name_len` readable bytes.
+/// `ctx` must be non-null; `name` must cover `name_len` readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__create(
     ctx: *mut EngineContext,
@@ -123,11 +114,10 @@ pub unsafe extern "C" fn rust__handler__create(
     })
 }
 
-/// Open an existing table.
+/// Open an existing table
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null; `name` must cover
-/// `name_len` readable bytes.
+/// `ctx` must be non-null; `name` must cover `name_len` readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__open(
     ctx: *mut EngineContext,
@@ -147,10 +137,10 @@ pub unsafe extern "C" fn rust__handler__open(
     })
 }
 
-/// Close the table.
+/// Close the table
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null.
+/// `ctx` must be non-null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__close(ctx: *mut EngineContext) -> i32 {
     FfiBoundary::run(|| {
@@ -159,10 +149,10 @@ pub unsafe extern "C" fn rust__handler__close(ctx: *mut EngineContext) -> i32 {
     })
 }
 
-/// Begin a full table scan.
+/// Begin a full table scan
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null.
+/// `ctx` must be non-null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__rnd_init(ctx: *mut EngineContext, scan: bool) -> i32 {
     FfiBoundary::run(|| {
@@ -171,11 +161,10 @@ pub unsafe extern "C" fn rust__handler__rnd_init(ctx: *mut EngineContext, scan: 
     })
 }
 
-/// Fetch the next row.
+/// Fetch the next row
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null; `buf` must be
-/// writable for `buf_len` bytes.
+/// `ctx` must be non-null; `buf` must be writable for `buf_len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__rnd_next(
     ctx: *mut EngineContext,
@@ -190,11 +179,11 @@ pub unsafe extern "C" fn rust__handler__rnd_next(
     })
 }
 
-/// Fetch a row by previously stored position.
+/// Fetch a row by stored position
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null; `buf` and `pos`
-/// must cover `buf_len` writable / `pos_len` readable bytes respectively.
+/// `ctx` must be non-null; `buf` writable for `buf_len`, `pos` readable for
+/// `pos_len`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__rnd_pos(
     ctx: *mut EngineContext,
@@ -214,11 +203,10 @@ pub unsafe extern "C" fn rust__handler__rnd_pos(
     })
 }
 
-/// Store the position of the current row.
+/// Store the current row's position
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null; `record` must
-/// cover `record_len` readable bytes.
+/// `ctx` must be non-null; `record` must cover `record_len` readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__position(
     ctx: *mut EngineContext,
@@ -234,10 +222,10 @@ pub unsafe extern "C" fn rust__handler__position(
     });
 }
 
-/// Refresh table statistics.
+/// Refresh table statistics
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null.
+/// `ctx` must be non-null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__info(ctx: *mut EngineContext, flag: u32) -> i32 {
     FfiBoundary::run(|| {

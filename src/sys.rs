@@ -20,25 +20,44 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Raw FFI bindings: MySQL handler constants and opaque C++ types.
+//! Raw FFI bindings: MySQL handler constants and opaque C++ types
 
-#![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
-#![allow(missing_docs, unreachable_pub, missing_debug_implementations)]
-#![allow(clippy::all, clippy::pedantic)]
+#[allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
+#[allow(missing_docs, unreachable_pub, missing_debug_implementations)]
+#[allow(clippy::all, clippy::pedantic)]
+mod generated {
+    include!("sys_bindings.rs");
+}
 
-include!(concat!(env!("OUT_DIR"), "/sys_bindings.rs"));
+pub use generated::*;
 
-// Opaque C++ classes referenced by FFI signatures but not produced by bindgen.
+// Hand-written as `u64` because `Table_flags` is `unsigned long long` upstream
+// but bindgen's default macro type would render these as `i64`.
+
+/// `HA_BINLOG_ROW_CAPABLE` from `sql/handler.h`
+pub const HA_BINLOG_ROW_CAPABLE: u64 = 1 << 34;
+
+/// `HA_BINLOG_STMT_CAPABLE` from `sql/handler.h`
+pub const HA_BINLOG_STMT_CAPABLE: u64 = 1 << 35;
+
+/// Opaque C++ `RustHandlerBase` from `shim/binding.hpp`
 #[repr(C)]
+#[derive(Debug)]
 pub struct RustHandlerBase([u8; 0]);
 
+/// Opaque MySQL `TABLE`
 #[repr(C)]
+#[derive(Debug)]
 pub struct TABLE([u8; 0]);
 
+/// Opaque MySQL `TABLE_SHARE`
 #[repr(C)]
+#[derive(Debug)]
 pub struct TABLE_SHARE([u8; 0]);
 
+/// Opaque MySQL `THD` (thread handle)
 #[repr(C)]
+#[derive(Debug)]
 pub struct THD([u8; 0]);
 
 #[cfg(test)]
@@ -52,6 +71,6 @@ mod tests {
 
     #[test]
     fn ha_binlog_stmt_capable_bit() {
-        assert_eq!(HA_BINLOG_STMT_CAPABLE, 1i64 << 35);
+        assert_eq!(HA_BINLOG_STMT_CAPABLE, 1u64 << 35);
     }
 }

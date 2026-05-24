@@ -27,10 +27,11 @@
 #include "my_base.h"
 
 // Mirrored from sql/handler.h (server-internal dependencies make the original
-// header unsuitable for direct bindgen consumption).
+// header unsuitable for direct bindgen consumption). HA_BINLOG_* flag values
+// live in src/sys.rs as `u64` constants because MySQL's `Table_flags` is
+// `unsigned long long`; defining them here as macros would force bindgen's
+// signed default to widen them to `i64`.
 typedef unsigned long long Table_flags;
-#define HA_BINLOG_ROW_CAPABLE (1ULL << 34)
-#define HA_BINLOG_STMT_CAPABLE (1ULL << 35)
 
 // Mirrored from thr_lock.h (avoids the mysql/psi/* dependency chain).
 enum thr_lock_type {

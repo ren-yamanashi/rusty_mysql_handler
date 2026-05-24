@@ -46,3 +46,5 @@ redundant_pub_crate = "warn"
 [profile.release]
 lto = true
 codegen-units = 1
+# `catch_unwind` at the FFI boundary requires unwinding panics
+panic = "unwind"

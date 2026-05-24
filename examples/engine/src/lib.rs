@@ -20,8 +20,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Minimal storage engine for testing `mysql-handler`. Returns three empty
-//! rows from `rnd_next` and then signals end-of-file.
+//! Minimal storage engine for testing `mysql-handler`; `rnd_next` yields
+//! three empty rows then `EndOfFile`.
 
 #![allow(unsafe_code)]
 
@@ -32,17 +32,9 @@ use mysql_handler::ffi::register_engine_factory;
 use mysql_handler::panic_guard::FfiBoundary;
 use mysql_handler::sys::HA_BINLOG_STMT_CAPABLE;
 
-// Plugin manifest. Lives in Rust (not in the C++ shim) because Rust cdylib's
-// auto-generated linker version script wraps every non-`pub no_mangle` symbol
-// in `local: *;`, which would otherwise hide the three data symbols mysqld
-// looks up via dlsym at `INSTALL PLUGIN` time. Declaring them as
-// `#[no_mangle] pub static` puts them on the `global:` side of that script
-// on Linux ELF and on Mach-O alike, so no platform-specific export gymnastics
-// are needed.
-// `pub mod` is needed to satisfy `unreachable_pub` on the exported statics,
-// which Rust's cdylib export path requires to be `pub`. The contents are
-// MySQL ABI symbols, not a Rust public API, so doc / Debug lints are silenced
-// at the module scope.
+// Plugin manifest lives here (not in the C++ shim) because the Rust cdylib's
+// linker version script wraps every non-`pub no_mangle` symbol in `local: *;`,
+// which would hide the three data symbols mysqld dlsyms at `INSTALL PLUGIN`.
 #[cfg(not(test))]
 #[doc(hidden)]
 #[allow(missing_docs, missing_debug_implementations)]
@@ -50,10 +42,8 @@ pub mod plugin_manifest {
     use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
     use core::ptr;
 
-    // Layout copy of MySQL's `struct st_mysql_plugin` from include/mysql/plugin.h.
-    // The C struct is ABI-stable across MySQL 8.x. Status / system vars and the
-    // reserved slot are kept as opaque `*mut c_void` because this example
-    // engine does not expose any of those.
+    // Layout copy of `struct st_mysql_plugin` (include/mysql/plugin.h); stable
+    // across MySQL 8.x. Status / system vars stay opaque — unused here.
     #[repr(C)]
     pub struct StMysqlPlugin {
         pub type_: c_int,
@@ -72,23 +62,19 @@ pub mod plugin_manifest {
         pub flags: c_ulong,
     }
 
-    // SAFETY: every field is either Copy POD or a pointer to a `'static` symbol
-    // owned by the linker; the struct itself is never mutated.
+    // SAFETY: fields are Copy POD or pointers to `'static` linker-owned
+    // symbols; the struct is never mutated.
     unsafe impl Sync for StMysqlPlugin {}
 
-    // Storage-engine interface tag defined by the C++ shim (shim/plugin.cc).
-    // We only need its address; opaque `[u8; 0]` keeps the layout intentionally
-    // unspecified on the Rust side.
+    // Interface tag defined in shim/plugin.cc; opaque on the Rust side.
     unsafe extern "C" {
         static rusty_storage_engine: [u8; 0];
         fn rusty_init_func(p: *mut c_void) -> c_int;
         fn rusty_deinit_func(p: *mut c_void) -> c_int;
     }
 
-    // Constants from include/mysql/plugin.h. Hardcoded rather than pulled in
-    // via bindgen because exposing `st_mysql_plugin` transitively drags in
-    // `SHOW_VAR` / `SYS_VAR` for no real benefit; these three integers are
-    // ABI-stable on every MySQL 8.x release.
+    // From include/mysql/plugin.h; hand-written to skip the SHOW_VAR / SYS_VAR
+    // transitive types bindgen would pull in.
     const MYSQL_STORAGE_ENGINE_PLUGIN: c_int = 1;
     const PLUGIN_LICENSE_GPL: c_int = 1;
     const MYSQL_PLUGIN_INTERFACE_VERSION: c_int = 0x010B;
@@ -96,27 +82,21 @@ pub mod plugin_manifest {
     #[unsafe(no_mangle)]
     pub static _mysql_plugin_interface_version_: c_int = MYSQL_PLUGIN_INTERFACE_VERSION;
 
-    // Force the size into a const so `pub static` carries a plain c_int value
-    // (not a const-eval expression). Otherwise the macOS Mach-O linker drops
-    // the symbol from the exports trie under LTO; the link_section attribute
-    // alone is not enough.
+    // Routed through a `const` so the `pub static` carries a plain value;
+    // otherwise macOS LTO drops the symbol from the export trie.
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     const SIZEOF_ST_PLUGIN: c_int = size_of::<StMysqlPlugin>() as c_int;
 
-    // Force into __DATA on macOS: otherwise both 4-byte c_int statics end up
-    // adjacent in __TEXT,__const and the Mach-O export trie collapses them —
-    // only the first c_int gets a dlsym-visible entry. Linux ELF does not
-    // suffer from this and keeps the default section.
+    // Forced into __DATA on macOS so the Mach-O export trie keeps both 4-byte
+    // c_int statics distinct; Linux ELF does not need this.
     #[unsafe(no_mangle)]
     #[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__data"))]
     pub static _mysql_sizeof_struct_st_plugin_: c_int = SIZEOF_ST_PLUGIN;
 
     #[unsafe(no_mangle)]
     pub static _mysql_plugin_declarations_: [StMysqlPlugin; 2] = [
-        // `info` is `*mut c_void` per MySQL's ABI but `rusty_storage_engine`
-        // is a Rust `static` (immutable). The C++ side only reads its address,
-        // so the const-to-mut cast is sound; the underlying memory is never
-        // written through this pointer.
+        // `info` is `*mut c_void` per ABI but the C++ side only reads the
+        // address; the const-to-mut cast never writes through the pointer.
         StMysqlPlugin {
             type_: MYSQL_STORAGE_ENGINE_PLUGIN,
             info: &raw const rusty_storage_engine as *mut c_void,
@@ -133,7 +113,7 @@ pub mod plugin_manifest {
             reserved1: ptr::null_mut(),
             flags: 0,
         },
-        // mysql_declare_plugin_end sentinel: zeroed st_mysql_plugin terminator.
+        // `mysql_declare_plugin_end` sentinel: zeroed terminator
         StMysqlPlugin {
             type_: 0,
             info: ptr::null_mut(),
@@ -153,7 +133,7 @@ pub mod plugin_manifest {
     ];
 }
 
-/// Trivial in-memory engine that yields a fixed number of empty rows.
+/// Trivial in-memory engine yielding a fixed number of empty rows
 #[derive(Debug)]
 pub struct TrivialEngine {
     num_rows: u32,
@@ -161,7 +141,7 @@ pub struct TrivialEngine {
 }
 
 impl TrivialEngine {
-    /// Construct a new engine that will yield three empty rows on the next scan.
+    /// New engine that yields three empty rows
     pub const fn new() -> Self {
         Self {
             num_rows: 3,
@@ -182,7 +162,7 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn table_flags(&self) -> u64 {
-        HA_BINLOG_STMT_CAPABLE as u64
+        HA_BINLOG_STMT_CAPABLE
     }
 
     fn index_flags(&self, _idx: u32, _part: u32, _all_parts: bool) -> u32 {
@@ -225,14 +205,11 @@ impl StorageEngine for TrivialEngine {
     }
 }
 
-/// Plugin entry point. The C++ shim calls this once at `INSTALL PLUGIN` so the
-/// factory is wired up before any table is opened.
+/// Plugin entry point; the shim calls this once at `INSTALL PLUGIN`.
 ///
 /// # Safety
-/// Must be called once from `rusty_init_func` on the mysqld thread that runs
-/// `INSTALL PLUGIN`. The body is panic-safe via [`FfiBoundary::run_void`] and
-/// takes no inputs from the caller, so the soundness requirement reduces to
-/// the FFI calling-convention invariants (same as every other `rust__*`).
+/// Called once from `rusty_init_func` on the mysqld thread running
+/// `INSTALL PLUGIN`. Panic-safe via [`FfiBoundary::run_void`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__plugin_init() {
     FfiBoundary::run_void(|| {

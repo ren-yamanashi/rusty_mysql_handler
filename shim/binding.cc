@@ -65,6 +65,8 @@ extern "C" int rusty_deinit_func(void *) {
 RustyShare::RustyShare() { thr_lock_init(&lock); }
 RustyShare::~RustyShare() { thr_lock_delete(&lock); }
 
+// `rust_ctx_` is null only when no engine factory was registered. `create`
+// and `open` reject that case; later methods may dereference unconditionally.
 RustHandlerBase::RustHandlerBase(handlerton *hton, TABLE_SHARE *table_arg)
     : handler(hton, table_arg) {
   rust_ctx_ = rust__create_engine();
@@ -119,7 +121,6 @@ int RustHandlerBase::open(const char *name, int mode, uint, const dd::Table *) {
 
 int RustHandlerBase::close() {
   DBUG_TRACE;
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__close(rust_ctx_);
 }
 
@@ -134,31 +135,27 @@ int RustHandlerBase::create(const char *name, TABLE *, HA_CREATE_INFO *,
 
 int RustHandlerBase::rnd_init(bool scan) {
   DBUG_TRACE;
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__rnd_init(rust_ctx_, scan);
 }
 
 int RustHandlerBase::rnd_next(uchar *buf) {
   DBUG_TRACE;
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__rnd_next(rust_ctx_, buf, table->s->rec_buff_length);
 }
 
 int RustHandlerBase::rnd_pos(uchar *buf, uchar *pos) {
   DBUG_TRACE;
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__rnd_pos(rust_ctx_, buf, table->s->rec_buff_length,
                                 pos, ref_length);
 }
 
 void RustHandlerBase::position(const uchar *record) {
   DBUG_TRACE;
-  if (rust_ctx_) rust__handler__position(rust_ctx_, record, ref_length);
+  rust__handler__position(rust_ctx_, record, ref_length);
 }
 
 int RustHandlerBase::info(uint flag) {
   DBUG_TRACE;
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__info(rust_ctx_, flag);
 }
 

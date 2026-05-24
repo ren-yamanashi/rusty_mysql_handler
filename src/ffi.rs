@@ -20,7 +20,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! FFI lifecycle and shared helpers. Per-handler `rust__handler__*` callbacks
+//! FFI lifecycle and shared helpers. Per-method `rust__handler__*` callbacks
 //! live in [`crate::ffi_handler`]; both modules share the safety contract
 //! documented there.
 
@@ -60,9 +60,10 @@ impl fmt::Debug for EngineContext {
 /// Factory closure that produces a fresh engine instance per opened table.
 pub type EngineFactory = fn() -> Box<dyn StorageEngine>;
 
-/// Process-wide singleton holding the engine factory and producing per-handler
-/// contexts on demand. The plugin's `rust__plugin_init` registers a factory
-/// once at startup; `rust__create_engine` reads back through the same registry.
+/// Process-wide singleton holding the engine factory. The plugin's
+/// `rust__plugin_init` registers the factory once at startup;
+/// `rust__create_engine` reads back through the same registry on every
+/// handler instantiation.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct EngineRegistry {
@@ -70,7 +71,7 @@ pub struct EngineRegistry {
 }
 
 impl EngineRegistry {
-    /// Empty registry. Used to initialise the [`REGISTRY`] singleton at link
+    /// Empty registry. Used to initialise the process-wide singleton at link
     /// time; downstream callers should go through [`register_engine_factory`].
     pub const fn new() -> Self {
         Self {
@@ -79,7 +80,7 @@ impl EngineRegistry {
     }
 
     /// Install the factory. Idempotent: subsequent calls are ignored and a
-    /// `debug` log entry is emitted so a stray re-install is observable
+    /// `debug` log line is emitted so a stray re-install is observable
     /// without burdening operators.
     pub fn register(&self, factory: EngineFactory) {
         match self.factory.set(factory) {
@@ -106,29 +107,24 @@ impl Default for EngineRegistry {
 
 static REGISTRY: EngineRegistry = EngineRegistry::new();
 
-/// Install the factory on the process-wide registry. Thin wrapper around
-/// [`EngineRegistry::register`] for the [`REGISTRY`] singleton.
+/// Install `factory` on the process-wide engine registry. Call this once
+/// from the plugin's `rust__plugin_init`; later calls are ignored.
 pub fn register_engine_factory(factory: EngineFactory) {
     REGISTRY.register(factory);
 }
 
-/// Raw-pointer helpers: turn pointers handed in by the C++ shim into bounded
-/// Rust references. Zero-sized; the methods are associated functions grouped
-/// by responsibility. All methods are `unsafe` because the FFI caller owns the
-/// validity proof for the pointer.
+/// Raw-pointer helpers that turn shim-supplied pointers into bounded references
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct FfiPtr;
 
 impl FfiPtr {
-    /// Validate `len` bytes at `p` as a UTF-8 `&str` without scanning past the
-    /// caller-supplied length. The shim measures `name`'s length on the C++
-    /// side (where MySQL's `NAME_LEN` upper bound holds) and passes it in
-    /// explicitly so this side performs no `strlen`-style unbounded read.
+    /// Decode `len` bytes at `p` as a UTF-8 `&str`; length is caller-measured
+    /// so this side performs no `strlen`-style scan.
     ///
     /// # Safety
-    /// `p` must be non-null, properly aligned, and readable for `len` bytes
-    /// for the lifetime of the returned reference.
+    /// `p` must be non-null, aligned, and readable for `len` bytes for the
+    /// returned reference's lifetime.
     pub(crate) unsafe fn bytes_to_str<'a>(p: *const u8, len: usize) -> EngineResult<&'a str> {
         // SAFETY: caller guarantees `p` covers `len` readable bytes;
         // `from_raw_parts` requires non-null even when `len == 0`.
@@ -139,22 +135,22 @@ impl FfiPtr {
         }
     }
 
-    /// View `len` writable bytes at `p` as `&mut [u8]`.
+    /// View `len` writable bytes at `p` as `&mut [u8]`
     ///
     /// # Safety
-    /// `p` must be non-null, properly aligned, and writable for `len` bytes
-    /// for the lifetime of the returned reference.
+    /// `p` must be non-null, aligned, and writable for `len` bytes for the
+    /// returned reference's lifetime.
     pub(crate) unsafe fn slice_mut<'a>(p: *mut u8, len: usize) -> &'a mut [u8] {
         // SAFETY: caller guarantees `p` covers `len` writable bytes;
         // `from_raw_parts_mut` requires non-null even when `len == 0`.
         unsafe { slice::from_raw_parts_mut(p, len) }
     }
 
-    /// View `len` readable bytes at `p` as `&[u8]`.
+    /// View `len` readable bytes at `p` as `&[u8]`
     ///
     /// # Safety
-    /// `p` must be non-null, properly aligned, and readable for `len` bytes
-    /// for the lifetime of the returned reference.
+    /// `p` must be non-null, aligned, and readable for `len` bytes for the
+    /// returned reference's lifetime.
     pub(crate) unsafe fn slice_const<'a>(p: *const u8, len: usize) -> &'a [u8] {
         // SAFETY: caller guarantees `p` covers `len` readable bytes;
         // `from_raw_parts` requires non-null even when `len == 0`.
@@ -162,12 +158,10 @@ impl FfiPtr {
     }
 }
 
-/// Allocate an `EngineContext`. Null if no factory was registered or the
-/// factory panics.
+/// Allocate an `EngineContext`; null if no factory or the factory panics.
 ///
 /// # Safety
-/// Safe to call from C++ after `rust__plugin_init`. The returned pointer must
-/// be released exactly once with `rust__destroy_engine`.
+/// Safe after `rust__plugin_init`; release via `rust__destroy_engine` once.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__create_engine() -> *mut EngineContext {
     FfiBoundary::run_default(std::ptr::null_mut(), || match REGISTRY.create_context() {
@@ -176,11 +170,11 @@ pub unsafe extern "C" fn rust__create_engine() -> *mut EngineContext {
     })
 }
 
-/// Drop a context returned by `rust__create_engine`.
+/// Drop a context returned by `rust__create_engine`
 ///
 /// # Safety
-/// `ctx` must be a pointer returned by `rust__create_engine` and not yet
-/// passed to this function. Null is accepted and ignored.
+/// `ctx` must come from `rust__create_engine` and not be released twice; null
+/// is ignored.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__destroy_engine(ctx: *mut EngineContext) {
     FfiBoundary::run_void(|| {
