@@ -21,7 +21,7 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 # Smoke-test image: builds the engine cdylib as a Linux ELF and bakes it into
-# a mysql:8.4 runtime container. Used by e2e/smoke/run.sh to run end-to-end
+# a mysql:8.4 runtime container. Used by tests/e2e/run.sh to run end-to-end
 # INSTALL PLUGIN / SELECT verification without polluting the host mysqld.
 
 FROM rust:1.95.0-slim AS builder
@@ -34,6 +34,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       g++ \
       pkg-config \
       bison \
+      libssl-dev \
+      libncurses-dev \
+      libtirpc-dev \
+      zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
@@ -56,7 +60,7 @@ COPY examples ./examples
 
 RUN MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release -p engine
 
-FROM mysql:8.4.6
+FROM mysql:8.4.9
 
 COPY --from=builder \
      /workspace/target/release/libengine.so \

@@ -35,7 +35,9 @@
 //! - Pointer/length pairs (`buf`+`buf_len`, `pos`+`pos_len`, `record`+
 //!   `record_len`) describe a region valid for read or write (per direction)
 //!   for the duration of the call only — the engine must not retain them.
-//! - C string parameters (`name`) are valid null-terminated bytes.
+//! - `name` parameters arrive as `(*const u8, usize)`. The shim measures the
+//!   length before crossing the boundary so this side never performs an
+//!   unbounded scan; the buffer is read for `name_len` bytes only.
 
 #![allow(unsafe_code)]
 
@@ -101,18 +103,19 @@ pub unsafe extern "C" fn rust__handler__index_flags(
 /// Create a new table.
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null; `name` must be a
-/// valid null-terminated C string.
+/// See module-level safety notes. `ctx` must be non-null; `name` must cover
+/// `name_len` readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__create(
     ctx: *mut EngineContext,
-    name: *const c_char,
+    name: *const u8,
+    name_len: usize,
 ) -> i32 {
     FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
-        // SAFETY: caller guarantees name is a valid null-terminated C string.
-        let name = match unsafe { FfiPtr::cstr_to_str(name) } {
+        // SAFETY: caller guarantees name covers name_len readable bytes.
+        let name = match unsafe { FfiPtr::bytes_to_str(name, name_len) } {
             Ok(s) => s,
             Err(e) => return Err(e),
         };
@@ -123,19 +126,20 @@ pub unsafe extern "C" fn rust__handler__create(
 /// Open an existing table.
 ///
 /// # Safety
-/// See module-level safety notes. `ctx` must be non-null; `name` must be a
-/// valid null-terminated C string.
+/// See module-level safety notes. `ctx` must be non-null; `name` must cover
+/// `name_len` readable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__open(
     ctx: *mut EngineContext,
-    name: *const c_char,
+    name: *const u8,
+    name_len: usize,
     mode: i32,
 ) -> i32 {
     FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
-        // SAFETY: caller guarantees name is a valid null-terminated C string.
-        let name = match unsafe { FfiPtr::cstr_to_str(name) } {
+        // SAFETY: caller guarantees name covers name_len readable bytes.
+        let name = match unsafe { FfiPtr::bytes_to_str(name, name_len) } {
             Ok(s) => s,
             Err(e) => return Err(e),
         };

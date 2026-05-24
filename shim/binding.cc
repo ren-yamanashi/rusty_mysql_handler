@@ -22,12 +22,23 @@
 
 #include "binding.hpp"
 
+#include <cstring>
 #include <new>
 
 #include "my_dbug.h"
 #include "mysql/plugin.h"
 #include "rust_callbacks.hpp"
 #include "sql/table.h"
+
+// The Rust-side plugin manifest hand-declares `StMysqlPlugin` to mirror this
+// layout. Pinning the size here catches any C++-side header drift at compile
+// time; the runtime `_mysql_sizeof_struct_st_plugin_` symbol catches the
+// converse (Rust side diverging from the C++ header).
+#if defined(__LP64__) || defined(_LP64)
+static_assert(sizeof(st_mysql_plugin) == 112,
+              "st_mysql_plugin layout drifted; update plugin_manifest in "
+              "examples/engine/src/lib.rs");
+#endif
 
 static handlerton *rusty_hton = nullptr;
 
@@ -101,7 +112,9 @@ int RustHandlerBase::open(const char *name, int mode, uint, const dd::Table *) {
   if (!(share_ = get_share())) return HA_ERR_OUT_OF_MEM;
   thr_lock_data_init(&share_->lock, &lock_data_, nullptr);
   if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
-  return rust__handler__open(rust_ctx_, name, mode);
+  return rust__handler__open(rust_ctx_,
+                             reinterpret_cast<const uint8_t *>(name),
+                             std::strlen(name), mode);
 }
 
 int RustHandlerBase::close() {
@@ -114,7 +127,9 @@ int RustHandlerBase::create(const char *name, TABLE *, HA_CREATE_INFO *,
                             dd::Table *) {
   DBUG_TRACE;
   if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
-  return rust__handler__create(rust_ctx_, name);
+  return rust__handler__create(rust_ctx_,
+                               reinterpret_cast<const uint8_t *>(name),
+                               std::strlen(name));
 }
 
 int RustHandlerBase::rnd_init(bool scan) {

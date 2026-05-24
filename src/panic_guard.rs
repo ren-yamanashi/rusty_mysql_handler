@@ -33,6 +33,7 @@ const PANIC_LOG_MSG: &str = "ffi boundary caught panic from storage engine";
 /// Panic-safe entry point for every `extern "C"` callback. Zero-sized; the
 /// methods are associated functions grouped by responsibility.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct FfiBoundary;
 
 impl FfiBoundary {

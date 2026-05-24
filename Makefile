@@ -20,7 +20,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-.PHONY: setup rust-build clean lint fmt check test smoke help
+.PHONY: setup rust-build clean lint fmt check test test_e2e help
 
 MYSQL_SOURCE_DIR ?= $(CURDIR)/mysql-server
 MYSQL_BUILD_DIR  ?= $(CURDIR)/build/mysql
@@ -65,8 +65,8 @@ check: ## Run check + clippy + fmt check + license check
 test: ## Run tests
 	@cargo test --workspace
 
-smoke: ## E2E smoke test via Docker (mysql:8.4 + plugin baked into image)
-	@bash e2e/smoke/run.sh
+test_e2e: ## E2E test via Docker (mysql:8.4 + plugin baked into image)
+	@bash tests/e2e/run.sh
 
 clean: ## Remove cargo build artifacts (keeps build/mysql to avoid re-running mysql-configure)
 	@cargo clean

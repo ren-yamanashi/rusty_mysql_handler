@@ -37,17 +37,18 @@ uint64_t rust__handler__table_flags(void *ctx);
 uint32_t rust__handler__index_flags(void *ctx, uint32_t idx, uint32_t part,
                                     bool all_parts);
 
-int rust__handler__create(void *ctx, const char *name);
-int rust__handler__open(void *ctx, const char *name, int mode);
-int rust__handler__close(void *ctx);
+int32_t rust__handler__create(void *ctx, const uint8_t *name, size_t name_len);
+int32_t rust__handler__open(void *ctx, const uint8_t *name, size_t name_len,
+                            int32_t mode);
+int32_t rust__handler__close(void *ctx);
 
-int rust__handler__rnd_init(void *ctx, bool scan);
-int rust__handler__rnd_next(void *ctx, uint8_t *buf, size_t buf_len);
-int rust__handler__rnd_pos(void *ctx, uint8_t *buf, size_t buf_len,
-                           const uint8_t *pos, size_t pos_len);
+int32_t rust__handler__rnd_init(void *ctx, bool scan);
+int32_t rust__handler__rnd_next(void *ctx, uint8_t *buf, size_t buf_len);
+int32_t rust__handler__rnd_pos(void *ctx, uint8_t *buf, size_t buf_len,
+                               const uint8_t *pos, size_t pos_len);
 void rust__handler__position(void *ctx, const uint8_t *record,
                              size_t record_len);
-int rust__handler__info(void *ctx, uint32_t flag);
+int32_t rust__handler__info(void *ctx, uint32_t flag);
 }
 
 #endif

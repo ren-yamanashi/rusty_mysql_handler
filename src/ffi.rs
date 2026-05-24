@@ -26,7 +26,6 @@
 
 #![allow(unsafe_code)]
 
-use std::ffi::{CStr, c_char};
 use std::fmt;
 use std::slice;
 use std::sync::OnceLock;
@@ -36,6 +35,7 @@ use crate::panic_guard::FfiBoundary;
 
 /// Per-handler Rust-side state owned through `Box::into_raw`. The C++
 /// `RustHandlerBase` keeps a `void*` to one of these.
+#[non_exhaustive]
 pub struct EngineContext {
     engine: Box<dyn StorageEngine>,
 }
@@ -64,6 +64,7 @@ pub type EngineFactory = fn() -> Box<dyn StorageEngine>;
 /// contexts on demand. The plugin's `rust__plugin_init` registers a factory
 /// once at startup; `rust__create_engine` reads back through the same registry.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct EngineRegistry {
     factory: OnceLock<EngineFactory>,
 }
@@ -116,19 +117,23 @@ pub fn register_engine_factory(factory: EngineFactory) {
 /// by responsibility. All methods are `unsafe` because the FFI caller owns the
 /// validity proof for the pointer.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct FfiPtr;
 
 impl FfiPtr {
-    /// Convert a null-terminated C string pointer to `&str`.
+    /// Validate `len` bytes at `p` as a UTF-8 `&str` without scanning past the
+    /// caller-supplied length. The shim measures `name`'s length on the C++
+    /// side (where MySQL's `NAME_LEN` upper bound holds) and passes it in
+    /// explicitly so this side performs no `strlen`-style unbounded read.
     ///
     /// # Safety
-    /// `p` must be non-null and point to a valid null-terminated C string
-    /// for the lifetime of the returned reference. This helper does not
-    /// perform a null check; passing a null pointer is undefined behaviour.
-    pub(crate) unsafe fn cstr_to_str<'a>(p: *const c_char) -> EngineResult<&'a str> {
-        // SAFETY: caller guarantees `p` is non-null and points to a valid
-        // null-terminated C string.
-        match unsafe { CStr::from_ptr(p) }.to_str() {
+    /// `p` must be non-null, properly aligned, and readable for `len` bytes
+    /// for the lifetime of the returned reference.
+    pub(crate) unsafe fn bytes_to_str<'a>(p: *const u8, len: usize) -> EngineResult<&'a str> {
+        // SAFETY: caller guarantees `p` covers `len` readable bytes;
+        // `from_raw_parts` requires non-null even when `len == 0`.
+        let bytes = unsafe { slice::from_raw_parts(p, len) };
+        match core::str::from_utf8(bytes) {
             Ok(s) => Ok(s),
             Err(_) => Err(EngineError::Internal),
         }
