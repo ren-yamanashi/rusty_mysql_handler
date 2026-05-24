@@ -46,14 +46,19 @@ docker build -f tests/e2e/Dockerfile -t "$IMAGE" .
 docker run -d --name "$CONTAINER" -e MYSQL_ROOT_PASSWORD="$ROOT_PW" "$IMAGE" >/dev/null
 
 echo "e2e: waiting for mysqld..."
-for _ in {1..60}; do
-  ping_mysqld && break
+for i in $(seq 1 60); do
+  if ping_mysqld; then
+    echo "e2e: mysqld ready after ${i} attempt(s)"
+    break
+  fi
   sleep 2
 done
-ping_mysqld || {
-  echo "e2e: mysqld did not become ready within 120s" >&2
+if ! ping_mysqld; then
+  echo "e2e: mysqld did not become ready within 120s; container state + log tail:" >&2
+  docker ps -a --filter "name=$CONTAINER" >&2
+  docker logs "$CONTAINER" 2>&1 | tail -100 >&2
   exit 1
-}
+fi
 
 mysql -e "INSTALL PLUGIN rusty SONAME 'ha_rusty.so';" || {
   echo "e2e: INSTALL PLUGIN failed; mysqld log tail:" >&2
