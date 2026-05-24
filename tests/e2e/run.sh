@@ -38,8 +38,12 @@ trap 'docker rm -f "$CONTAINER" >/dev/null 2>&1 || true' EXIT
 # MYSQL_PWD avoids the "Using a password on the command line interface" warning
 # that `-p<pw>` triggers. Container-scoped, never reaches the host process list.
 mysql() { docker exec -i -e MYSQL_PWD="$ROOT_PW" "$CONTAINER" mysql -uroot "$@"; }
+# `mysqladmin ping` returns success even when auth fails, which makes it
+# fire during the mysql:8.4 image's temporary-server init phase (root has
+# no password yet). Run an authenticated query instead so we only break out
+# of the wait loop once the real server with MYSQL_ROOT_PASSWORD is up.
 ping_mysqld() {
-  docker exec -e MYSQL_PWD="$ROOT_PW" "$CONTAINER" mysqladmin ping -uroot --silent &>/dev/null
+  docker exec -e MYSQL_PWD="$ROOT_PW" "$CONTAINER" mysql -uroot -e "SELECT 1" &>/dev/null
 }
 
 docker build -f tests/e2e/Dockerfile -t "$IMAGE" .
