@@ -8,12 +8,18 @@ license = "GPL-2.0-only"
 edition = "2024"
 repository = "https://github.com/ren-yamanashi/rusty_mysql_handler"
 rust-version = "1.85"
+links = "ha_rusty_shim"
 
 [workspace]
 members = ["examples/engine"]
 
+[dependencies]
+tracing = "0.1.41"
+
 [build-dependencies]
-bindgen = "0.71"
+bindgen = "0.71.1"
+cmake = "0.1.58"
+flate2 = "1.1.9"
 
 [lints]
 workspace = true

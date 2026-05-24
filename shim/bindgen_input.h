@@ -20,13 +20,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#include "binding.hpp"
+#ifndef SHIM_BINDGEN_INPUT_H
+#define SHIM_BINDGEN_INPUT_H
 
-#include "mysql/plugin.h"
+// HA_ERR_* error codes.
+#include "my_base.h"
 
-// Storage-engine interface tag. Referenced from the Rust-side plugin manifest
-// as an `extern "C"` static. The manifest itself lives in Rust because Rust
-// cdylib's auto-generated linker version script wraps any non-`pub no_mangle`
-// symbol in `local: *;`, which would hide C++ data symbols from dlsym.
-extern "C" st_mysql_storage_engine rusty_storage_engine = {
-    MYSQL_HANDLERTON_INTERFACE_VERSION};
+// Mirrored from sql/handler.h (server-internal dependencies make the original
+// header unsuitable for direct bindgen consumption).
+typedef unsigned long long Table_flags;
+#define HA_BINLOG_ROW_CAPABLE (1ULL << 34)
+#define HA_BINLOG_STMT_CAPABLE (1ULL << 35)
+
+// Mirrored from thr_lock.h (avoids the mysql/psi/* dependency chain).
+enum thr_lock_type {
+  TL_IGNORE = -1,
+  TL_UNLOCK,
+  TL_READ_DEFAULT,
+  TL_READ,
+  TL_READ_WITH_SHARED_LOCKS,
+  TL_READ_HIGH_PRIORITY,
+  TL_READ_NO_INSERT,
+  TL_WRITE_ALLOW_WRITE,
+  TL_WRITE_CONCURRENT_DEFAULT,
+  TL_WRITE_CONCURRENT_INSERT,
+  TL_WRITE_DEFAULT,
+  TL_WRITE_LOW_PRIORITY,
+  TL_WRITE,
+  TL_WRITE_ONLY
+};
+
+#endif

@@ -22,8 +22,12 @@
 
 #include "binding.hpp"
 
+#include <new>
+
 #include "my_dbug.h"
 #include "mysql/plugin.h"
+#include "rust_callbacks.hpp"
+#include "sql/table.h"
 
 static handlerton *rusty_hton = nullptr;
 
@@ -32,8 +36,9 @@ static handler *rusty_create_handler(handlerton *hton, TABLE_SHARE *table,
   return new (mem_root) RustHandlerBase(hton, table);
 }
 
-int rusty_init_func(void *p) {
+extern "C" int rusty_init_func(void *p) {
   DBUG_TRACE;
+  rust__plugin_init();
   rusty_hton = static_cast<handlerton *>(p);
   rusty_hton->state = SHOW_OPTION_YES;
   rusty_hton->create = rusty_create_handler;
@@ -41,20 +46,31 @@ int rusty_init_func(void *p) {
   return 0;
 }
 
-int rusty_deinit_func(void *p [[maybe_unused]]) {
+extern "C" int rusty_deinit_func(void *) {
   DBUG_TRACE;
   return 0;
 }
 
+RustyShare::RustyShare() { thr_lock_init(&lock); }
+RustyShare::~RustyShare() { thr_lock_delete(&lock); }
+
 RustHandlerBase::RustHandlerBase(handlerton *hton, TABLE_SHARE *table_arg)
-    : handler(hton, table_arg) {}
+    : handler(hton, table_arg) {
+  rust_ctx_ = rust__create_engine();
+}
+
+RustHandlerBase::~RustHandlerBase() {
+  if (rust_ctx_) {
+    rust__destroy_engine(rust_ctx_);
+  }
+}
 
 RustyShare *RustHandlerBase::get_share() {
   RustyShare *tmp_share;
   DBUG_TRACE;
   lock_shared_ha_data();
   if (!(tmp_share = static_cast<RustyShare *>(get_ha_share_ptr()))) {
-    tmp_share = new RustyShare;
+    tmp_share = new (std::nothrow) RustyShare;
     if (tmp_share) {
       set_ha_share_ptr(static_cast<Handler_share *>(tmp_share));
     }
@@ -63,52 +79,72 @@ RustyShare *RustHandlerBase::get_share() {
   return tmp_share;
 }
 
-const char *RustHandlerBase::table_type() const { return "RUSTY"; }
-
-handler::Table_flags RustHandlerBase::table_flags() const {
-  return HA_BINLOG_STMT_CAPABLE;
+const char *RustHandlerBase::table_type() const {
+  // Always return a name so SHOW ENGINES lists the plugin even when the Rust
+  // factory failed to register (rust_ctx_ == nullptr).
+  if (rust_ctx_) return rust__handler__table_type(rust_ctx_);
+  return "RUSTY";
 }
 
-ulong RustHandlerBase::index_flags(uint, uint, bool) const { return 0; }
-
-int RustHandlerBase::open(const char *, int, uint, const dd::Table *) {
-  DBUG_TRACE;
-  if (!(share_ = get_share())) return 1;
-  thr_lock_data_init(&share_->lock, &lock_data_, nullptr);
+handler::Table_flags RustHandlerBase::table_flags() const {
+  if (rust_ctx_) return rust__handler__table_flags(rust_ctx_);
   return 0;
+}
+
+ulong RustHandlerBase::index_flags(uint idx, uint part, bool all_parts) const {
+  if (rust_ctx_) return rust__handler__index_flags(rust_ctx_, idx, part, all_parts);
+  return 0;
+}
+
+int RustHandlerBase::open(const char *name, int mode, uint, const dd::Table *) {
+  DBUG_TRACE;
+  if (!(share_ = get_share())) return HA_ERR_OUT_OF_MEM;
+  thr_lock_data_init(&share_->lock, &lock_data_, nullptr);
+  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  return rust__handler__open(rust_ctx_, name, mode);
 }
 
 int RustHandlerBase::close() {
   DBUG_TRACE;
-  return 0;
+  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  return rust__handler__close(rust_ctx_);
 }
 
-int RustHandlerBase::create(const char *, TABLE *, HA_CREATE_INFO *,
+int RustHandlerBase::create(const char *name, TABLE *, HA_CREATE_INFO *,
                             dd::Table *) {
   DBUG_TRACE;
-  return 0;
+  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  return rust__handler__create(rust_ctx_, name);
 }
 
-int RustHandlerBase::rnd_init(bool) {
+int RustHandlerBase::rnd_init(bool scan) {
   DBUG_TRACE;
-  return 0;
+  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  return rust__handler__rnd_init(rust_ctx_, scan);
 }
 
-int RustHandlerBase::rnd_next(uchar *) {
+int RustHandlerBase::rnd_next(uchar *buf) {
   DBUG_TRACE;
-  return HA_ERR_END_OF_FILE;
+  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  return rust__handler__rnd_next(rust_ctx_, buf, table->s->rec_buff_length);
 }
 
-int RustHandlerBase::rnd_pos(uchar *, uchar *) {
+int RustHandlerBase::rnd_pos(uchar *buf, uchar *pos) {
   DBUG_TRACE;
-  return HA_ERR_WRONG_COMMAND;
+  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  return rust__handler__rnd_pos(rust_ctx_, buf, table->s->rec_buff_length,
+                                pos, ref_length);
 }
 
-void RustHandlerBase::position(const uchar *) { DBUG_TRACE; }
-
-int RustHandlerBase::info(uint) {
+void RustHandlerBase::position(const uchar *record) {
   DBUG_TRACE;
-  return 0;
+  if (rust_ctx_) rust__handler__position(rust_ctx_, record, ref_length);
+}
+
+int RustHandlerBase::info(uint flag) {
+  DBUG_TRACE;
+  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  return rust__handler__info(rust_ctx_, flag);
 }
 
 THR_LOCK_DATA **RustHandlerBase::store_lock(THD *, THR_LOCK_DATA **to,

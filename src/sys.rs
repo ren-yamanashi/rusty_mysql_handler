@@ -20,13 +20,38 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#include "binding.hpp"
+//! Raw FFI bindings: MySQL handler constants and opaque C++ types.
 
-#include "mysql/plugin.h"
+#![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
+#![allow(missing_docs, unreachable_pub, missing_debug_implementations)]
+#![allow(clippy::all, clippy::pedantic)]
 
-// Storage-engine interface tag. Referenced from the Rust-side plugin manifest
-// as an `extern "C"` static. The manifest itself lives in Rust because Rust
-// cdylib's auto-generated linker version script wraps any non-`pub no_mangle`
-// symbol in `local: *;`, which would hide C++ data symbols from dlsym.
-extern "C" st_mysql_storage_engine rusty_storage_engine = {
-    MYSQL_HANDLERTON_INTERFACE_VERSION};
+include!(concat!(env!("OUT_DIR"), "/sys_bindings.rs"));
+
+// Opaque C++ classes referenced by FFI signatures but not produced by bindgen.
+#[repr(C)]
+pub struct RustHandlerBase([u8; 0]);
+
+#[repr(C)]
+pub struct TABLE([u8; 0]);
+
+#[repr(C)]
+pub struct TABLE_SHARE([u8; 0]);
+
+#[repr(C)]
+pub struct THD([u8; 0]);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ha_err_end_of_file_is_137() {
+        assert_eq!(HA_ERR_END_OF_FILE, 137);
+    }
+
+    #[test]
+    fn ha_binlog_stmt_capable_bit() {
+        assert_eq!(HA_BINLOG_STMT_CAPABLE, 1i64 << 35);
+    }
+}

@@ -1,0 +1,36 @@
+# Copyright (C) 2026 ren-yamanashi — GPL-2.0-only.
+# See LICENSE in the repository root for full terms.
+
+name: Audit
+
+on:
+  pull_request:
+    paths:
+      - 'Cargo.lock'
+      - '.github/workflows/audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Cargo.lock'
+      - '.github/workflows/audit.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@f48d2f8ba2b452934c948b7be1a768079c3632ff # v2.79.6
+        with:
+          tool: cargo-audit
+      - run: cargo audit

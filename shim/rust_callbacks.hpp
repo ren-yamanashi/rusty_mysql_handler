@@ -20,13 +20,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#include "binding.hpp"
+#ifndef SHIM_RUST_CALLBACKS_HPP
+#define SHIM_RUST_CALLBACKS_HPP
 
-#include "mysql/plugin.h"
+#include <cstddef>
+#include <cstdint>
 
-// Storage-engine interface tag. Referenced from the Rust-side plugin manifest
-// as an `extern "C"` static. The manifest itself lives in Rust because Rust
-// cdylib's auto-generated linker version script wraps any non-`pub no_mangle`
-// symbol in `local: *;`, which would hide C++ data symbols from dlsym.
-extern "C" st_mysql_storage_engine rusty_storage_engine = {
-    MYSQL_HANDLERTON_INTERFACE_VERSION};
+extern "C" {
+
+void rust__plugin_init();
+void *rust__create_engine();
+void rust__destroy_engine(void *ctx);
+
+const char *rust__handler__table_type(void *ctx);
+uint64_t rust__handler__table_flags(void *ctx);
+uint32_t rust__handler__index_flags(void *ctx, uint32_t idx, uint32_t part,
+                                    bool all_parts);
+
+int rust__handler__create(void *ctx, const char *name);
+int rust__handler__open(void *ctx, const char *name, int mode);
+int rust__handler__close(void *ctx);
+
+int rust__handler__rnd_init(void *ctx, bool scan);
+int rust__handler__rnd_next(void *ctx, uint8_t *buf, size_t buf_len);
+int rust__handler__rnd_pos(void *ctx, uint8_t *buf, size_t buf_len,
+                           const uint8_t *pos, size_t pos_len);
+void rust__handler__position(void *ctx, const uint8_t *record,
+                             size_t record_len);
+int rust__handler__info(void *ctx, uint32_t flag);
+}
+
+#endif

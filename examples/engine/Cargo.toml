@@ -8,7 +8,7 @@ edition = "2024"
 rust-version = "1.85"
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["cdylib"]
 
 [lints]
 workspace = true

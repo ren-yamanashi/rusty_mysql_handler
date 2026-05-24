@@ -21,3 +21,9 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 //! Rust bindings for the MySQL 8.4 storage engine handler API.
+
+pub mod engine;
+pub mod ffi;
+pub mod ffi_handler;
+pub mod panic_guard;
+pub mod sys;

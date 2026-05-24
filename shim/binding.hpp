@@ -30,19 +30,20 @@
 class RustyShare : public Handler_share {
  public:
   THR_LOCK lock;
-  RustyShare() { thr_lock_init(&lock); }
-  ~RustyShare() override { thr_lock_delete(&lock); }
+  RustyShare();
+  ~RustyShare() override;
 };
 
 class RustHandlerBase : public handler {
   THR_LOCK_DATA lock_data_;
   RustyShare *share_ = nullptr;
+  void *rust_ctx_ = nullptr;
 
   RustyShare *get_share();
 
  public:
   RustHandlerBase(handlerton *hton, TABLE_SHARE *table_arg);
-  ~RustHandlerBase() override = default;
+  ~RustHandlerBase() override;
 
   const char *table_type() const override;
   Table_flags table_flags() const override;
@@ -64,7 +65,11 @@ class RustHandlerBase : public handler {
                              enum thr_lock_type lock_type) override;
 };
 
+// C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs
+// can refer to these by their unmangled names via `extern "C"`.
+extern "C" {
 int rusty_init_func(void *p);
 int rusty_deinit_func(void *p);
+}
 
 #endif

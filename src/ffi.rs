@@ -1,0 +1,187 @@
+// Copyright (C) 2026 ren-yamanashi
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License, version 2.0,
+// as published by the Free Software Foundation.
+//
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms,
+// as designated in a particular file or component or in included license
+// documentation. The authors of this program hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, see <https://www.gnu.org/licenses/>.
+
+//! FFI lifecycle and shared helpers. Per-handler `rust__handler__*` callbacks
+//! live in [`crate::ffi_handler`]; both modules share the safety contract
+//! documented there.
+
+#![allow(unsafe_code)]
+
+use std::ffi::{CStr, c_char};
+use std::fmt;
+use std::slice;
+use std::sync::OnceLock;
+
+use crate::engine::{EngineError, EngineResult, StorageEngine};
+use crate::panic_guard::FfiBoundary;
+
+/// Per-handler Rust-side state owned through `Box::into_raw`. The C++
+/// `RustHandlerBase` keeps a `void*` to one of these.
+pub struct EngineContext {
+    engine: Box<dyn StorageEngine>,
+}
+
+impl EngineContext {
+    /// Wrap a fresh engine implementation in a context owned by the FFI layer.
+    pub fn new(engine: Box<dyn StorageEngine>) -> Self {
+        Self { engine }
+    }
+
+    pub(crate) fn engine_mut(&mut self) -> &mut dyn StorageEngine {
+        &mut *self.engine
+    }
+}
+
+impl fmt::Debug for EngineContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EngineContext").finish_non_exhaustive()
+    }
+}
+
+/// Factory closure that produces a fresh engine instance per opened table.
+pub type EngineFactory = fn() -> Box<dyn StorageEngine>;
+
+/// Process-wide singleton holding the engine factory and producing per-handler
+/// contexts on demand. The plugin's `rust__plugin_init` registers a factory
+/// once at startup; `rust__create_engine` reads back through the same registry.
+#[derive(Debug)]
+pub struct EngineRegistry {
+    factory: OnceLock<EngineFactory>,
+}
+
+impl EngineRegistry {
+    /// Empty registry. Used to initialise the [`REGISTRY`] singleton at link
+    /// time; downstream callers should go through [`register_engine_factory`].
+    pub const fn new() -> Self {
+        Self {
+            factory: OnceLock::new(),
+        }
+    }
+
+    /// Install the factory. Idempotent: subsequent calls are ignored and a
+    /// `debug` log entry is emitted so a stray re-install is observable
+    /// without burdening operators.
+    pub fn register(&self, factory: EngineFactory) {
+        match self.factory.set(factory) {
+            Ok(()) => {}
+            Err(_) => {
+                tracing::debug!(
+                    "engine factory already registered; ignoring duplicate registration"
+                );
+            }
+        }
+    }
+
+    pub(crate) fn create_context(&self) -> Option<EngineContext> {
+        let factory = self.factory.get().copied()?;
+        Some(EngineContext::new(factory()))
+    }
+}
+
+impl Default for EngineRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+static REGISTRY: EngineRegistry = EngineRegistry::new();
+
+/// Install the factory on the process-wide registry. Thin wrapper around
+/// [`EngineRegistry::register`] for the [`REGISTRY`] singleton.
+pub fn register_engine_factory(factory: EngineFactory) {
+    REGISTRY.register(factory);
+}
+
+/// Raw-pointer helpers: turn pointers handed in by the C++ shim into bounded
+/// Rust references. Zero-sized; the methods are associated functions grouped
+/// by responsibility. All methods are `unsafe` because the FFI caller owns the
+/// validity proof for the pointer.
+#[derive(Debug)]
+pub struct FfiPtr;
+
+impl FfiPtr {
+    /// Convert a null-terminated C string pointer to `&str`.
+    ///
+    /// # Safety
+    /// `p` must be non-null and point to a valid null-terminated C string
+    /// for the lifetime of the returned reference. This helper does not
+    /// perform a null check; passing a null pointer is undefined behaviour.
+    pub(crate) unsafe fn cstr_to_str<'a>(p: *const c_char) -> EngineResult<&'a str> {
+        // SAFETY: caller guarantees `p` is non-null and points to a valid
+        // null-terminated C string.
+        match unsafe { CStr::from_ptr(p) }.to_str() {
+            Ok(s) => Ok(s),
+            Err(_) => Err(EngineError::Internal),
+        }
+    }
+
+    /// View `len` writable bytes at `p` as `&mut [u8]`.
+    ///
+    /// # Safety
+    /// `p` must be non-null, properly aligned, and writable for `len` bytes
+    /// for the lifetime of the returned reference.
+    pub(crate) unsafe fn slice_mut<'a>(p: *mut u8, len: usize) -> &'a mut [u8] {
+        // SAFETY: caller guarantees `p` covers `len` writable bytes;
+        // `from_raw_parts_mut` requires non-null even when `len == 0`.
+        unsafe { slice::from_raw_parts_mut(p, len) }
+    }
+
+    /// View `len` readable bytes at `p` as `&[u8]`.
+    ///
+    /// # Safety
+    /// `p` must be non-null, properly aligned, and readable for `len` bytes
+    /// for the lifetime of the returned reference.
+    pub(crate) unsafe fn slice_const<'a>(p: *const u8, len: usize) -> &'a [u8] {
+        // SAFETY: caller guarantees `p` covers `len` readable bytes;
+        // `from_raw_parts` requires non-null even when `len == 0`.
+        unsafe { slice::from_raw_parts(p, len) }
+    }
+}
+
+/// Allocate an `EngineContext`. Null if no factory was registered or the
+/// factory panics.
+///
+/// # Safety
+/// Safe to call from C++ after `rust__plugin_init`. The returned pointer must
+/// be released exactly once with `rust__destroy_engine`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__create_engine() -> *mut EngineContext {
+    FfiBoundary::run_default(std::ptr::null_mut(), || match REGISTRY.create_context() {
+        Some(ctx) => Box::into_raw(Box::new(ctx)),
+        None => std::ptr::null_mut(),
+    })
+}
+
+/// Drop a context returned by `rust__create_engine`.
+///
+/// # Safety
+/// `ctx` must be a pointer returned by `rust__create_engine` and not yet
+/// passed to this function. Null is accepted and ignored.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__destroy_engine(ctx: *mut EngineContext) {
+    FfiBoundary::run_void(|| {
+        if !ctx.is_null() {
+            // SAFETY: pointer originates from `Box::into_raw` and is dropped once.
+            drop(unsafe { Box::from_raw(ctx) });
+        }
+    });
+}

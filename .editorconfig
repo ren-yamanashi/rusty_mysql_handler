@@ -16,7 +16,6 @@ indent_size = 4
 
 [*.{cc,cpp,hpp,h}]
 indent_size = 2
-# Access specifiers (public/private/protected) use 1-space indent
 
 [*.md]
 indent_size = 2

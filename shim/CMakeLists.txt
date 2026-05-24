@@ -21,7 +21,7 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 cmake_minimum_required(VERSION 3.20)
-project(ha_rusty LANGUAGES CXX)
+project(ha_rusty_shim LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,8 @@ if(NOT DEFINED MYSQL_BUILD_DIR)
   message(FATAL_ERROR "Set -DMYSQL_BUILD_DIR=<path to mysql cmake build dir>")
 endif()
 
+# Required transitively by MySQL headers (sql/handler.h pulls in
+# rapidjson/x509 helpers). Not used directly by the shim sources.
 find_package(OpenSSL REQUIRED)
 
 add_definitions(-DMYSQL_DYNAMIC_PLUGIN -DMYSQL_SERVER -DHAVE_CONFIG_H)
@@ -42,22 +44,15 @@ include_directories(
   ${MYSQL_BUILD_DIR}/include
   ${MYSQL_SOURCE_DIR}/include
   ${MYSQL_SOURCE_DIR}/sql
+  # MySQL 8.4 moved some headers (mysql/components/*, dd/types/*) under libs/;
+  # sql/handler.h transitively requires them.
+  ${MYSQL_SOURCE_DIR}/libs
   ${MYSQL_SOURCE_DIR}
   ${MYSQL_SOURCE_DIR}/extra/rapidjson/include
   ${OPENSSL_INCLUDE_DIR}
 )
 
-add_library(ha_rusty MODULE binding.cc plugin.cc)
-set_target_properties(ha_rusty PROPERTIES PREFIX "" SUFFIX ".so")
-
-if(APPLE)
-  target_link_options(ha_rusty PRIVATE LINKER:-undefined,dynamic_lookup)
-endif()
-
-option(ENABLE_RUST "Link Rust engine staticlib" OFF)
-if(ENABLE_RUST)
-  if(NOT DEFINED RUST_LIB_DIR)
-    message(FATAL_ERROR "Set -DRUST_LIB_DIR=<path to Rust target/release>")
-  endif()
-  target_link_libraries(ha_rusty PRIVATE ${RUST_LIB_DIR}/libengine.a)
-endif()
+# Built as STATIC so a downstream Rust cdylib (built by mysql-handler's
+# build.rs) can pull it in. The final ha_rusty.{so,dylib} is produced
+# by `cargo build --release -p engine`, not by this CMakeLists.
+add_library(ha_rusty_shim STATIC binding.cc plugin.cc)
