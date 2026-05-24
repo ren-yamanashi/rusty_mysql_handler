@@ -45,10 +45,8 @@ ping_mysqld() {
 docker build -f tests/e2e/Dockerfile -t "$IMAGE" .
 docker run -d --name "$CONTAINER" -e MYSQL_ROOT_PASSWORD="$ROOT_PW" "$IMAGE" >/dev/null
 
-echo "e2e: waiting for mysqld..."
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   if ping_mysqld; then
-    echo "e2e: mysqld ready after ${i} attempt(s)"
     break
   fi
   sleep 2
