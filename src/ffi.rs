@@ -41,8 +41,7 @@ pub struct EngineContext {
 }
 
 impl EngineContext {
-    /// Wrap a fresh engine implementation in a context owned by the FFI layer.
-    pub fn new(engine: Box<dyn StorageEngine>) -> Self {
+    pub(crate) fn new(engine: Box<dyn StorageEngine>) -> Self {
         Self { engine }
     }
 
@@ -57,7 +56,7 @@ impl fmt::Debug for EngineContext {
     }
 }
 
-/// Factory closure that produces a fresh engine instance per opened table.
+/// Factory closure that produces a fresh engine instance per opened table
 pub type EngineFactory = fn() -> Box<dyn StorageEngine>;
 
 /// Process-wide singleton holding the engine factory. The plugin's
@@ -66,23 +65,18 @@ pub type EngineFactory = fn() -> Box<dyn StorageEngine>;
 /// handler instantiation.
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct EngineRegistry {
+pub(crate) struct EngineRegistry {
     factory: OnceLock<EngineFactory>,
 }
 
 impl EngineRegistry {
-    /// Empty registry. Used to initialise the process-wide singleton at link
-    /// time; downstream callers should go through [`register_engine_factory`].
-    pub const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             factory: OnceLock::new(),
         }
     }
 
-    /// Install the factory. Idempotent: subsequent calls are ignored and a
-    /// `debug` log line is emitted so a stray re-install is observable
-    /// without burdening operators.
-    pub fn register(&self, factory: EngineFactory) {
+    pub(crate) fn register(&self, factory: EngineFactory) {
         match self.factory.set(factory) {
             Ok(()) => {}
             Err(_) => {
@@ -116,7 +110,7 @@ pub fn register_engine_factory(factory: EngineFactory) {
 /// Raw-pointer helpers that turn shim-supplied pointers into bounded references
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct FfiPtr;
+pub(crate) struct FfiPtr;
 
 impl FfiPtr {
     /// Decode `len` bytes at `p` as a UTF-8 `&str`; length is caller-measured
@@ -131,7 +125,7 @@ impl FfiPtr {
         let bytes = unsafe { slice::from_raw_parts(p, len) };
         match core::str::from_utf8(bytes) {
             Ok(s) => Ok(s),
-            Err(_) => Err(EngineError::Internal),
+            Err(_) => Err(EngineError::InvalidName),
         }
     }
 
@@ -158,7 +152,7 @@ impl FfiPtr {
     }
 }
 
-/// Allocate an `EngineContext`; null if no factory or the factory panics.
+/// Allocate an `EngineContext`; null if no factory or the factory panics
 ///
 /// # Safety
 /// Safe after `rust__plugin_init`; release via `rust__destroy_engine` once.

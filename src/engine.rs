@@ -26,16 +26,20 @@ use std::ffi::CStr;
 
 use crate::sys;
 
-/// Errors a storage engine can return; each maps to a MySQL `HA_ERR_*` code.
+/// Errors a storage engine can return; each maps to a MySQL `HA_ERR_*` code
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EngineError {
     /// End of a table or index scan, returned from [`StorageEngine::rnd_next`]
     /// when the scan is exhausted.
     EndOfFile,
-    /// The engine does not support the requested operation.
+    /// The engine does not support the requested operation
     WrongCommand,
-    /// Generic internal error; prefer a more specific variant when possible.
+    /// The supplied table or schema name is not valid UTF-8 or otherwise
+    /// unusable. Mapped to `HA_ERR_WRONG_TABLE_NAME` so operators see a
+    /// name-level diagnostic instead of a generic internal error.
+    InvalidName,
+    /// Generic internal error; prefer a more specific variant when possible
     Internal,
 }
 
@@ -47,12 +51,13 @@ impl EngineError {
         match self {
             Self::EndOfFile => sys::HA_ERR_END_OF_FILE,
             Self::WrongCommand => sys::HA_ERR_WRONG_COMMAND,
+            Self::InvalidName => sys::HA_ERR_WRONG_TABLE_NAME,
             Self::Internal => sys::HA_ERR_INTERNAL_ERROR,
         }
     }
 }
 
-/// Result alias used throughout the [`StorageEngine`] trait.
+/// Result alias used throughout the [`StorageEngine`] trait
 pub type EngineResult<T = ()> = Result<T, EngineError>;
 
 /// The safe interface every storage engine implements.
@@ -67,7 +72,7 @@ pub trait StorageEngine: Send {
     /// (e.g. `c"RUSTY"`) because the pointer is handed straight to MySQL.
     fn table_type(&self) -> &'static CStr;
 
-    /// `HA_*` capability bitfield advertised to the optimizer.
+    /// `HA_*` capability bitfield advertised to the optimizer
     fn table_flags(&self) -> u64;
 
     /// Per-index capability bitfield. `idx` is the index, `part` the key part;
@@ -75,13 +80,13 @@ pub trait StorageEngine: Send {
     /// including `part`.
     fn index_flags(&self, idx: u32, part: u32, all_parts: bool) -> u32;
 
-    /// Create the on-disk representation for a new table named `name`.
+    /// Create the on-disk representation for a new table named `name`
     fn create(&mut self, name: &str) -> EngineResult;
 
-    /// Open an existing table named `name` in the given `mode`.
+    /// Open an existing table named `name` in the given `mode`
     fn open(&mut self, name: &str, mode: i32) -> EngineResult;
 
-    /// Release any resources acquired by [`open`](Self::open).
+    /// Release any resources acquired by [`open`](Self::open)
     fn close(&mut self) -> EngineResult;
 
     /// Begin a full table scan. `scan == false` indicates the optimizer will
@@ -96,8 +101,12 @@ pub trait StorageEngine: Send {
     /// [`position`](Self::position).
     fn rnd_pos(&mut self, buf: &mut [u8], pos: &[u8]) -> EngineResult;
 
-    /// Record the current row's position. The bytes written are passed back
-    /// to [`rnd_pos`](Self::rnd_pos) on subsequent positioned reads.
+    /// Notify the engine of the row just read so a later
+    /// [`rnd_pos`](Self::rnd_pos) can replay it. The shim does not yet
+    /// expose MySQL's `handler::ref` buffer to Rust, so engines have no
+    /// place to persist a position — implementations either remember the
+    /// row internally or return [`EngineError::WrongCommand`] from
+    /// `rnd_pos` until the wiring is added.
     fn position(&mut self, record: &[u8]);
 
     /// Refresh statistics (rows, deleted rows, data length, ...) for the
