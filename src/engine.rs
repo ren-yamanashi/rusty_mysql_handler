@@ -247,4 +247,43 @@ pub trait StorageEngine: Send {
     ) -> EngineResult {
         Ok(())
     }
+
+    /// Insert the row held in `buf`, encoded in MySQL's internal record format
+    /// (the contents of `record[0]`). The engine must copy out whatever it
+    /// needs during the call; the borrow may not be retained afterwards.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the MySQL
+    /// handler base which rejects writes on engines that do not support them.
+    fn write_row(&mut self, _buf: &[u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Replace the row whose existing image is `old` with the new image `new`,
+    /// both in MySQL's internal record format. Neither borrow may be retained
+    /// past the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`].
+    fn update_row(&mut self, _old: &[u8], _new: &[u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Delete the row whose current image is `buf`, in MySQL's internal record
+    /// format. The borrow may not be retained past the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`].
+    fn delete_row(&mut self, _buf: &[u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Delete every row in the table in a single operation, the fast path MySQL
+    /// takes for an unqualified `DELETE` when the engine advertises support.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`].
+    fn delete_all_rows(&mut self) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
 }

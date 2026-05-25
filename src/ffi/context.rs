@@ -20,29 +20,31 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `rust__handler__*` callbacks invoked by the C++ shim, split by handler-API
-//! category. Each submodule holds the callbacks for one section of
-//! `docs/api/handler.md`.
-//!
-//! # Safety (every callback in these submodules)
-//!
-//! - `ctx` comes from `rust__create_engine` and has not been destroyed; the
-//!   C++ shim guards every callback against null on its side, so each Rust
-//!   callback requires non-null.
-//! - The shim never calls a callback for the same `ctx` from two threads
-//!   concurrently, so `&mut *ctx` is sound inside each callback.
-//! - Pointer/length pairs are valid for the call only; engines must not
-//!   retain them.
+//! Per-handler Rust-side state owned across the C++ FFI boundary.
 
-#[doc(hidden)]
-pub mod open_close;
-#[doc(hidden)]
-pub mod properties;
-#[doc(hidden)]
-pub mod row_operations;
-#[doc(hidden)]
-pub mod scan;
-#[doc(hidden)]
-pub mod statistics;
-#[doc(hidden)]
-pub mod table_lifecycle;
+use std::fmt;
+
+use crate::engine::StorageEngine;
+
+/// Per-handler Rust-side state owned through `Box::into_raw`. The C++
+/// `RustHandlerBase` keeps a `void*` to one of these.
+#[non_exhaustive]
+pub struct EngineContext {
+    engine: Box<dyn StorageEngine>,
+}
+
+impl EngineContext {
+    pub(crate) fn new(engine: Box<dyn StorageEngine>) -> Self {
+        Self { engine }
+    }
+
+    pub(crate) fn engine_mut(&mut self) -> &mut dyn StorageEngine {
+        &mut *self.engine
+    }
+}
+
+impl fmt::Debug for EngineContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EngineContext").finish_non_exhaustive()
+    }
+}
