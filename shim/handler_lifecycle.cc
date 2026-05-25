@@ -20,8 +20,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-// Table-lifecycle overrides (handler.h #4-#11). Split out of binding.cc to
-// keep both files under the 250-line cap.
+// Table-lifecycle overrides (handler.h #4-#11).
 
 #include "binding.hpp"
 #include "my_dbug.h"
@@ -70,7 +69,9 @@ int RustHandlerBase::truncate(dd::Table *table_def) {
 }
 
 // Preserve base behaviour so handler::table / table_share stay coherent before
-// the engine observes the change.
+// the engine observes the change. The base call is noexcept in MySQL 8.4; if a
+// future upstream change adds a throwing path here, FFI panic-safety requires
+// wrapping this invocation in try/catch.
 void RustHandlerBase::change_table_ptr(TABLE *table_arg, TABLE_SHARE *share) {
   DBUG_TRACE;
   handler::change_table_ptr(table_arg, share);
@@ -101,7 +102,7 @@ bool RustHandlerBase::upgrade_table(THD *thd, const char *dbname,
                                     const char *table_name,
                                     dd::Table *dd_table) {
   DBUG_TRACE;
-  if (!rust_ctx_) return false;
+  if (!rust_ctx_) return true;
   if (!dbname || !table_name) return true;
   return rust__handler__upgrade_table(
       rust_ctx_, static_cast<const void *>(thd),

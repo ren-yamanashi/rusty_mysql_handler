@@ -34,6 +34,7 @@ use crate::sys;
 /// # Safety
 /// `ctx` non-null; `name` covers `name_len` readable bytes; `table_def` is
 /// null or valid for read for the call.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__delete_table(
     ctx: *mut EngineContext,
@@ -57,6 +58,7 @@ pub unsafe extern "C" fn rust__handler__delete_table(
 /// # Safety
 /// `ctx` non-null; `from` / `to` cover their declared lengths; `from_def` /
 /// `to_def` are null or valid for read for the call.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__rename_table(
     ctx: *mut EngineContext,
@@ -86,6 +88,7 @@ pub unsafe extern "C" fn rust__handler__rename_table(
 ///
 /// # Safety
 /// `ctx` non-null; `name` covers `name_len` readable bytes.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__drop_table(
     ctx: *mut EngineContext,
@@ -96,10 +99,11 @@ pub unsafe extern "C" fn rust__handler__drop_table(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees name covers name_len readable bytes.
-        match unsafe { FfiPtr::bytes_to_str(name, name_len) } {
-            Ok(name) => engine.drop_table(name),
-            Err(_) => tracing::warn!("drop_table: invalid utf-8 in table name"),
-        }
+        let Ok(name) = (unsafe { FfiPtr::bytes_to_str(name, name_len) }) else {
+            tracing::warn!("drop_table: invalid utf-8 in table name");
+            return;
+        };
+        engine.drop_table(name);
     });
 }
 
@@ -107,6 +111,7 @@ pub unsafe extern "C" fn rust__handler__drop_table(
 ///
 /// # Safety
 /// `ctx` non-null; `table_def` is null or valid for read for the call.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__truncate(
     ctx: *mut EngineContext,
@@ -122,13 +127,14 @@ pub unsafe extern "C" fn rust__handler__truncate(
 }
 
 /// Notify the engine that MySQL reassigned the `TABLE` and `TABLE_SHARE`
-/// pointers. The callback receives the new pointers directly as arguments;
-/// the shim additionally invokes `handler::change_table_ptr` first so that
+/// pointers. The shim invokes `handler::change_table_ptr` first so that
 /// any subsequent virtual call observing `handler::table` / `table_share`
-/// sees the updated state.
+/// sees the updated state. Typed `*const sys::TABLE` / `*const sys::TABLE_SHARE`
+/// here pair with `const void *` on the C++ side (pointer-width on all targets).
 ///
 /// # Safety
 /// `ctx` non-null; `table` / `share` are null or valid for read for the call.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__change_table_ptr(
     ctx: *mut EngineContext,
@@ -151,6 +157,7 @@ pub unsafe extern "C" fn rust__handler__change_table_ptr(
 ///
 /// # Safety
 /// `ctx` non-null; `dd_table` is null or valid for read for the call.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__get_se_private_data(
     ctx: *mut EngineContext,
@@ -170,6 +177,7 @@ pub unsafe extern "C" fn rust__handler__get_se_private_data(
 ///
 /// # Safety
 /// `ctx` non-null; every other pointer is null or valid for read for the call.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__get_extra_columns_and_keys(
     ctx: *mut EngineContext,
@@ -201,6 +209,7 @@ pub unsafe extern "C" fn rust__handler__get_extra_columns_and_keys(
 /// # Safety
 /// `ctx` non-null; name buffers cover their declared lengths; `thd` /
 /// `dd_table` are null or valid for read for the call.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__upgrade_table(
     ctx: *mut EngineContext,

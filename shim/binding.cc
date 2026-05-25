@@ -122,6 +122,7 @@ int RustHandlerBase::open(const char *name, int mode, uint, const dd::Table *) {
 
 int RustHandlerBase::close() {
   DBUG_TRACE;
+  if (!rust_ctx_) return 0;
   return rust__handler__close(rust_ctx_);
 }
 

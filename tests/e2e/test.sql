@@ -9,4 +9,5 @@ TRUNCATE TABLE t1;
 RENAME TABLE t1 TO t2;
 DROP TABLE t2;
 
+-- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran
 SELECT 3;
