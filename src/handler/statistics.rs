@@ -21,12 +21,12 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 //! `rust__handler__*` callbacks for statistics methods (info). Shares the FFI
-//! safety contract documented at [`crate::ffi_handler`].
+//! safety contract documented at [`crate::handler`].
 
 #![allow(unsafe_code)]
 
-use crate::ffi::EngineContext;
 use crate::panic_guard::FfiBoundary;
+use crate::runtime::EngineContext;
 
 /// Refresh table statistics
 ///

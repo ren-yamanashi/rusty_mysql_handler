@@ -20,9 +20,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! FFI lifecycle entry points and shared helpers. Per-method
-//! `rust__handler__*` callbacks live in [`crate::ffi_handler`]; both modules
-//! share the safety contract documented there.
+//! Engine-instance lifecycle across the FFI boundary: the factory registry,
+//! the per-handler [`EngineContext`], create/destroy entry points, and the
+//! `FfiPtr` pointer helpers. Per-method `rust__handler__*` callbacks live in
+//! [`crate::handler`]; both modules share the safety contract documented there.
 
 #![allow(unsafe_code)]
 

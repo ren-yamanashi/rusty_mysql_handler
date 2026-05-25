@@ -20,65 +20,59 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `rust__handler__*` callbacks for table-instance lifecycle (handler.h #1–#3):
-//! create, open, close. Shares the FFI safety contract documented at
-//! [`crate::ffi_handler`].
+//! `rust__handler__*` callbacks for engine-property methods (table_type,
+//! table_flags, index_flags). Shares the FFI safety contract documented at
+//! [`crate::handler`].
 
 #![allow(unsafe_code)]
 
-use crate::ffi::{EngineContext, FfiPtr};
+use std::ffi::c_char;
+
 use crate::panic_guard::FfiBoundary;
+use crate::runtime::EngineContext;
 
-/// Create a new table
-///
-/// # Safety
-/// `ctx` must be non-null; `name` must cover `name_len` readable bytes.
-#[doc(hidden)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__handler__create(
-    ctx: *mut EngineContext,
-    name: *const u8,
-    name_len: usize,
-) -> i32 {
-    FfiBoundary::run(|| {
-        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        let engine = unsafe { &mut *ctx }.engine_mut();
-        // SAFETY: caller guarantees name covers name_len readable bytes.
-        let name = unsafe { FfiPtr::bytes_to_str(name, name_len) }?;
-        engine.create(name)
-    })
-}
-
-/// Open an existing table
-///
-/// # Safety
-/// `ctx` must be non-null; `name` must cover `name_len` readable bytes.
-#[doc(hidden)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__handler__open(
-    ctx: *mut EngineContext,
-    name: *const u8,
-    name_len: usize,
-    mode: i32,
-) -> i32 {
-    FfiBoundary::run(|| {
-        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        let engine = unsafe { &mut *ctx }.engine_mut();
-        // SAFETY: caller guarantees name covers name_len readable bytes.
-        let name = unsafe { FfiPtr::bytes_to_str(name, name_len) }?;
-        engine.open(name, mode)
-    })
-}
-
-/// Close the table
+/// Engine display name; null-terminated `'static`
 ///
 /// # Safety
 /// `ctx` must be non-null.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__handler__close(ctx: *mut EngineContext) -> i32 {
-    FfiBoundary::run(|| {
+pub unsafe extern "C" fn rust__handler__table_type(ctx: *mut EngineContext) -> *const c_char {
+    FfiBoundary::run_default(std::ptr::null(), || {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        unsafe { &mut *ctx }.engine_mut().close()
+        unsafe { &mut *ctx }.engine_mut().table_type().as_ptr()
+    })
+}
+
+/// `HA_*` capability bitfield
+///
+/// # Safety
+/// `ctx` must be non-null.
+#[doc(hidden)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__handler__table_flags(ctx: *mut EngineContext) -> u64 {
+    FfiBoundary::run_default(0, || {
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
+        unsafe { &mut *ctx }.engine_mut().table_flags()
+    })
+}
+
+/// Per-index capability bitfield
+///
+/// # Safety
+/// `ctx` must be non-null.
+#[doc(hidden)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__handler__index_flags(
+    ctx: *mut EngineContext,
+    idx: u32,
+    part: u32,
+    all_parts: bool,
+) -> u32 {
+    FfiBoundary::run_default(0, || {
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
+        unsafe { &mut *ctx }
+            .engine_mut()
+            .index_flags(idx, part, all_parts)
     })
 }

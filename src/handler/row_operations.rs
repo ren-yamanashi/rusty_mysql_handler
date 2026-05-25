@@ -20,88 +20,87 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `rust__handler__*` callbacks for full-table-scan methods (rnd_init,
-//! rnd_next, rnd_pos, position). Shares the FFI safety contract documented at
-//! [`crate::ffi_handler`].
+//! `rust__handler__*` callbacks for row-operation methods (handler.h #35–#38).
+//! Shares the FFI safety contract documented at [`crate::handler`].
 
 #![allow(unsafe_code)]
 
-use crate::ffi::{EngineContext, FfiPtr};
 use crate::panic_guard::FfiBoundary;
+use crate::runtime::{EngineContext, FfiPtr};
 
-/// Begin a full table scan
+/// Insert the row encoded in `buf`
 ///
 /// # Safety
-/// `ctx` must be non-null.
+/// `ctx` non-null; `buf` readable for `buf_len` bytes for the call's duration.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__handler__rnd_init(ctx: *mut EngineContext, scan: bool) -> i32 {
-    FfiBoundary::run(|| {
-        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        unsafe { &mut *ctx }.engine_mut().rnd_init(scan)
-    })
-}
-
-/// Fetch the next row
-///
-/// # Safety
-/// `ctx` must be non-null; `buf` must be writable for `buf_len` bytes.
-#[doc(hidden)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__handler__rnd_next(
+pub unsafe extern "C" fn rust__handler__write_row(
     ctx: *mut EngineContext,
-    buf: *mut u8,
+    buf: *const u8,
     buf_len: usize,
 ) -> i32 {
     FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
-        // SAFETY: caller guarantees buf covers buf_len writable bytes.
-        engine.rnd_next(unsafe { FfiPtr::slice_mut(buf, buf_len) })
+        // SAFETY: caller guarantees buf covers buf_len readable bytes.
+        let buf = unsafe { FfiPtr::slice_const(buf, buf_len) };
+        engine.write_row(buf)
     })
 }
 
-/// Fetch a row by stored position
+/// Replace the row imaged by `old` with the row imaged by `new`
 ///
 /// # Safety
-/// `ctx` must be non-null; `buf` writable for `buf_len`, `pos` readable for
-/// `pos_len`.
+/// `ctx` non-null; `old`/`new` readable for their lengths for the call.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__handler__rnd_pos(
+pub unsafe extern "C" fn rust__handler__update_row(
     ctx: *mut EngineContext,
-    buf: *mut u8,
-    buf_len: usize,
-    pos: *const u8,
-    pos_len: usize,
+    old: *const u8,
+    old_len: usize,
+    new: *const u8,
+    new_len: usize,
 ) -> i32 {
     FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
-        // SAFETY: caller guarantees buf covers buf_len writable bytes.
-        let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
-        // SAFETY: caller guarantees pos covers pos_len readable bytes.
-        let pos = unsafe { FfiPtr::slice_const(pos, pos_len) };
-        engine.rnd_pos(buf, pos)
+        // SAFETY: caller guarantees old covers old_len readable bytes.
+        let old = unsafe { FfiPtr::slice_const(old, old_len) };
+        // SAFETY: caller guarantees new covers new_len readable bytes.
+        let new = unsafe { FfiPtr::slice_const(new, new_len) };
+        engine.update_row(old, new)
     })
 }
 
-/// Store the current row's position
+/// Delete the row imaged by `buf`
 ///
 /// # Safety
-/// `ctx` must be non-null; `record` must cover `record_len` readable bytes.
+/// `ctx` non-null; `buf` readable for `buf_len` bytes for the call's duration.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__handler__position(
+pub unsafe extern "C" fn rust__handler__delete_row(
     ctx: *mut EngineContext,
-    record: *const u8,
-    record_len: usize,
-) {
-    FfiBoundary::run_void(|| {
+    buf: *const u8,
+    buf_len: usize,
+) -> i32 {
+    FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
-        // SAFETY: caller guarantees record covers record_len readable bytes.
-        let record = unsafe { FfiPtr::slice_const(record, record_len) };
-        engine.position(record);
-    });
+        // SAFETY: caller guarantees buf covers buf_len readable bytes.
+        let buf = unsafe { FfiPtr::slice_const(buf, buf_len) };
+        engine.delete_row(buf)
+    })
+}
+
+/// Delete every row in the table in one operation
+///
+/// # Safety
+/// `ctx` non-null.
+#[doc(hidden)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__handler__delete_all_rows(ctx: *mut EngineContext) -> i32 {
+    FfiBoundary::run(|| {
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
+        unsafe { &mut *ctx }.engine_mut().delete_all_rows()
+    })
 }
