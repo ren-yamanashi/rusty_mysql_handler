@@ -33,7 +33,7 @@ use crate::runtime::{EngineContext, FfiPtr};
 const HA_POS_ERROR: u64 = u64::MAX;
 
 /// Resolve a possibly-null key pointer to the slice the trait expects; a null
-/// pointer ("begin at the first key") becomes an empty slice.
+/// pointer ("begin at the first key") becomes an empty slice
 ///
 /// # Safety
 /// When non-null, `key` must be readable for `key_len` bytes for `'a`.
@@ -46,7 +46,7 @@ unsafe fn key_slice<'a>(key: *const u8, key_len: usize) -> &'a [u8] {
     }
 }
 
-/// Rebuild one range endpoint; a null pointer denotes an open-ended bound.
+/// Rebuild one range endpoint; a null pointer denotes an open-ended bound
 ///
 /// # Safety
 /// When non-null, `key` must be readable for `key_len` bytes for `'a`.
