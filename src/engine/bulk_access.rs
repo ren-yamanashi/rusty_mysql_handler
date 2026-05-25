@@ -45,7 +45,7 @@ impl BulkAccess {
     /// `true` when the engine declines batching (normal per-row operation),
     /// matching the inverted handler-base contract.
     #[must_use]
-    pub fn declines_batching(self) -> bool {
+    pub fn to_mysql_bool(self) -> bool {
         match self {
             Self::Batched => false,
             Self::PerRow => true,

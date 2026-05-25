@@ -65,7 +65,7 @@ pub unsafe extern "C" fn rust__handler__start_bulk_update(ctx: *mut EngineContex
     FfiBoundary::run_default(true, || {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
-        engine.start_bulk_update().declines_batching()
+        engine.start_bulk_update().to_mysql_bool()
     })
 }
 
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn rust__handler__start_bulk_delete(ctx: *mut EngineContex
     FfiBoundary::run_default(true, || {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
-        engine.start_bulk_delete().declines_batching()
+        engine.start_bulk_delete().to_mysql_bool()
     })
 }
 
