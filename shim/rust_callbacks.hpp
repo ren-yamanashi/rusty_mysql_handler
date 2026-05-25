@@ -75,6 +75,22 @@ bool rust__handler__upgrade_table(void *ctx, const void *thd,
                                   const uint8_t *table_name,
                                   size_t table_name_len, const void *dd_table);
 
+// Index — basic (handler.h #18-#19, #21, #25-#29). The shim resolves the
+// original key_part_map to a leading-bytes length before crossing the FFI, so
+// the key arrives as `const uint8_t *` + length; `find_flag` is the raw
+// ha_rkey_function integer.
+int32_t rust__handler__index_init(void *ctx, uint32_t idx, bool sorted);
+int32_t rust__handler__index_end(void *ctx);
+int32_t rust__handler__index_read_map(void *ctx, uint8_t *buf, size_t buf_len,
+                                      const uint8_t *key, size_t key_len,
+                                      int32_t find_flag);
+int32_t rust__handler__index_next(void *ctx, uint8_t *buf, size_t buf_len);
+int32_t rust__handler__index_prev(void *ctx, uint8_t *buf, size_t buf_len);
+int32_t rust__handler__index_first(void *ctx, uint8_t *buf, size_t buf_len);
+int32_t rust__handler__index_last(void *ctx, uint8_t *buf, size_t buf_len);
+int32_t rust__handler__index_next_same(void *ctx, uint8_t *buf, size_t buf_len,
+                                       const uint8_t *key, size_t key_len);
+
 // Row operations (handler.h #35-#38). Record buffers cross the FFI as
 // `const uint8_t *` + length; the engine reads them but must not retain them.
 int32_t rust__handler__write_row(void *ctx, const uint8_t *buf, size_t buf_len);

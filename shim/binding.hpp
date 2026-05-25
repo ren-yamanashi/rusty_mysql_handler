@@ -81,6 +81,16 @@ class RustHandlerBase : public handler {
   bool upgrade_table(THD *thd, const char *dbname, const char *table_name,
                      dd::Table *dd_table) override;
 
+  int index_init(uint idx, bool sorted) override;
+  int index_end() override;
+  int index_read_map(uchar *buf, const uchar *key, key_part_map keypart_map,
+                     enum ha_rkey_function find_flag) override;
+  int index_next(uchar *buf) override;
+  int index_prev(uchar *buf) override;
+  int index_first(uchar *buf) override;
+  int index_last(uchar *buf) override;
+  int index_next_same(uchar *buf, const uchar *key, uint keylen) override;
+
   int write_row(uchar *buf) override;
   int update_row(const uchar *old_data, uchar *new_data) override;
   int delete_row(const uchar *buf) override;

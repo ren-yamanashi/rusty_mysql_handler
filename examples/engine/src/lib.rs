@@ -27,7 +27,7 @@
 
 use std::ffi::CStr;
 
-use mysql_handler::engine::{EngineError, EngineResult, StorageEngine};
+use mysql_handler::engine::{EngineError, EngineResult, RKeyFunction, StorageEngine};
 use mysql_handler::ffi::register_engine_factory;
 use mysql_handler::panic_guard::FfiBoundary;
 use mysql_handler::sys::{self, HA_BINLOG_ROW_CAPABLE, HA_BINLOG_STMT_CAPABLE};
@@ -51,6 +51,16 @@ impl TrivialEngine {
             num_rows: 3,
             current_row: 0,
         }
+    }
+
+    /// Yield the next empty row, or `EndOfFile` once `num_rows` are exhausted.
+    /// Shared by the random-scan and index-scan read paths.
+    fn yield_next(&mut self) -> EngineResult {
+        if self.current_row >= self.num_rows {
+            return Err(EngineError::EndOfFile);
+        }
+        self.current_row += 1;
+        Ok(())
     }
 }
 
@@ -91,11 +101,7 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn rnd_next(&mut self, _buf: &mut [u8]) -> EngineResult {
-        if self.current_row >= self.num_rows {
-            return Err(EngineError::EndOfFile);
-        }
-        self.current_row += 1;
-        Ok(())
+        self.yield_next()
     }
 
     fn rnd_pos(&mut self, _buf: &mut [u8], _pos: &[u8]) -> EngineResult {
@@ -139,6 +145,47 @@ impl StorageEngine for TrivialEngine {
         self.num_rows = 0;
         self.current_row = 0;
         Ok(())
+    }
+
+    fn index_init(&mut self, _idx: u32, _sorted: bool) -> EngineResult {
+        self.current_row = 0;
+        Ok(())
+    }
+
+    fn index_end(&mut self) -> EngineResult {
+        Ok(())
+    }
+
+    fn index_read_map(
+        &mut self,
+        _buf: &mut [u8],
+        _key: &[u8],
+        _find_flag: RKeyFunction,
+    ) -> EngineResult {
+        self.current_row = 0;
+        self.yield_next()
+    }
+
+    fn index_next(&mut self, _buf: &mut [u8]) -> EngineResult {
+        self.yield_next()
+    }
+
+    fn index_prev(&mut self, _buf: &mut [u8]) -> EngineResult {
+        self.yield_next()
+    }
+
+    fn index_first(&mut self, _buf: &mut [u8]) -> EngineResult {
+        self.current_row = 0;
+        self.yield_next()
+    }
+
+    fn index_last(&mut self, _buf: &mut [u8]) -> EngineResult {
+        self.current_row = 0;
+        self.yield_next()
+    }
+
+    fn index_next_same(&mut self, _buf: &mut [u8], _key: &[u8]) -> EngineResult {
+        self.yield_next()
     }
 }
 
