@@ -20,7 +20,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-// Table-lifecycle overrides (handler.h #4-#11).
+// Table-lifecycle overrides (handler.h #4-#11)
 
 #include "binding.hpp"
 #include "my_dbug.h"
@@ -56,6 +56,8 @@ int RustHandlerBase::rename_table(const char *from, const char *to,
 // requires wrapping this invocation in try/catch.
 void RustHandlerBase::drop_table(const char *name) {
   DBUG_TRACE;
+  // a null name suppresses the whole chain (base close + delete_table too),
+  // since safe_name_len below would otherwise hit strnlen(NULL)
   if (!name) return;
   handler::drop_table(name);
   if (!rust_ctx_) return;

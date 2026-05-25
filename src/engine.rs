@@ -47,7 +47,7 @@ impl EngineError {
     /// Convert to the matching MySQL `HA_ERR_*` integer expected at the
     /// `extern "C"` boundary.
     #[must_use]
-    pub fn as_mysql_errno(self) -> i32 {
+    pub fn to_mysql_errno(self) -> i32 {
         match self {
             Self::EndOfFile => sys::HA_ERR_END_OF_FILE,
             Self::WrongCommand => sys::HA_ERR_WRONG_COMMAND,

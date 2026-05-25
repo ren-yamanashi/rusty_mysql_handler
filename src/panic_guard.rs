@@ -42,7 +42,7 @@ impl FfiBoundary {
     /// `HA_ERR_*` integer suitable for an `extern "C"` return:
     ///
     /// - `Ok(Ok(()))` → `0`
-    /// - `Ok(Err(e))` → `e.as_mysql_errno()`
+    /// - `Ok(Err(e))` → `e.to_mysql_errno()`
     /// - `Err(_)` (panic) → `HA_ERR_INTERNAL_ERROR`
     pub fn run<F>(f: F) -> i32
     where
@@ -50,10 +50,10 @@ impl FfiBoundary {
     {
         match catch_unwind(AssertUnwindSafe(f)) {
             Ok(Ok(())) => 0,
-            Ok(Err(e)) => e.as_mysql_errno(),
+            Ok(Err(e)) => e.to_mysql_errno(),
             Err(_) => {
                 tracing::error!("{PANIC_LOG_MSG}");
-                EngineError::Internal.as_mysql_errno()
+                EngineError::Internal.to_mysql_errno()
             }
         }
     }
