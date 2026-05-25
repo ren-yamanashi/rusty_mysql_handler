@@ -109,6 +109,16 @@ class RustHandlerBase : public handler {
   int update_row(const uchar *old_data, uchar *new_data) override;
   int delete_row(const uchar *buf) override;
   int delete_all_rows() override;
+
+  void start_bulk_insert(ha_rows rows) override;
+  int end_bulk_insert() override;
+  bool start_bulk_update() override;
+  int exec_bulk_update(uint *dup_key_found) override;
+  void end_bulk_update() override;
+  int bulk_update_row(const uchar *old_data, uchar *new_data,
+                      uint *dup_key_found) override;
+  bool start_bulk_delete() override;
+  int end_bulk_delete() override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs
