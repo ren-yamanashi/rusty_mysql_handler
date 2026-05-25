@@ -34,9 +34,15 @@
 //! - Pointer/length pairs are valid for the call only; engines must not
 //!   retain them.
 
+#[doc(hidden)]
 pub mod open_close;
+#[doc(hidden)]
 pub mod properties;
+#[doc(hidden)]
 pub mod row_operations;
+#[doc(hidden)]
 pub mod scan;
+#[doc(hidden)]
 pub mod statistics;
+#[doc(hidden)]
 pub mod table_lifecycle;

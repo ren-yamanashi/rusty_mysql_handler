@@ -31,27 +31,27 @@ use core::ptr;
 // across MySQL 8.x. Status / system vars stay opaque — unused here.
 #[repr(C)]
 pub struct StMysqlPlugin {
-    pub type_: c_int,
-    pub info: *mut c_void,
-    pub name: *const c_char,
-    pub author: *const c_char,
-    pub descr: *const c_char,
-    pub license: c_int,
-    pub init: Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-    pub check_uninstall: Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-    pub deinit: Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-    pub version: c_uint,
-    pub status_vars: *mut c_void,
-    pub system_vars: *mut c_void,
-    pub reserved1: *mut c_void,
-    pub flags: c_ulong,
+    type_: c_int,
+    info: *mut c_void,
+    name: *const c_char,
+    author: *const c_char,
+    descr: *const c_char,
+    license: c_int,
+    init: Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
+    check_uninstall: Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
+    deinit: Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
+    version: c_uint,
+    status_vars: *mut c_void,
+    system_vars: *mut c_void,
+    reserved1: *mut c_void,
+    flags: c_ulong,
 }
 
 // SAFETY: fields are Copy POD or pointers to `'static` linker-owned
 // symbols; the struct is never mutated.
 unsafe impl Sync for StMysqlPlugin {}
 
-// Interface tag defined in shim/plugin.cc; opaque on the Rust side.
+// Interface tag defined in shim/plugin.cc; opaque on the Rust side
 unsafe extern "C" {
     static rusty_storage_engine: [u8; 0];
     fn rusty_init_func(p: *mut c_void) -> c_int;
