@@ -91,6 +91,37 @@ int32_t rust__handler__index_last(void *ctx, uint8_t *buf, size_t buf_len);
 int32_t rust__handler__index_next_same(void *ctx, uint8_t *buf, size_t buf_len,
                                        const uint8_t *key, size_t key_len);
 
+// Index — read & range (handler.h #20, #22-#24, #30-#32). Keys arrive
+// length-resolved as `const uint8_t *` + length (a null key => nullptr);
+// find_flag is the raw ha_rkey_function integer. Each range bound decomposes
+// its key_range into (key ptr, length, flag); a null bound denotes an open
+// end. records_in_range returns the estimated row count, or HA_POS_ERROR
+// (~uint64_t{0}) when the engine cannot estimate.
+int32_t rust__handler__index_read(void *ctx, uint8_t *buf, size_t buf_len,
+                                  const uint8_t *key, size_t key_len,
+                                  int32_t find_flag);
+int32_t rust__handler__index_read_idx_map(void *ctx, uint8_t *buf,
+                                          size_t buf_len, uint32_t index,
+                                          const uint8_t *key, size_t key_len,
+                                          int32_t find_flag);
+int32_t rust__handler__index_read_last(void *ctx, uint8_t *buf, size_t buf_len,
+                                       const uint8_t *key, size_t key_len);
+int32_t rust__handler__index_read_last_map(void *ctx, uint8_t *buf,
+                                           size_t buf_len, const uint8_t *key,
+                                           size_t key_len);
+int32_t rust__handler__read_range_first(void *ctx, uint8_t *buf, size_t buf_len,
+                                        const uint8_t *start_key,
+                                        size_t start_len, int32_t start_flag,
+                                        const uint8_t *end_key, size_t end_len,
+                                        int32_t end_flag, bool eq_range,
+                                        bool sorted);
+int32_t rust__handler__read_range_next(void *ctx, uint8_t *buf, size_t buf_len);
+uint64_t rust__handler__records_in_range(void *ctx, uint32_t inx,
+                                         const uint8_t *min_key, size_t min_len,
+                                         int32_t min_flag,
+                                         const uint8_t *max_key, size_t max_len,
+                                         int32_t max_flag);
+
 // Row operations (handler.h #35-#38). Record buffers cross the FFI as
 // `const uint8_t *` + length; the engine reads them but must not retain them.
 int32_t rust__handler__write_row(void *ctx, const uint8_t *buf, size_t buf_len);

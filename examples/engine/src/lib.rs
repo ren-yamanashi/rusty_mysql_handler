@@ -27,7 +27,7 @@
 
 use std::ffi::CStr;
 
-use mysql_handler::engine::{EngineError, EngineResult, RKeyFunction, StorageEngine};
+use mysql_handler::engine::{EngineError, EngineResult, RKeyFunction, RangeKey, StorageEngine};
 use mysql_handler::panic_guard::FfiBoundary;
 use mysql_handler::runtime::register_engine_factory;
 use mysql_handler::sys::{self, HA_BINLOG_ROW_CAPABLE, HA_BINLOG_STMT_CAPABLE};
@@ -186,6 +186,15 @@ impl StorageEngine for TrivialEngine {
 
     fn index_next_same(&mut self, _buf: &mut [u8], _key: &[u8]) -> EngineResult {
         self.yield_next()
+    }
+
+    fn records_in_range(
+        &mut self,
+        _inx: u32,
+        _min: Option<RangeKey<'_>>,
+        _max: Option<RangeKey<'_>>,
+    ) -> Option<u64> {
+        None
     }
 }
 

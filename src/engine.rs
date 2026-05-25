@@ -27,10 +27,12 @@ use std::ffi::CStr;
 use crate::sys;
 
 mod error;
+mod range_key;
 mod reset_cached_state;
 mod rkey_function;
 
 pub use error::{EngineError, EngineResult};
+pub use range_key::RangeKey;
 pub use reset_cached_state::ResetCachedState;
 pub use rkey_function::RKeyFunction;
 
@@ -325,5 +327,114 @@ pub trait StorageEngine: Send {
     /// [`EngineError::EndOfFile`] when no further row shares the key.
     fn index_next_same(&mut self, _buf: &mut [u8], _key: &[u8]) -> EngineResult {
         Err(EngineError::WrongCommand)
+    }
+
+    /// Position the index cursor at `key` according to `find_flag` and read the
+    /// matching row into `buf`. This is the explicit-length sibling of
+    /// [`index_read_map`](Self::index_read_map): MySQL supplied the key length
+    /// directly rather than as a `key_part_map`, but the shim resolves both to
+    /// the same leading key bytes. `key` is empty when MySQL passed a null key
+    /// (begin at the first key). Neither borrow may be retained past the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when no row matches.
+    fn index_read(
+        &mut self,
+        _buf: &mut [u8],
+        _key: &[u8],
+        _find_flag: RKeyFunction,
+    ) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read from index `index` (rather than the active index) at `key` per
+    /// `find_flag`, into `buf`. The base handler brackets this with an
+    /// `index_init` / `index_end` pair; the binding instead passes `index`
+    /// explicitly so the engine never has to track an implicit active index.
+    /// `key` is empty for a null key. Neither borrow may be retained past the
+    /// call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when no row matches.
+    fn index_read_idx_map(
+        &mut self,
+        _buf: &mut [u8],
+        _index: u32,
+        _key: &[u8],
+        _find_flag: RKeyFunction,
+    ) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the last row matching `key` (or its prefix) on the active index
+    /// into `buf`. The explicit-length counterpart of
+    /// [`index_read_last_map`](Self::index_read_last_map). `key` is empty for a
+    /// null key. Neither borrow may be retained past the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when no row matches.
+    fn index_read_last(&mut self, _buf: &mut [u8], _key: &[u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the last row matching `key` (or its prefix) on the active index
+    /// into `buf`, with the key length resolved from the original
+    /// `key_part_map`. `key` is empty for a null key. Neither borrow may be
+    /// retained past the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when no row matches.
+    fn index_read_last_map(&mut self, _buf: &mut [u8], _key: &[u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Begin a range scan and read its first row into `buf`. `start` and `end`
+    /// are the lower and upper bounds; either is `None` for an open end.
+    /// `eq_range` marks an equality range (`start == end`), and `sorted`
+    /// requests rows in index order. The handler base implements this by
+    /// orchestrating the index read and navigation methods plus its own
+    /// end-of-range comparison; the binding hands the whole operation to the
+    /// engine, so an overriding engine owns range-boundary enforcement.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when the range is empty.
+    fn read_range_first(
+        &mut self,
+        _buf: &mut [u8],
+        _start: Option<RangeKey<'_>>,
+        _end: Option<RangeKey<'_>>,
+        _eq_range: bool,
+        _sorted: bool,
+    ) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the next row of the range scan started by
+    /// [`read_range_first`](Self::read_range_first) into `buf`.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] once the range is exhausted.
+    fn read_range_next(&mut self, _buf: &mut [u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Estimate the number of rows on index `inx` between `min` and `max`
+    /// (either `None` for an open end). Used by the optimizer to cost an index
+    /// access path. Return `None` to signal "cannot estimate" (MySQL's
+    /// `HA_POS_ERROR`); the default returns `Some(10)`, mirroring the handler
+    /// base's fixed guess.
+    fn records_in_range(
+        &mut self,
+        _inx: u32,
+        _min: Option<RangeKey<'_>>,
+        _max: Option<RangeKey<'_>>,
+    ) -> Option<u64> {
+        Some(10)
     }
 }
