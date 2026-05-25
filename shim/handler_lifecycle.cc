@@ -50,7 +50,10 @@ int RustHandlerBase::rename_table(const char *from, const char *to,
 
 // Mirror the upstream chain `handler::drop_table` performs (close + delete_table)
 // so engines that only override the leaf callbacks still see the full sequence;
-// the Rust notification then runs as a post-chain hook.
+// the Rust notification then runs as a post-chain hook. The chain is noexcept
+// in MySQL 8.4 (close and delete_table both route through FfiBoundary::*);
+// if a future upstream change introduces a throwing path here, FFI panic-safety
+// requires wrapping this invocation in try/catch.
 void RustHandlerBase::drop_table(const char *name) {
   DBUG_TRACE;
   if (!name) return;

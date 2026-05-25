@@ -60,6 +60,23 @@ impl EngineError {
 /// Result alias used throughout the [`StorageEngine`] trait
 pub type EngineResult<T = ()> = Result<T, EngineError>;
 
+/// Whether MySQL has just reset the data-dictionary entry and any cached
+/// engine-private metadata should be re-emitted from scratch
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ResetCachedState {
+    /// Reuse whatever the engine has cached
+    Keep,
+    /// Discard cached state and re-emit from authoritative source
+    Reset,
+}
+
+impl From<bool> for ResetCachedState {
+    fn from(needs_reset: bool) -> Self {
+        if needs_reset { Self::Reset } else { Self::Keep }
+    }
+}
+
 /// The safe interface every storage engine implements.
 ///
 /// MySQL constructs one instance per opened table per session worker thread,
@@ -186,10 +203,15 @@ pub trait StorageEngine: Send {
     fn change_table_ptr(&mut self, _table: Option<&sys::TABLE>, _share: Option<&sys::TABLE_SHARE>) {
     }
 
-    /// Populate engine-private metadata in `dd_table`. `reset` indicates that
-    /// the data-dictionary entry has been reset and any cached state should
-    /// be re-emitted. The default returns `false` (no private data written).
-    fn get_se_private_data(&mut self, _dd_table: Option<&sys::DdTable>, _reset: bool) -> bool {
+    /// Populate engine-private metadata in `dd_table`. `reset` distinguishes
+    /// the case where the data-dictionary entry has been reset and any cached
+    /// state must be re-emitted. Returns `true` when private data was written.
+    /// The default returns `false`.
+    fn se_private_data(
+        &mut self,
+        _dd_table: Option<&sys::DdTable>,
+        _reset: ResetCachedState,
+    ) -> bool {
         false
     }
 
@@ -199,7 +221,7 @@ pub trait StorageEngine: Send {
     /// # Errors
     /// The default never errors; overrides choose which [`EngineError`]
     /// variants they emit.
-    fn get_extra_columns_and_keys(
+    fn extra_columns_and_keys(
         &mut self,
         _create_info: Option<&sys::HA_CREATE_INFO>,
         _create_list: Option<&sys::ListCreateField>,
@@ -211,15 +233,18 @@ pub trait StorageEngine: Send {
     }
 
     /// Adjust the data-dictionary entry of an old-format table during a server
-    /// upgrade. Returns `true` to signal failure (matches the C++ bool
-    /// convention). The default returns `false`.
+    /// upgrade. Returning `Err` aborts the upgrade (mapped to C++ `bool true`).
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`; overrides surface an [`EngineError`] to
+    /// abort the upgrade.
     fn upgrade_table(
         &mut self,
         _thd: Option<&sys::THD>,
         _dbname: &str,
         _table_name: &str,
         _dd_table: Option<&sys::DdTable>,
-    ) -> bool {
-        false
+    ) -> EngineResult {
+        Ok(())
     }
 }

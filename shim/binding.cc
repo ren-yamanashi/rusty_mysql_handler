@@ -114,12 +114,15 @@ int RustHandlerBase::open(const char *name, int mode, uint, const dd::Table *) {
   DBUG_TRACE;
   if (!(share_ = get_share())) return HA_ERR_OUT_OF_MEM;
   thr_lock_data_init(&share_->lock, &lock_data_, nullptr);
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  if (!rust_ctx_ || !name) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__open(rust_ctx_,
                              reinterpret_cast<const uint8_t *>(name),
                              shim::safe_name_len(name), mode);
 }
 
+// Reachable from the `handler::drop_table` chain even when no Rust engine has
+// been bound; treat that case as already-closed rather than calling into Rust
+// with a null context.
 int RustHandlerBase::close() {
   DBUG_TRACE;
   if (!rust_ctx_) return 0;
@@ -129,7 +132,7 @@ int RustHandlerBase::close() {
 int RustHandlerBase::create(const char *name, TABLE *, HA_CREATE_INFO *,
                             dd::Table *) {
   DBUG_TRACE;
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  if (!rust_ctx_ || !name) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__create(rust_ctx_,
                                reinterpret_cast<const uint8_t *>(name),
                                shim::safe_name_len(name));

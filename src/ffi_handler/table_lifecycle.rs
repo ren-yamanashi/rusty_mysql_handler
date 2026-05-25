@@ -25,6 +25,7 @@
 
 #![allow(unsafe_code)]
 
+use crate::engine::ResetCachedState;
 use crate::ffi::{EngineContext, FfiPtr};
 use crate::panic_guard::FfiBoundary;
 use crate::sys;
@@ -32,8 +33,7 @@ use crate::sys;
 /// Drop a table by name; `table_def` may be null for temporary tables
 ///
 /// # Safety
-/// `ctx` non-null; `name` covers `name_len` readable bytes; `table_def` is
-/// null or valid for read for the call.
+/// `ctx` non-null; `name` covers `name_len`; `table_def` null-or-valid.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__delete_table(
@@ -56,8 +56,7 @@ pub unsafe extern "C" fn rust__handler__delete_table(
 /// Rename a table from `from` to `to`
 ///
 /// # Safety
-/// `ctx` non-null; `from` / `to` cover their declared lengths; `from_def` /
-/// `to_def` are null or valid for read for the call.
+/// `ctx` non-null; `from`/`to` cover their lengths; defs null-or-valid.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__rename_table(
@@ -99,9 +98,12 @@ pub unsafe extern "C" fn rust__handler__drop_table(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees name covers name_len readable bytes.
-        let Ok(name) = (unsafe { FfiPtr::bytes_to_str(name, name_len) }) else {
-            tracing::warn!("drop_table: invalid utf-8 in table name");
-            return;
+        let name = match unsafe { FfiPtr::bytes_to_str(name, name_len) } {
+            Ok(s) => s,
+            Err(_) => {
+                tracing::warn!("drop_table: invalid utf-8 in table name");
+                return;
+            }
         };
         engine.drop_table(name);
     });
@@ -128,12 +130,11 @@ pub unsafe extern "C" fn rust__handler__truncate(
 
 /// Notify the engine that MySQL reassigned the `TABLE` and `TABLE_SHARE`
 /// pointers. The shim invokes `handler::change_table_ptr` first so that
-/// any subsequent virtual call observing `handler::table` / `table_share`
-/// sees the updated state. Typed `*const sys::TABLE` / `*const sys::TABLE_SHARE`
-/// here pair with `const void *` on the C++ side (pointer-width on all targets).
+/// subsequent virtual calls observe the updated `handler::table`/`table_share`.
+/// Typed Rust pointers here pair with `const void *` on the C++ side.
 ///
 /// # Safety
-/// `ctx` non-null; `table` / `share` are null or valid for read for the call.
+/// `ctx` non-null; `table`/`share` null-or-valid.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__change_table_ptr(
@@ -169,7 +170,7 @@ pub unsafe extern "C" fn rust__handler__get_se_private_data(
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: dd_table is null or valid for read for the call's duration.
         let dd_table = unsafe { dd_table.as_ref() };
-        engine.get_se_private_data(dd_table, reset)
+        engine.se_private_data(dd_table, ResetCachedState::from(reset))
     })
 }
 
@@ -198,17 +199,15 @@ pub unsafe extern "C" fn rust__handler__get_extra_columns_and_keys(
         let key_info = unsafe { key_info.as_ref() };
         // SAFETY: table_obj is null or valid for read for the call's duration.
         let table_obj = unsafe { table_obj.as_ref() };
-        engine.get_extra_columns_and_keys(create_info, create_list, key_info, key_count, table_obj)
+        engine.extra_columns_and_keys(create_info, create_list, key_info, key_count, table_obj)
     })
 }
 
 /// Adjust an old-format DD entry during a server upgrade. Returns `true` on
-/// failure to match the C++ bool convention; the panic-safe default is also
-/// `true` so a panicking engine forces an upgrade abort.
+/// failure; the panic-safe default is also `true` to abort on panic.
 ///
 /// # Safety
-/// `ctx` non-null; name buffers cover their declared lengths; `thd` /
-/// `dd_table` are null or valid for read for the call.
+/// `ctx` non-null; name buffers cover their lengths; `thd`/`dd_table` null-or-valid.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__upgrade_table(
@@ -228,15 +227,24 @@ pub unsafe extern "C" fn rust__handler__upgrade_table(
         // SAFETY: dd_table is null or valid for read for the call's duration.
         let dd_table = unsafe { dd_table.as_ref() };
         // SAFETY: caller guarantees dbname covers dbname_len readable bytes.
-        let Ok(dbname) = (unsafe { FfiPtr::bytes_to_str(dbname, dbname_len) }) else {
-            tracing::warn!("upgrade_table: invalid utf-8 in dbname");
-            return true;
+        let dbname = match unsafe { FfiPtr::bytes_to_str(dbname, dbname_len) } {
+            Ok(s) => s,
+            Err(_) => {
+                tracing::warn!("upgrade_table: invalid utf-8 in dbname");
+                return true;
+            }
         };
         // SAFETY: caller guarantees table_name covers table_name_len readable bytes.
-        let Ok(table_name) = (unsafe { FfiPtr::bytes_to_str(table_name, table_name_len) }) else {
-            tracing::warn!("upgrade_table: invalid utf-8 in table name");
-            return true;
+        let table_name = match unsafe { FfiPtr::bytes_to_str(table_name, table_name_len) } {
+            Ok(s) => s,
+            Err(_) => {
+                tracing::warn!("upgrade_table: invalid utf-8 in table name");
+                return true;
+            }
         };
-        engine.upgrade_table(thd, dbname, table_name, dd_table)
+        match engine.upgrade_table(thd, dbname, table_name, dd_table) {
+            Ok(()) => false,
+            Err(_) => true,
+        }
     })
 }

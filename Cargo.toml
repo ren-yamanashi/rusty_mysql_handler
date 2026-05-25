@@ -40,6 +40,7 @@ must_use_candidate = "allow"
 doc_markdown = "allow"
 missing_panics_doc = "allow"
 single_match_else = "allow"
+manual_let_else = "allow"
 undocumented_unsafe_blocks = "deny"
 redundant_pub_crate = "warn"
 
