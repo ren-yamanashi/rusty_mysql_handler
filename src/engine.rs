@@ -129,8 +129,10 @@ pub trait StorageEngine: Send {
     /// by the optimizer.
     ///
     /// # Errors
-    /// The default returns [`EngineError::WrongCommand`] (no-op engines need
-    /// not implement this).
+    /// The default returns [`EngineError::WrongCommand`]. This deliberately
+    /// diverges from MySQL's `handler::delete_table` base, which deletes the
+    /// on-disk artefact via `my_delete`; the binding leaves any artefact
+    /// cleanup to the engine implementation.
     fn delete_table(&mut self, _name: &str, _table_def: Option<&sys::DdTable>) -> EngineResult {
         Err(EngineError::WrongCommand)
     }
@@ -150,8 +152,12 @@ pub trait StorageEngine: Send {
         Err(EngineError::WrongCommand)
     }
 
-    /// Engine-internal hook fired before [`delete_table`](Self::delete_table)
-    /// (or in lieu of it for some paths). Default is a no-op.
+    /// Notification that MySQL is dropping the table, invoked from
+    /// `ha_drop_table` on temporary-table cleanup paths. The binding mirrors
+    /// upstream's `handler::drop_table` chain (`close()` then
+    /// [`delete_table`](Self::delete_table) with `table_def = None`) on the
+    /// C++ side, so this callback fires after the chain completes and serves
+    /// purely as a post-cleanup hook. Default is a no-op.
     fn drop_table(&mut self, _name: &str) {}
 
     /// Reset the table to an empty state without dropping it.
@@ -178,10 +184,8 @@ pub trait StorageEngine: Send {
     }
 
     /// Inject implicit columns and indexes the engine requires for `table_obj`
-    /// to be created. The default leaves the definition unchanged.
-    ///
-    /// # Errors
-    /// The default returns `Ok(())`.
+    /// to be created. The default leaves the definition unchanged and returns
+    /// `Ok(())`; overrides choose which [`EngineError`] variants they emit.
     fn get_extra_columns_and_keys(
         &mut self,
         _create_info: Option<&sys::HA_CREATE_INFO>,

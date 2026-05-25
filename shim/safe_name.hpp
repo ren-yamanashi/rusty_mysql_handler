@@ -29,7 +29,10 @@
 namespace shim {
 
 // Handler API names are documented as null-terminated; strnlen with this cap
-// keeps the scan bounded if that contract is ever violated.
+// keeps the scan bounded if that contract is ever violated. Identifiers are
+// capped by MySQL at 64 chars (utf8mb4, < 256 bytes), so 4096 leaves ample
+// headroom. The truncation is silent — callers must ensure `name` is a valid
+// null-terminated C string before calling this helper.
 constexpr std::size_t MAX_NAME_LEN = 4096;
 
 inline std::size_t safe_name_len(const char *name) {

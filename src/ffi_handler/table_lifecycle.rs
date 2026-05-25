@@ -122,9 +122,10 @@ pub unsafe extern "C" fn rust__handler__truncate(
 }
 
 /// Notify the engine that MySQL reassigned the `TABLE` and `TABLE_SHARE`
-/// pointers. The C++ shim updates the base `handler::table` / `table_share`
-/// itself before invoking this callback, so the engine observes the new
-/// pointers consistently.
+/// pointers. The callback receives the new pointers directly as arguments;
+/// the shim additionally invokes `handler::change_table_ptr` first so that
+/// any subsequent virtual call observing `handler::table` / `table_share`
+/// sees the updated state.
 ///
 /// # Safety
 /// `ctx` non-null; `table` / `share` are null or valid for read for the call.
@@ -219,10 +220,12 @@ pub unsafe extern "C" fn rust__handler__upgrade_table(
         let dd_table = unsafe { dd_table.as_ref() };
         // SAFETY: caller guarantees dbname covers dbname_len readable bytes.
         let Ok(dbname) = (unsafe { FfiPtr::bytes_to_str(dbname, dbname_len) }) else {
+            tracing::warn!("upgrade_table: invalid utf-8 in dbname");
             return true;
         };
         // SAFETY: caller guarantees table_name covers table_name_len readable bytes.
         let Ok(table_name) = (unsafe { FfiPtr::bytes_to_str(table_name, table_name_len) }) else {
+            tracing::warn!("upgrade_table: invalid utf-8 in table name");
             return true;
         };
         engine.upgrade_table(thd, dbname, table_name, dd_table)

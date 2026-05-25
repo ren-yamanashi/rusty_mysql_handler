@@ -31,7 +31,7 @@
 int RustHandlerBase::delete_table(const char *name,
                                   const dd::Table *table_def) {
   DBUG_TRACE;
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  if (!rust_ctx_ || !name) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__delete_table(
       rust_ctx_, reinterpret_cast<const uint8_t *>(name),
       shim::safe_name_len(name), static_cast<const void *>(table_def));
@@ -41,7 +41,7 @@ int RustHandlerBase::rename_table(const char *from, const char *to,
                                   const dd::Table *from_table_def,
                                   dd::Table *to_table_def) {
   DBUG_TRACE;
-  if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
+  if (!rust_ctx_ || !from || !to) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__rename_table(
       rust_ctx_, reinterpret_cast<const uint8_t *>(from),
       shim::safe_name_len(from), reinterpret_cast<const uint8_t *>(to),
@@ -49,8 +49,13 @@ int RustHandlerBase::rename_table(const char *from, const char *to,
       static_cast<const void *>(to_table_def));
 }
 
+// Mirror the upstream chain `handler::drop_table` performs (close + delete_table)
+// so engines that only override the leaf callbacks still see the full sequence;
+// the Rust notification then runs as a post-chain hook.
 void RustHandlerBase::drop_table(const char *name) {
   DBUG_TRACE;
+  if (!name) return;
+  handler::drop_table(name);
   if (!rust_ctx_) return;
   rust__handler__drop_table(rust_ctx_,
                             reinterpret_cast<const uint8_t *>(name),
@@ -67,9 +72,10 @@ int RustHandlerBase::truncate(dd::Table *table_def) {
 // Preserve base behaviour so handler::table / table_share stay coherent before
 // the engine observes the change.
 void RustHandlerBase::change_table_ptr(TABLE *table_arg, TABLE_SHARE *share) {
+  DBUG_TRACE;
   handler::change_table_ptr(table_arg, share);
-  if (rust_ctx_)
-    rust__handler__change_table_ptr(rust_ctx_, table_arg, share);
+  if (!rust_ctx_) return;
+  rust__handler__change_table_ptr(rust_ctx_, table_arg, share);
 }
 
 bool RustHandlerBase::get_se_private_data(dd::Table *dd_table, bool reset) {
@@ -96,6 +102,7 @@ bool RustHandlerBase::upgrade_table(THD *thd, const char *dbname,
                                     dd::Table *dd_table) {
   DBUG_TRACE;
   if (!rust_ctx_) return false;
+  if (!dbname || !table_name) return true;
   return rust__handler__upgrade_table(
       rust_ctx_, static_cast<const void *>(thd),
       reinterpret_cast<const uint8_t *>(dbname), shim::safe_name_len(dbname),
