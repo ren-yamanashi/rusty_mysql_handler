@@ -49,6 +49,31 @@ int32_t rust__handler__rnd_pos(void *ctx, uint8_t *buf, size_t buf_len,
 void rust__handler__position(void *ctx, const uint8_t *record,
                              size_t record_len);
 int32_t rust__handler__info(void *ctx, uint32_t flag);
+
+// Table lifecycle (handler.h #4-#11). Opaque MySQL pointers (dd::Table,
+// TABLE, TABLE_SHARE, HA_CREATE_INFO, List<Create_field>, KEY, THD) cross
+// the FFI as `const void *` to keep this header free of the server-internal
+// type dependencies; the Rust side re-types them through `sys::*` opaque
+// structs.
+int32_t rust__handler__delete_table(void *ctx, const uint8_t *name,
+                                    size_t name_len, const void *table_def);
+int32_t rust__handler__rename_table(void *ctx, const uint8_t *from,
+                                    size_t from_len, const uint8_t *to,
+                                    size_t to_len, const void *from_def,
+                                    const void *to_def);
+void rust__handler__drop_table(void *ctx, const uint8_t *name, size_t name_len);
+int32_t rust__handler__truncate(void *ctx, const void *table_def);
+void rust__handler__change_table_ptr(void *ctx, const void *table,
+                                     const void *share);
+bool rust__handler__get_se_private_data(void *ctx, const void *dd_table,
+                                        bool reset);
+int32_t rust__handler__get_extra_columns_and_keys(
+    void *ctx, const void *create_info, const void *create_list,
+    const void *key_info, uint32_t key_count, const void *table_obj);
+bool rust__handler__upgrade_table(void *ctx, const void *thd,
+                                  const uint8_t *dbname, size_t dbname_len,
+                                  const uint8_t *table_name,
+                                  size_t table_name_len, const void *dd_table);
 }
 
 #endif

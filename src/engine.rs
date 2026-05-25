@@ -47,7 +47,7 @@ impl EngineError {
     /// Convert to the matching MySQL `HA_ERR_*` integer expected at the
     /// `extern "C"` boundary.
     #[must_use]
-    pub fn as_mysql_errno(self) -> i32 {
+    pub fn to_mysql_errno(self) -> i32 {
         match self {
             Self::EndOfFile => sys::HA_ERR_END_OF_FILE,
             Self::WrongCommand => sys::HA_ERR_WRONG_COMMAND,
@@ -59,6 +59,23 @@ impl EngineError {
 
 /// Result alias used throughout the [`StorageEngine`] trait
 pub type EngineResult<T = ()> = Result<T, EngineError>;
+
+/// Whether MySQL has just reset the data-dictionary entry and any cached
+/// engine-private metadata should be re-emitted from scratch
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ResetCachedState {
+    /// Reuse whatever the engine has cached
+    Keep,
+    /// Discard cached state and re-emit from authoritative source
+    Reset,
+}
+
+impl From<bool> for ResetCachedState {
+    fn from(needs_reset: bool) -> Self {
+        if needs_reset { Self::Reset } else { Self::Keep }
+    }
+}
 
 /// The safe interface every storage engine implements.
 ///
@@ -123,4 +140,111 @@ pub trait StorageEngine: Send {
     /// Refresh statistics (rows, deleted rows, data length, ...) for the
     /// optimizer. Errors are implementation-defined.
     fn info(&mut self, flag: u32) -> EngineResult;
+
+    /// Drop a table. `table_def` is the data-dictionary descriptor of the
+    /// table being deleted; it may be `None` for temporary tables created
+    /// by the optimizer.
+    ///
+    /// May be invoked twice per `DROP TABLE` of a temporary table: once
+    /// directly, and once as part of the `handler::drop_table` chain (close +
+    /// delete_table with `table_def = None`) that fires before
+    /// [`drop_table`](Self::drop_table). Implementations that count calls
+    /// must tolerate the repeat.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]. This deliberately
+    /// diverges from MySQL's `handler::delete_table` base, which deletes the
+    /// on-disk artefact via `my_delete`; the binding leaves any artefact
+    /// cleanup to the engine implementation.
+    fn delete_table(&mut self, _name: &str, _table_def: Option<&sys::DdTable>) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Rename a table from `from` to `to`. `from_table_def` and `to_table_def`
+    /// are the data-dictionary descriptors before and after the rename.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`].
+    fn rename_table(
+        &mut self,
+        _from: &str,
+        _to: &str,
+        _from_table_def: Option<&sys::DdTable>,
+        _to_table_def: Option<&sys::DdTable>,
+    ) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Notification that MySQL is dropping the table, invoked from
+    /// `ha_drop_table` on temporary-table cleanup paths. The binding mirrors
+    /// upstream's `handler::drop_table` chain (`close()` then
+    /// [`delete_table`](Self::delete_table) with `table_def = None`) on the
+    /// C++ side, so this callback fires after the chain completes and serves
+    /// purely as a post-cleanup hook. Default is a no-op.
+    ///
+    /// Any error returned by the in-chain [`delete_table`](Self::delete_table)
+    /// is swallowed by MySQL's void `handler::drop_table`; engines that need
+    /// to surface a failure during cleanup must do so out-of-band.
+    fn drop_table(&mut self, _name: &str) {}
+
+    /// Reset the table to an empty state without dropping it.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the
+    /// MySQL handler base implementation.
+    fn truncate(&mut self, _table_def: Option<&sys::DdTable>) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Notification that MySQL has reassigned the underlying `TABLE` and
+    /// `TABLE_SHARE`. The base C++ handler updates its own pointers; this
+    /// callback lets the engine react if it caches per-table state. Default
+    /// is a no-op.
+    fn change_table_ptr(&mut self, _table: Option<&sys::TABLE>, _share: Option<&sys::TABLE_SHARE>) {
+    }
+
+    /// Populate engine-private metadata in `dd_table`. `reset` distinguishes
+    /// the case where the data-dictionary entry has been reset and any cached
+    /// state must be re-emitted. Returns `true` when private data was written.
+    /// The default returns `false`.
+    fn se_private_data(
+        &mut self,
+        _dd_table: Option<&sys::DdTable>,
+        _reset: ResetCachedState,
+    ) -> bool {
+        false
+    }
+
+    /// Inject implicit columns and indexes the engine requires for `table_obj`
+    /// to be created.
+    ///
+    /// # Errors
+    /// The default never errors; overrides choose which [`EngineError`]
+    /// variants they emit.
+    fn extra_columns_and_keys(
+        &mut self,
+        _create_info: Option<&sys::HA_CREATE_INFO>,
+        _create_list: Option<&sys::ListCreateField>,
+        _key_info: Option<&sys::KEY>,
+        _key_count: u32,
+        _table_obj: Option<&sys::DdTable>,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Adjust the data-dictionary entry of an old-format table during a server
+    /// upgrade. Returning `Err` aborts the upgrade (mapped to C++ `bool true`).
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`; overrides surface an [`EngineError`] to
+    /// abort the upgrade.
+    fn upgrade_table(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _dbname: &str,
+        _table_name: &str,
+        _dd_table: Option<&sys::DdTable>,
+    ) -> EngineResult {
+        Ok(())
+    }
 }

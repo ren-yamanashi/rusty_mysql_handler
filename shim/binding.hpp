@@ -63,6 +63,21 @@ class RustHandlerBase : public handler {
   int info(uint flag) override;
   THR_LOCK_DATA **store_lock(THD *thd, THR_LOCK_DATA **to,
                              enum thr_lock_type lock_type) override;
+
+  int delete_table(const char *name, const dd::Table *table_def) override;
+  int rename_table(const char *from, const char *to,
+                   const dd::Table *from_table_def,
+                   dd::Table *to_table_def) override;
+  void drop_table(const char *name) override;
+  int truncate(dd::Table *table_def) override;
+  void change_table_ptr(TABLE *table_arg, TABLE_SHARE *share) override;
+  bool get_se_private_data(dd::Table *dd_table, bool reset) override;
+  int get_extra_columns_and_keys(const HA_CREATE_INFO *create_info,
+                                 const List<Create_field> *create_list,
+                                 const KEY *key_info, uint key_count,
+                                 dd::Table *table_obj) override;
+  bool upgrade_table(THD *thd, const char *dbname, const char *table_name,
+                     dd::Table *dd_table) override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

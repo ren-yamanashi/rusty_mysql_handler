@@ -34,6 +34,8 @@
 
 #![allow(unsafe_code)]
 
+pub mod table_lifecycle;
+
 use std::ffi::c_char;
 
 use crate::ffi::{EngineContext, FfiPtr};
@@ -43,6 +45,7 @@ use crate::panic_guard::FfiBoundary;
 ///
 /// # Safety
 /// `ctx` must be non-null.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__table_type(ctx: *mut EngineContext) -> *const c_char {
     FfiBoundary::run_default(std::ptr::null(), || {
@@ -55,6 +58,7 @@ pub unsafe extern "C" fn rust__handler__table_type(ctx: *mut EngineContext) -> *
 ///
 /// # Safety
 /// `ctx` must be non-null.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__table_flags(ctx: *mut EngineContext) -> u64 {
     FfiBoundary::run_default(0, || {
@@ -67,6 +71,7 @@ pub unsafe extern "C" fn rust__handler__table_flags(ctx: *mut EngineContext) -> 
 ///
 /// # Safety
 /// `ctx` must be non-null.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__index_flags(
     ctx: *mut EngineContext,
@@ -86,6 +91,7 @@ pub unsafe extern "C" fn rust__handler__index_flags(
 ///
 /// # Safety
 /// `ctx` must be non-null; `name` must cover `name_len` readable bytes.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__create(
     ctx: *mut EngineContext,
@@ -105,6 +111,7 @@ pub unsafe extern "C" fn rust__handler__create(
 ///
 /// # Safety
 /// `ctx` must be non-null; `name` must cover `name_len` readable bytes.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__open(
     ctx: *mut EngineContext,
@@ -125,6 +132,7 @@ pub unsafe extern "C" fn rust__handler__open(
 ///
 /// # Safety
 /// `ctx` must be non-null.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__close(ctx: *mut EngineContext) -> i32 {
     FfiBoundary::run(|| {
@@ -137,6 +145,7 @@ pub unsafe extern "C" fn rust__handler__close(ctx: *mut EngineContext) -> i32 {
 ///
 /// # Safety
 /// `ctx` must be non-null.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__rnd_init(ctx: *mut EngineContext, scan: bool) -> i32 {
     FfiBoundary::run(|| {
@@ -149,6 +158,7 @@ pub unsafe extern "C" fn rust__handler__rnd_init(ctx: *mut EngineContext, scan: 
 ///
 /// # Safety
 /// `ctx` must be non-null; `buf` must be writable for `buf_len` bytes.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__rnd_next(
     ctx: *mut EngineContext,
@@ -168,6 +178,7 @@ pub unsafe extern "C" fn rust__handler__rnd_next(
 /// # Safety
 /// `ctx` must be non-null; `buf` writable for `buf_len`, `pos` readable for
 /// `pos_len`.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__rnd_pos(
     ctx: *mut EngineContext,
@@ -191,6 +202,7 @@ pub unsafe extern "C" fn rust__handler__rnd_pos(
 ///
 /// # Safety
 /// `ctx` must be non-null; `record` must cover `record_len` readable bytes.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__position(
     ctx: *mut EngineContext,
@@ -210,6 +222,7 @@ pub unsafe extern "C" fn rust__handler__position(
 ///
 /// # Safety
 /// `ctx` must be non-null.
+#[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__info(ctx: *mut EngineContext, flag: u32) -> i32 {
     FfiBoundary::run(|| {
