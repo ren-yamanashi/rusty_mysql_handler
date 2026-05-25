@@ -78,6 +78,11 @@ class RustHandlerBase : public handler {
                                  dd::Table *table_obj) override;
   bool upgrade_table(THD *thd, const char *dbname, const char *table_name,
                      dd::Table *dd_table) override;
+
+  int write_row(uchar *buf) override;
+  int update_row(const uchar *old_data, uchar *new_data) override;
+  int delete_row(const uchar *buf) override;
+  int delete_all_rows() override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

@@ -74,6 +74,14 @@ bool rust__handler__upgrade_table(void *ctx, const void *thd,
                                   const uint8_t *dbname, size_t dbname_len,
                                   const uint8_t *table_name,
                                   size_t table_name_len, const void *dd_table);
+
+// Row operations (handler.h #35-#38). Record buffers cross the FFI as
+// `const uint8_t *` + length; the engine reads them but must not retain them.
+int32_t rust__handler__write_row(void *ctx, const uint8_t *buf, size_t buf_len);
+int32_t rust__handler__update_row(void *ctx, const uint8_t *old, size_t old_len,
+                                  const uint8_t *new_row, size_t new_len);
+int32_t rust__handler__delete_row(void *ctx, const uint8_t *buf, size_t buf_len);
+int32_t rust__handler__delete_all_rows(void *ctx);
 }
 
 #endif
