@@ -26,11 +26,13 @@ use std::ffi::CStr;
 
 use crate::sys;
 
+mod bulk_access;
 mod error;
 mod range_key;
 mod reset_cached_state;
 mod rkey_function;
 
+pub use bulk_access::BulkAccess;
 pub use error::{EngineError, EngineResult};
 pub use range_key::RangeKey;
 pub use reset_cached_state::ResetCachedState;
@@ -243,6 +245,78 @@ pub trait StorageEngine: Send {
     /// # Errors
     /// The default returns [`EngineError::WrongCommand`].
     fn delete_all_rows(&mut self) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Hint that a multi-row INSERT is about to begin; `rows` is MySQL's
+    /// estimate of how many rows will be written (`0` when unknown). Engines may
+    /// pre-size buffers here. The default is a no-op, matching the handler base.
+    fn start_bulk_insert(&mut self, _rows: u64) {}
+
+    /// Flush any rows buffered since
+    /// [`start_bulk_insert`](Self::start_bulk_insert).
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the handler base which always
+    /// succeeds.
+    fn end_bulk_insert(&mut self) -> EngineResult {
+        Ok(())
+    }
+
+    /// Decide whether to batch the rows of a multi-row UPDATE.
+    /// [`BulkAccess::Batched`] routes subsequent rows through
+    /// [`bulk_update_row`](Self::bulk_update_row) and
+    /// [`exec_bulk_update`](Self::exec_bulk_update); [`BulkAccess::PerRow`] keeps
+    /// MySQL on the per-row [`update_row`](Self::update_row) path. The default is
+    /// [`BulkAccess::PerRow`], matching the handler base.
+    fn start_bulk_update(&mut self) -> BulkAccess {
+        BulkAccess::PerRow
+    }
+
+    /// Apply all updates buffered since
+    /// [`start_bulk_update`](Self::start_bulk_update), returning the number of
+    /// duplicate-key collisions encountered. MySQL may continue batching after
+    /// this call until [`end_bulk_update`](Self::end_bulk_update).
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the handler
+    /// base which rejects the bulk path unless the engine opts in.
+    fn exec_bulk_update(&mut self) -> EngineResult<u32> {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Release any state held for the bulk-update batch, called once the
+    /// statement's updates are concluded. The default is a no-op.
+    fn end_bulk_update(&mut self) {}
+
+    /// Buffer one row update for a later
+    /// [`exec_bulk_update`](Self::exec_bulk_update), replacing the image `old`
+    /// with `new` (both in MySQL's internal record format). Returns the running
+    /// count of duplicate-key collisions. Neither borrow may be retained past
+    /// the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the handler
+    /// base.
+    fn bulk_update_row(&mut self, _old: &[u8], _new: &[u8]) -> EngineResult<u32> {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Decide whether to batch the rows of a multi-row DELETE.
+    /// [`BulkAccess::Batched`] routes the deletes through the bulk path closed
+    /// by [`end_bulk_delete`](Self::end_bulk_delete); [`BulkAccess::PerRow`]
+    /// keeps MySQL on [`delete_row`](Self::delete_row). The default is
+    /// [`BulkAccess::PerRow`], matching the handler base.
+    fn start_bulk_delete(&mut self) -> BulkAccess {
+        BulkAccess::PerRow
+    }
+
+    /// Execute all buffered deletes and close the bulk-delete batch.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the handler
+    /// base.
+    fn end_bulk_delete(&mut self) -> EngineResult {
         Err(EngineError::WrongCommand)
     }
 

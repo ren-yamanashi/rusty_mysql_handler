@@ -129,6 +129,22 @@ int32_t rust__handler__update_row(void *ctx, const uint8_t *old, size_t old_len,
                                   const uint8_t *new_row, size_t new_len);
 int32_t rust__handler__delete_row(void *ctx, const uint8_t *buf, size_t buf_len);
 int32_t rust__handler__delete_all_rows(void *ctx);
+
+// Bulk operations (handler.h #39-#46). The start_bulk_* callbacks return the
+// inverted MySQL bool (true => bulk not used, normal per-row operation);
+// exec_bulk_update / bulk_update_row write the duplicate-key count through
+// dup_key_found. Record buffers cross as `const uint8_t *` + length and must
+// not be retained by the engine.
+void rust__handler__start_bulk_insert(void *ctx, uint64_t rows);
+int32_t rust__handler__end_bulk_insert(void *ctx);
+bool rust__handler__start_bulk_update(void *ctx);
+int32_t rust__handler__exec_bulk_update(void *ctx, uint32_t *dup_key_found);
+void rust__handler__end_bulk_update(void *ctx);
+int32_t rust__handler__bulk_update_row(void *ctx, const uint8_t *old,
+                                       size_t old_len, const uint8_t *new_row,
+                                       size_t new_len, uint32_t *dup_key_found);
+bool rust__handler__start_bulk_delete(void *ctx);
+int32_t rust__handler__end_bulk_delete(void *ctx);
 }
 
 #endif
