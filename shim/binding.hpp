@@ -37,6 +37,8 @@ class RustyShare : public Handler_share {
 class RustHandlerBase : public handler {
   THR_LOCK_DATA lock_data_;
   RustyShare *share_ = nullptr;
+  // Non-null once open() succeeds; row-op overrides rely on this invariant
+  // and pass it to the Rust callbacks without a per-call null guard
   void *rust_ctx_ = nullptr;
 
   RustyShare *get_share();

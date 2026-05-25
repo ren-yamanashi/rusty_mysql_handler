@@ -131,7 +131,7 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn write_row(&mut self, _buf: &[u8]) -> EngineResult {
-        self.num_rows += 1;
+        self.num_rows = self.num_rows.saturating_add(1);
         Ok(())
     }
 

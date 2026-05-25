@@ -30,7 +30,6 @@ use crate::engine::{EngineError, EngineResult};
 
 /// Raw-pointer helpers that turn shim-supplied pointers into bounded references
 #[derive(Debug)]
-#[non_exhaustive]
 pub(crate) struct FfiPtr;
 
 impl FfiPtr {
