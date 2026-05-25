@@ -22,13 +22,13 @@
 
 //! `rust__handler__*` callbacks for basic index-scan methods (handler.h
 //! #18–#19, #21, #25–#29). Shares the FFI safety contract documented at
-//! [`crate::ffi_handler`].
+//! [`crate::handler`].
 
 #![allow(unsafe_code)]
 
 use crate::engine::RKeyFunction;
-use crate::ffi::{EngineContext, FfiPtr};
 use crate::panic_guard::FfiBoundary;
+use crate::runtime::{EngineContext, FfiPtr};
 
 /// Begin an index scan on index `idx`
 ///

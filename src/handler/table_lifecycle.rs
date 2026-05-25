@@ -21,13 +21,13 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 //! `rust__handler__*` callbacks for table-lifecycle methods (handler.h #4–#11).
-//! Shares the FFI safety contract documented at [`crate::ffi_handler`].
+//! Shares the FFI safety contract documented at [`crate::handler`].
 
 #![allow(unsafe_code)]
 
 use crate::engine::ResetCachedState;
-use crate::ffi::{EngineContext, FfiPtr};
 use crate::panic_guard::FfiBoundary;
+use crate::runtime::{EngineContext, FfiPtr};
 use crate::sys;
 
 /// Drop a table by name; `table_def` may be null for temporary tables

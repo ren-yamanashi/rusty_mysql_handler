@@ -26,121 +26,13 @@ use std::ffi::CStr;
 
 use crate::sys;
 
-/// Errors a storage engine can return; each maps to a MySQL `HA_ERR_*` code
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum EngineError {
-    /// End of a table or index scan, returned from [`StorageEngine::rnd_next`]
-    /// when the scan is exhausted.
-    EndOfFile,
-    /// The engine does not support the requested operation
-    WrongCommand,
-    /// The supplied table or schema name is not valid UTF-8 or otherwise
-    /// unusable. Mapped to `HA_ERR_WRONG_TABLE_NAME` so operators see a
-    /// name-level diagnostic instead of a generic internal error.
-    InvalidName,
-    /// Generic internal error; prefer a more specific variant when possible
-    Internal,
-}
+mod error;
+mod reset_cached_state;
+mod rkey_function;
 
-impl EngineError {
-    /// Convert to the matching MySQL `HA_ERR_*` integer expected at the
-    /// `extern "C"` boundary.
-    #[must_use]
-    pub fn to_mysql_errno(self) -> i32 {
-        match self {
-            Self::EndOfFile => sys::HA_ERR_END_OF_FILE,
-            Self::WrongCommand => sys::HA_ERR_WRONG_COMMAND,
-            Self::InvalidName => sys::HA_ERR_WRONG_TABLE_NAME,
-            Self::Internal => sys::HA_ERR_INTERNAL_ERROR,
-        }
-    }
-}
-
-/// Result alias used throughout the [`StorageEngine`] trait
-pub type EngineResult<T = ()> = Result<T, EngineError>;
-
-/// Whether MySQL has just reset the data-dictionary entry and any cached
-/// engine-private metadata should be re-emitted from scratch
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum ResetCachedState {
-    /// Reuse whatever the engine has cached
-    Keep,
-    /// Discard cached state and re-emit from authoritative source
-    Reset,
-}
-
-impl From<bool> for ResetCachedState {
-    fn from(needs_reset: bool) -> Self {
-        if needs_reset { Self::Reset } else { Self::Keep }
-    }
-}
-
-/// Search semantics for an index lookup, mirroring MySQL's `ha_rkey_function`.
-///
-/// Passed to [`StorageEngine::index_read_map`] to describe how the supplied key
-/// should be matched: an exact hit, the nearest neighbour in a direction, a
-/// prefix, or one of the spatial (minimum-bounding-rectangle) relations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum RKeyFunction {
-    /// Find the first record with exactly this key, else error
-    KeyExact,
-    /// This record or the next one
-    KeyOrNext,
-    /// This record or the previous one
-    KeyOrPrev,
-    /// First record after this key
-    AfterKey,
-    /// First record before this key
-    BeforeKey,
-    /// First record sharing this key prefix
-    Prefix,
-    /// Last record sharing this key prefix
-    PrefixLast,
-    /// Last record with this prefix, or the previous one
-    PrefixLastOrPrev,
-    /// Minimum bounding rectangle contains the key
-    MbrContain,
-    /// Minimum bounding rectangle intersects the key
-    MbrIntersect,
-    /// Minimum bounding rectangle is within the key
-    MbrWithin,
-    /// Minimum bounding rectangle is disjoint from the key
-    MbrDisjoint,
-    /// Minimum bounding rectangle equals the key
-    MbrEqual,
-    /// Nearest-neighbour spatial search
-    NearestNeighbor,
-    /// Unrecognised value; MySQL's `HA_READ_INVALID` or an out-of-range code
-    Invalid,
-}
-
-impl RKeyFunction {
-    /// Map the raw `ha_rkey_function` integer supplied at the FFI boundary to a
-    /// variant. Any unknown code (including `HA_READ_INVALID == -1`) becomes
-    /// [`RKeyFunction::Invalid`] so the engine never observes an undefined value.
-    pub(crate) fn from_raw(raw: i32) -> Self {
-        match raw {
-            0 => Self::KeyExact,
-            1 => Self::KeyOrNext,
-            2 => Self::KeyOrPrev,
-            3 => Self::AfterKey,
-            4 => Self::BeforeKey,
-            5 => Self::Prefix,
-            6 => Self::PrefixLast,
-            7 => Self::PrefixLastOrPrev,
-            8 => Self::MbrContain,
-            9 => Self::MbrIntersect,
-            10 => Self::MbrWithin,
-            11 => Self::MbrDisjoint,
-            12 => Self::MbrEqual,
-            13 => Self::NearestNeighbor,
-            _ => Self::Invalid,
-        }
-    }
-}
+pub use error::{EngineError, EngineResult};
+pub use reset_cached_state::ResetCachedState;
+pub use rkey_function::RKeyFunction;
 
 /// The safe interface every storage engine implements.
 ///

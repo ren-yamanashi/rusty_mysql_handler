@@ -12,7 +12,7 @@ graph TD
   subgraph cdylib["libengine.so / libengine.dylib (cdylib)"]
     B["plugin manifest<br/>(3 Rust pub no_mangle statics)"]
     C["examples/engine: StorageEngine impl"]
-    D["mysql-handler rlib:<br/>StorageEngine trait + ffi + sys"]
+    D["mysql-handler rlib:<br/>StorageEngine trait + runtime + handler + sys"]
     E["ha_rusty_shim (C++ staticlib)<br/>RustHandlerBase, thr_lock helpers"]
     B --> C --> D --> E
   end

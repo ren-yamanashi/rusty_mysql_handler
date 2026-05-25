@@ -28,8 +28,8 @@
 use std::ffi::CStr;
 
 use mysql_handler::engine::{EngineError, EngineResult, RKeyFunction, StorageEngine};
-use mysql_handler::ffi::register_engine_factory;
 use mysql_handler::panic_guard::FfiBoundary;
+use mysql_handler::runtime::register_engine_factory;
 use mysql_handler::sys::{self, HA_BINLOG_ROW_CAPABLE, HA_BINLOG_STMT_CAPABLE};
 
 #[cfg(not(test))]

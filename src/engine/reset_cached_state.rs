@@ -20,10 +20,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Rust bindings for the MySQL 8.4 storage engine handler API
+//! Cached-state reset signal passed to engine-private metadata callbacks.
 
-pub mod engine;
-pub mod handler;
-pub mod panic_guard;
-pub mod runtime;
-pub mod sys;
+/// Whether MySQL has just reset the data-dictionary entry and any cached
+/// engine-private metadata should be re-emitted from scratch
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ResetCachedState {
+    /// Reuse whatever the engine has cached
+    Keep,
+    /// Discard cached state and re-emit from authoritative source
+    Reset,
+}
+
+impl From<bool> for ResetCachedState {
+    fn from(needs_reset: bool) -> Self {
+        if needs_reset { Self::Reset } else { Self::Keep }
+    }
+}
