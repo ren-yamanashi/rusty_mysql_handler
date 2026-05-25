@@ -77,6 +77,71 @@ impl From<bool> for ResetCachedState {
     }
 }
 
+/// Search semantics for an index lookup, mirroring MySQL's `ha_rkey_function`.
+///
+/// Passed to [`StorageEngine::index_read_map`] to describe how the supplied key
+/// should be matched: an exact hit, the nearest neighbour in a direction, a
+/// prefix, or one of the spatial (minimum-bounding-rectangle) relations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RKeyFunction {
+    /// Find the first record with exactly this key, else error
+    KeyExact,
+    /// This record or the next one
+    KeyOrNext,
+    /// This record or the previous one
+    KeyOrPrev,
+    /// First record after this key
+    AfterKey,
+    /// First record before this key
+    BeforeKey,
+    /// First record sharing this key prefix
+    Prefix,
+    /// Last record sharing this key prefix
+    PrefixLast,
+    /// Last record with this prefix, or the previous one
+    PrefixLastOrPrev,
+    /// Minimum bounding rectangle contains the key
+    MbrContain,
+    /// Minimum bounding rectangle intersects the key
+    MbrIntersect,
+    /// Minimum bounding rectangle is within the key
+    MbrWithin,
+    /// Minimum bounding rectangle is disjoint from the key
+    MbrDisjoint,
+    /// Minimum bounding rectangle equals the key
+    MbrEqual,
+    /// Nearest-neighbour spatial search
+    NearestNeighbor,
+    /// Unrecognised value; MySQL's `HA_READ_INVALID` or an out-of-range code
+    Invalid,
+}
+
+impl RKeyFunction {
+    /// Map the raw `ha_rkey_function` integer supplied at the FFI boundary to a
+    /// variant. Any unknown code (including `HA_READ_INVALID == -1`) becomes
+    /// [`RKeyFunction::Invalid`] so the engine never observes an undefined value.
+    pub(crate) fn from_raw(raw: i32) -> Self {
+        match raw {
+            0 => Self::KeyExact,
+            1 => Self::KeyOrNext,
+            2 => Self::KeyOrPrev,
+            3 => Self::AfterKey,
+            4 => Self::BeforeKey,
+            5 => Self::Prefix,
+            6 => Self::PrefixLast,
+            7 => Self::PrefixLastOrPrev,
+            8 => Self::MbrContain,
+            9 => Self::MbrIntersect,
+            10 => Self::MbrWithin,
+            11 => Self::MbrDisjoint,
+            12 => Self::MbrEqual,
+            13 => Self::NearestNeighbor,
+            _ => Self::Invalid,
+        }
+    }
+}
+
 /// The safe interface every storage engine implements.
 ///
 /// MySQL constructs one instance per opened table per session worker thread,
@@ -284,6 +349,89 @@ pub trait StorageEngine: Send {
     /// # Errors
     /// The default returns [`EngineError::WrongCommand`].
     fn delete_all_rows(&mut self) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Begin an index scan on index `idx`. `sorted` requests that subsequent
+    /// reads return rows in index order. The base handler merely records the
+    /// active index and returns success.
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the MySQL handler base.
+    fn index_init(&mut self, _idx: u32, _sorted: bool) -> EngineResult {
+        Ok(())
+    }
+
+    /// End the index scan started by [`index_init`](Self::index_init).
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the MySQL handler base.
+    fn index_end(&mut self) -> EngineResult {
+        Ok(())
+    }
+
+    /// Position the index cursor at `key` according to `find_flag` and read the
+    /// matching row into `buf`. `key` is the leading key bytes whose length the
+    /// shim resolved from the original `key_part_map`; it is empty when MySQL
+    /// passed a null key (begin at the first key of the index). Neither borrow
+    /// may be retained past the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when no row matches.
+    fn index_read_map(
+        &mut self,
+        _buf: &mut [u8],
+        _key: &[u8],
+        _find_flag: RKeyFunction,
+    ) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the next row in the index scan into `buf`.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] once the scan is exhausted.
+    fn index_next(&mut self, _buf: &mut [u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the previous row in the index scan into `buf`.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] once the scan is exhausted.
+    fn index_prev(&mut self, _buf: &mut [u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the first row of the index into `buf`.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when the index is empty.
+    fn index_first(&mut self, _buf: &mut [u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the last row of the index into `buf`.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when the index is empty.
+    fn index_last(&mut self, _buf: &mut [u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the next row that shares the leading `key` bytes with the current
+    /// position, into `buf`. The borrow on `key` may not be retained past the
+    /// call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] when no further row shares the key.
+    fn index_next_same(&mut self, _buf: &mut [u8], _key: &[u8]) -> EngineResult {
         Err(EngineError::WrongCommand)
     }
 }

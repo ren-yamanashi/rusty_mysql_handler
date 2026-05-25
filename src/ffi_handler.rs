@@ -35,6 +35,8 @@
 //!   retain them.
 
 #[doc(hidden)]
+pub mod index_basic;
+#[doc(hidden)]
 pub mod open_close;
 #[doc(hidden)]
 pub mod properties;
