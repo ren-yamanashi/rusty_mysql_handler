@@ -22,12 +22,12 @@
 
 #include "binding.hpp"
 
-#include <cstring>
 #include <new>
 
 #include "my_dbug.h"
 #include "mysql/plugin.h"
 #include "rust_callbacks.hpp"
+#include "safe_name.hpp"
 #include "sql/table.h"
 
 // The Rust-side plugin manifest hand-declares `StMysqlPlugin` to mirror this
@@ -42,16 +42,6 @@ static_assert(alignof(st_mysql_plugin) == 8,
               "st_mysql_plugin alignment drifted; update plugin_manifest in "
               "examples/engine/src/lib.rs");
 #endif
-
-namespace {
-// Upper bound for MySQL-supplied identifier strings handed to the engine. The
-// handler API contract says they are null-terminated, but reading length with
-// strnlen keeps the scan bounded if that contract is ever violated.
-constexpr std::size_t MAX_NAME_LEN = 4096;
-std::size_t safe_name_len(const char *name) {
-  return ::strnlen(name, MAX_NAME_LEN);
-}
-}  // namespace
 
 static handler *rusty_create_handler(handlerton *hton, TABLE_SHARE *table,
                                      bool, MEM_ROOT *mem_root) {
@@ -127,7 +117,7 @@ int RustHandlerBase::open(const char *name, int mode, uint, const dd::Table *) {
   if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__open(rust_ctx_,
                              reinterpret_cast<const uint8_t *>(name),
-                             safe_name_len(name), mode);
+                             shim::safe_name_len(name), mode);
 }
 
 int RustHandlerBase::close() {
@@ -141,7 +131,7 @@ int RustHandlerBase::create(const char *name, TABLE *, HA_CREATE_INFO *,
   if (!rust_ctx_) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__create(rust_ctx_,
                                reinterpret_cast<const uint8_t *>(name),
-                               safe_name_len(name));
+                               shim::safe_name_len(name));
 }
 
 int RustHandlerBase::rnd_init(bool scan) {

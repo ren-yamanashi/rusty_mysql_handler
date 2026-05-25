@@ -60,6 +60,28 @@ pub struct TABLE_SHARE([u8; 0]);
 #[derive(Debug)]
 pub struct THD([u8; 0]);
 
+/// Opaque MySQL data-dictionary `dd::Table`
+#[repr(C)]
+#[derive(Debug)]
+pub struct DdTable([u8; 0]);
+
+/// Opaque MySQL `HA_CREATE_INFO`
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Debug)]
+pub struct HA_CREATE_INFO([u8; 0]);
+
+/// Opaque MySQL `KEY` (index descriptor)
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Debug)]
+pub struct KEY([u8; 0]);
+
+/// Opaque MySQL `List<Create_field>` (C++ template instantiation)
+#[repr(C)]
+#[derive(Debug)]
+pub struct ListCreateField([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

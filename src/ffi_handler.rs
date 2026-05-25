@@ -34,6 +34,8 @@
 
 #![allow(unsafe_code)]
 
+pub mod table_lifecycle;
+
 use std::ffi::c_char;
 
 use crate::ffi::{EngineContext, FfiPtr};

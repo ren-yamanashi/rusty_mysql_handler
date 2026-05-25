@@ -123,4 +123,86 @@ pub trait StorageEngine: Send {
     /// Refresh statistics (rows, deleted rows, data length, ...) for the
     /// optimizer. Errors are implementation-defined.
     fn info(&mut self, flag: u32) -> EngineResult;
+
+    /// Drop a table. `table_def` is the data-dictionary descriptor of the
+    /// table being deleted; it may be `None` for temporary tables created
+    /// by the optimizer.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`] (no-op engines need
+    /// not implement this).
+    fn delete_table(&mut self, _name: &str, _table_def: Option<&sys::DdTable>) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Rename a table from `from` to `to`. `from_table_def` and `to_table_def`
+    /// are the data-dictionary descriptors before and after the rename.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`].
+    fn rename_table(
+        &mut self,
+        _from: &str,
+        _to: &str,
+        _from_table_def: Option<&sys::DdTable>,
+        _to_table_def: Option<&sys::DdTable>,
+    ) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Engine-internal hook fired before [`delete_table`](Self::delete_table)
+    /// (or in lieu of it for some paths). Default is a no-op.
+    fn drop_table(&mut self, _name: &str) {}
+
+    /// Reset the table to an empty state without dropping it.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the
+    /// MySQL handler base implementation.
+    fn truncate(&mut self, _table_def: Option<&sys::DdTable>) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Notification that MySQL has reassigned the underlying `TABLE` and
+    /// `TABLE_SHARE`. The base C++ handler updates its own pointers; this
+    /// callback lets the engine react if it caches per-table state. Default
+    /// is a no-op.
+    fn change_table_ptr(&mut self, _table: Option<&sys::TABLE>, _share: Option<&sys::TABLE_SHARE>) {
+    }
+
+    /// Populate engine-private metadata in `dd_table`. `reset` indicates that
+    /// the data-dictionary entry has been reset and any cached state should
+    /// be re-emitted. The default returns `false` (no private data written).
+    fn get_se_private_data(&mut self, _dd_table: Option<&sys::DdTable>, _reset: bool) -> bool {
+        false
+    }
+
+    /// Inject implicit columns and indexes the engine requires for `table_obj`
+    /// to be created. The default leaves the definition unchanged.
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`.
+    fn get_extra_columns_and_keys(
+        &mut self,
+        _create_info: Option<&sys::HA_CREATE_INFO>,
+        _create_list: Option<&sys::ListCreateField>,
+        _key_info: Option<&sys::KEY>,
+        _key_count: u32,
+        _table_obj: Option<&sys::DdTable>,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Adjust the data-dictionary entry of an old-format table during a server
+    /// upgrade. Returns `true` to signal failure (matches the C++ bool
+    /// convention). The default returns `false`.
+    fn upgrade_table(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _dbname: &str,
+        _table_name: &str,
+        _dd_table: Option<&sys::DdTable>,
+    ) -> bool {
+        false
+    }
 }

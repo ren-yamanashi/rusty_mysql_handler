@@ -30,7 +30,7 @@ use std::ffi::CStr;
 use mysql_handler::engine::{EngineError, EngineResult, StorageEngine};
 use mysql_handler::ffi::register_engine_factory;
 use mysql_handler::panic_guard::FfiBoundary;
-use mysql_handler::sys::HA_BINLOG_STMT_CAPABLE;
+use mysql_handler::sys::{self, HA_BINLOG_STMT_CAPABLE};
 
 // Plugin manifest lives here (not in the C++ shim) because the Rust cdylib's
 // linker version script wraps every non-`pub no_mangle` symbol in `local: *;`,
@@ -201,6 +201,28 @@ impl StorageEngine for TrivialEngine {
     fn position(&mut self, _record: &[u8]) {}
 
     fn info(&mut self, _flag: u32) -> EngineResult {
+        Ok(())
+    }
+
+    fn delete_table(&mut self, _name: &str, _table_def: Option<&sys::DdTable>) -> EngineResult {
+        Ok(())
+    }
+
+    fn rename_table(
+        &mut self,
+        _from: &str,
+        _to: &str,
+        _from_table_def: Option<&sys::DdTable>,
+        _to_table_def: Option<&sys::DdTable>,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    fn drop_table(&mut self, _name: &str) {}
+
+    fn truncate(&mut self, _table_def: Option<&sys::DdTable>) -> EngineResult {
+        self.num_rows = 0;
+        self.current_row = 0;
         Ok(())
     }
 }
