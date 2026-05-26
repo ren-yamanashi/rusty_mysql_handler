@@ -47,6 +47,8 @@ pub mod index_pushed;
 #[doc(hidden)]
 pub mod index_range;
 #[doc(hidden)]
+pub mod mrr;
+#[doc(hidden)]
 pub mod open_close;
 #[doc(hidden)]
 pub mod parallel_scan;

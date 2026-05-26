@@ -808,4 +808,82 @@ pub trait StorageEngine: Send {
     fn ft_read(&mut self, _buf: &mut [u8]) -> EngineResult {
         Err(EngineError::WrongCommand)
     }
+
+    /// Estimate the cost of a multi-range read over a known set of ranges on
+    /// index `keyno`, for the optimizer's const-range path. `seq` is MySQL's
+    /// `RANGE_SEQ_IF` range-sequence interface, `seq_init_param` its init
+    /// argument (round-tripped without dereference), and `cost` the
+    /// `Cost_estimate` accumulator. These are opaque MySQL objects the binding
+    /// cannot drive from Rust yet, so a custom estimate is not expressible until
+    /// that wiring lands; the callback exists so the surface is complete.
+    ///
+    /// Return `None` (the default) to use the base disk-sweep MRR
+    /// implementation, which is built on
+    /// [`read_range_first`](Self::read_range_first) /
+    /// [`read_range_next`](Self::read_range_next). Engines providing a custom
+    /// multi-range read return `Some(rows)`.
+    fn multi_range_read_info_const(
+        &mut self,
+        _keyno: u32,
+        _seq: Option<&sys::RangeSeqIf>,
+        _seq_init_param: *mut c_void,
+        _n_ranges: u32,
+        _cost: Option<&sys::CostEstimate>,
+    ) -> Option<u64> {
+        None
+    }
+
+    /// Estimate the cost of a multi-range read over `n_ranges` ranges spanning
+    /// `keys` rows on index `keyno`. `cost` is the `Cost_estimate` accumulator,
+    /// an opaque MySQL object the binding cannot drive from Rust yet.
+    ///
+    /// Return `None` (the default) to use the base disk-sweep MRR
+    /// implementation; engines providing a custom multi-range read return
+    /// `Some(rows)`.
+    fn multi_range_read_info(
+        &mut self,
+        _keyno: u32,
+        _n_ranges: u32,
+        _keys: u32,
+        _cost: Option<&sys::CostEstimate>,
+    ) -> Option<u64> {
+        None
+    }
+
+    /// Initialize a multi-range read scan over the ranges from `seq` (init
+    /// argument `seq_init_param`), with `mode` carrying the `HA_MRR_*` flags and
+    /// `buf` a caller-owned `HANDLER_BUFFER` scratch area. `seq` and `buf` are
+    /// opaque MySQL objects the binding cannot drive from Rust yet.
+    ///
+    /// Return `None` (the default) to use the base disk-sweep MRR
+    /// implementation, which drives
+    /// [`read_range_first`](Self::read_range_first) /
+    /// [`read_range_next`](Self::read_range_next). Engines providing a custom
+    /// multi-range read return `Some(result)`.
+    fn multi_range_read_init(
+        &mut self,
+        _seq: Option<&sys::RangeSeqIf>,
+        _seq_init_param: *mut c_void,
+        _n_ranges: u32,
+        _mode: u32,
+        _buf: Option<&sys::HandlerBuffer>,
+    ) -> Option<EngineResult> {
+        None
+    }
+
+    /// Read the next row of the multi-range read scan into `buf`, writing the
+    /// range association through `range_info` (an opaque `char**` out-pointer
+    /// the binding round-trips without dereference).
+    ///
+    /// Return `None` (the default) to use the base disk-sweep MRR
+    /// implementation; engines providing a custom multi-range read return
+    /// `Some(result)`, where [`EngineError::EndOfFile`] marks the end of the
+    /// scan.
+    fn multi_range_read_next(
+        &mut self,
+        _buf: &mut [u8],
+        _range_info: *mut *mut c_void,
+    ) -> Option<EngineResult> {
+        None
+    }
 }

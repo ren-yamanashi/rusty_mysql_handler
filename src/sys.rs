@@ -102,6 +102,21 @@ pub struct MysqlString([u8; 0]);
 #[derive(Debug)]
 pub struct FtHints([u8; 0]);
 
+/// Opaque MySQL `RANGE_SEQ_IF` (multi-range read range-sequence interface)
+#[repr(C)]
+#[derive(Debug)]
+pub struct RangeSeqIf([u8; 0]);
+
+/// Opaque MySQL `Cost_estimate` (optimizer cost accumulator)
+#[repr(C)]
+#[derive(Debug)]
+pub struct CostEstimate([u8; 0]);
+
+/// Opaque MySQL `HANDLER_BUFFER` (caller-owned multi-range read scratch buffer)
+#[repr(C)]
+#[derive(Debug)]
+pub struct HandlerBuffer([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;
