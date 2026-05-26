@@ -20,37 +20,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `rust__handler__*` callbacks invoked by the C++ shim, split by handler-API
-//! category. Each submodule holds the callbacks for one section of
-//! `docs/api/handler.md`.
-//!
-//! # Safety (every callback in these submodules)
-//!
-//! - `ctx` comes from `rust__create_engine` and has not been destroyed; the
-//!   C++ shim guards every callback against null on its side, so each Rust
-//!   callback requires non-null.
-//! - The shim never calls a callback for the same `ctx` from two threads
-//!   concurrently, so `&mut *ctx` is sound inside each callback.
-//! - Pointer/length pairs are valid for the call only; engines must not
-//!   retain them.
+// Pushed-join index overrides (handler.h #33-#34)
 
-#[doc(hidden)]
-pub mod bulk_operations;
-#[doc(hidden)]
-pub mod index_basic;
-#[doc(hidden)]
-pub mod index_pushed;
-#[doc(hidden)]
-pub mod index_range;
-#[doc(hidden)]
-pub mod open_close;
-#[doc(hidden)]
-pub mod properties;
-#[doc(hidden)]
-pub mod row_operations;
-#[doc(hidden)]
-pub mod scan;
-#[doc(hidden)]
-pub mod statistics;
-#[doc(hidden)]
-pub mod table_lifecycle;
+#include "binding.hpp"
+#include "my_dbug.h"
+#include "rust_callbacks.hpp"
+#include "sql/table.h"
+
+int RustHandlerBase::index_read_pushed(uchar *buf, const uchar *key,
+                                       key_part_map keypart_map) {
+  DBUG_TRACE;
+  const uint key_len = calculate_key_len(table, active_index, keypart_map);
+  return rust__handler__index_read_pushed(
+      rust_ctx_, buf, table->s->rec_buff_length, key, key_len);
+}
+
+int RustHandlerBase::index_next_pushed(uchar *buf) {
+  DBUG_TRACE;
+  return rust__handler__index_next_pushed(rust_ctx_, buf,
+                                          table->s->rec_buff_length);
+}

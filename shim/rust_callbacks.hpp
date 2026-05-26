@@ -94,6 +94,15 @@ int32_t rust__handler__index_last(void *ctx, uint8_t *buf, size_t buf_len);
 int32_t rust__handler__index_next_same(void *ctx, uint8_t *buf, size_t buf_len,
                                        const uint8_t *key, size_t key_len);
 
+// Index — pushed join (handler.h #33-#34). NDB-style; index_read_pushed takes
+// only an exact key (the shim resolves the key_part_map to a leading-bytes
+// length, a null key => nullptr) with no find_flag.
+int32_t rust__handler__index_read_pushed(void *ctx, uint8_t *buf,
+                                         size_t buf_len, const uint8_t *key,
+                                         size_t key_len);
+int32_t rust__handler__index_next_pushed(void *ctx, uint8_t *buf,
+                                         size_t buf_len);
+
 // Index — read & range (handler.h #20, #22-#24, #30-#32). Keys arrive
 // length-resolved as `const uint8_t *` + length (a null key => nullptr);
 // find_flag is the raw ha_rkey_function integer. Each range bound decomposes

@@ -495,6 +495,31 @@ pub trait StorageEngine: Send {
         Err(EngineError::WrongCommand)
     }
 
+    /// Position the index cursor at `key` (resolved from a `key_part_map` like
+    /// [`index_read_map`](Self::index_read_map)) and read the matching row into
+    /// `buf` as the root of a pushed join. Pushed-join execution is
+    /// engine-specific (NDB-style); the binding exposes the callback so a
+    /// participating engine can implement it, but there is no `find_flag` —
+    /// MySQL only ever issues an exact-key lookup here. `key` is empty for a
+    /// null key. Neither borrow may be retained past the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the handler
+    /// base.
+    fn index_read_pushed(&mut self, _buf: &mut [u8], _key: &[u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Read the next row of the pushed-join result started by
+    /// [`index_read_pushed`](Self::index_read_pushed) into `buf`.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the handler
+    /// base.
+    fn index_next_pushed(&mut self, _buf: &mut [u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
     /// Begin a range scan and read its first row into `buf`. `start` and `end`
     /// are the lower and upper bounds; either is `None` for an open end.
     /// `eq_range` marks an equality range (`start == end`), and `sorted`
