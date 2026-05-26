@@ -167,6 +167,16 @@ class RustHandlerBase : public handler {
                             uint n_ranges, uint mode,
                             HANDLER_BUFFER *buf) override;
   int multi_range_read_next(char **range_info) override;
+
+  uint max_supported_record_length() const override;
+  uint max_supported_keys() const override;
+  uint max_supported_key_parts() const override;
+  uint max_supported_key_length() const override;
+  uint max_supported_key_part_length(
+      HA_CREATE_INFO *create_info) const override;
+  uint min_record_length(uint options) const override;
+  uint extra_rec_buf_length() const override;
+  longlong get_memory_buffer_size() const override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

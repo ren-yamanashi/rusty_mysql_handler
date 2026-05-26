@@ -36,6 +36,7 @@
 #include "rust_callbacks/index_pushed.hpp"
 #include "rust_callbacks/index_range.hpp"
 #include "rust_callbacks/lifecycle.hpp"
+#include "rust_callbacks/limits.hpp"
 #include "rust_callbacks/mrr.hpp"
 #include "rust_callbacks/parallel_scan.hpp"
 #include "rust_callbacks/properties.hpp"
