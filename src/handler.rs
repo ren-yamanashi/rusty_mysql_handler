@@ -47,9 +47,13 @@ pub mod index_range;
 #[doc(hidden)]
 pub mod open_close;
 #[doc(hidden)]
+pub mod parallel_scan;
+#[doc(hidden)]
 pub mod properties;
 #[doc(hidden)]
 pub mod row_operations;
+#[doc(hidden)]
+pub mod sampling;
 #[doc(hidden)]
 pub mod scan;
 #[doc(hidden)]

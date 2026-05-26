@@ -7,6 +7,10 @@ SELECT COUNT(*) FROM t1;
 
 INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c');
 
+-- Drives the sampling handler path (sample_init -> sample_next -> sample_end);
+-- histogram building calls it unconditionally via ha_sample_*.
+ANALYZE TABLE t1 UPDATE HISTOGRAM ON id WITH 10 BUCKETS;
+
 TRUNCATE TABLE t1;
 RENAME TABLE t1 TO t2;
 DROP TABLE t2;
