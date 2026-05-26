@@ -59,6 +59,7 @@ add_library(ha_rusty_shim STATIC binding.cc handler_bulk_load.cc
                                  handler_bulk_operations.cc handler_fulltext.cc
                                  handler_index_basic.cc handler_index_pushed.cc
                                  handler_index_range.cc handler_lifecycle.cc
-                                 handler_mrr.cc handler_parallel_scan.cc
+                                 handler_limits.cc handler_mrr.cc
+                                 handler_parallel_scan.cc
                                  handler_row_operations.cc handler_sampling.cc
                                  plugin.cc)

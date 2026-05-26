@@ -15,5 +15,24 @@ TRUNCATE TABLE t1;
 RENAME TABLE t1 TO t2;
 DROP TABLE t2;
 
+-- max_supported_keys() >= 1 lets an indexed table be created, which makes the
+-- index and range-scan handler paths reachable from SQL.
+-- id is NOT NULL because TrivialEngine's index_flags does not advertise
+-- HA_NULL_IN_KEY (a capability bound later); a nullable indexed column is
+-- rejected with ER_NULL_COLUMN_IN_INDEX otherwise.
+CREATE TABLE idx1 (id INT NOT NULL, name VARCHAR(50), KEY idx_id (id)) ENGINE=RUSTY;
+
+-- index_read_map / index_first / index_next (equality + ordered scan)
+SELECT * FROM idx1 WHERE id = 1;
+SELECT * FROM idx1 ORDER BY id;
+-- index_last / index_prev (reverse ordered scan)
+SELECT * FROM idx1 ORDER BY id DESC;
+-- read_range_first / read_range_next (range scan)
+SELECT * FROM idx1 WHERE id BETWEEN 1 AND 10;
+-- records_in_range (optimizer row-count estimate)
+EXPLAIN SELECT * FROM idx1 WHERE id > 5;
+
+DROP TABLE idx1;
+
 -- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran
 SELECT 3;

@@ -886,4 +886,66 @@ pub trait StorageEngine: Send {
     ) -> Option<EngineResult> {
         None
     }
+
+    /// Maximum row length the engine supports, in bytes. Return `None` (the
+    /// default) to use the handler base (`HA_MAX_REC_LENGTH`); engines with a
+    /// tighter cap return `Some(len)`.
+    fn max_supported_record_length(&self) -> Option<u32> {
+        None
+    }
+
+    /// Maximum number of indexes the engine supports on one table. Return `None`
+    /// (the default) to use the handler base (`0`, i.e. no indexes); engines
+    /// that support indexes return `Some(count)` — this is the gate MySQL checks
+    /// before allowing `CREATE TABLE ... KEY(...)`.
+    fn max_supported_keys(&self) -> Option<u32> {
+        None
+    }
+
+    /// Maximum number of key parts in one index. Return `None` (the default) to
+    /// use the handler base (`MAX_REF_PARTS`); engines with a tighter cap return
+    /// `Some(parts)`.
+    fn max_supported_key_parts(&self) -> Option<u32> {
+        None
+    }
+
+    /// Maximum total key length in bytes. Return `None` (the default) to use the
+    /// handler base (`MAX_KEY_LENGTH`); engines with a tighter cap return
+    /// `Some(len)`.
+    fn max_supported_key_length(&self) -> Option<u32> {
+        None
+    }
+
+    /// Maximum length in bytes of a single key part for the table described by
+    /// `create_info` (an opaque MySQL `HA_CREATE_INFO`). Return `None` (the
+    /// default) to use the handler base (`255`); engines with a different cap
+    /// return `Some(len)`.
+    fn max_supported_key_part_length(
+        &self,
+        _create_info: Option<&sys::HA_CREATE_INFO>,
+    ) -> Option<u32> {
+        None
+    }
+
+    /// Minimum row length in bytes for a table created with `options` (the
+    /// `HA_CREATE_INFO` table-option bitfield). Return `None` (the default) to
+    /// use the handler base (`1`); engines with a larger floor return
+    /// `Some(len)`.
+    fn min_record_length(&self, _options: u32) -> Option<u32> {
+        None
+    }
+
+    /// Extra per-record buffer space the engine needs beyond the row image, in
+    /// bytes. Return `None` (the default) to use the handler base (`0`); engines
+    /// needing scratch space return `Some(len)`.
+    fn extra_rec_buf_length(&self) -> Option<u32> {
+        None
+    }
+
+    /// In-memory buffer size the engine reports to the optimizer, in bytes, or a
+    /// negative value when not applicable. Return `None` (the default) to use the
+    /// handler base (`-1`); engines return `Some(bytes)`.
+    fn memory_buffer_size(&self) -> Option<i64> {
+        None
+    }
 }

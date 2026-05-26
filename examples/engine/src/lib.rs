@@ -201,6 +201,30 @@ impl StorageEngine for TrivialEngine {
     ) -> Option<u64> {
         None
     }
+
+    fn read_range_first(
+        &mut self,
+        _buf: &mut [u8],
+        _start: Option<RangeKey<'_>>,
+        _end: Option<RangeKey<'_>>,
+        _eq_range: bool,
+        _sorted: bool,
+    ) -> EngineResult {
+        self.current_row = 0;
+        self.yield_next()
+    }
+
+    fn read_range_next(&mut self, _buf: &mut [u8]) -> EngineResult {
+        self.yield_next()
+    }
+
+    fn max_supported_keys(&self) -> Option<u32> {
+        Some(8)
+    }
+
+    fn max_supported_key_parts(&self) -> Option<u32> {
+        Some(8)
+    }
 }
 
 /// Plugin entry point; the shim calls this once at `INSTALL PLUGIN`.
