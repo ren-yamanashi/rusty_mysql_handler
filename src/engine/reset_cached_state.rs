@@ -38,3 +38,14 @@ impl From<bool> for ResetCachedState {
         if needs_reset { Self::Reset } else { Self::Keep }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_bool_to_variant() {
+        assert_eq!(ResetCachedState::from(true), ResetCachedState::Reset);
+        assert_eq!(ResetCachedState::from(false), ResetCachedState::Keep);
+    }
+}

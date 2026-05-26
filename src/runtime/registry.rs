@@ -69,3 +69,68 @@ impl Default for EngineRegistry {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::CStr;
+
+    use super::*;
+    use crate::engine::{EngineError, EngineResult};
+
+    struct MockEngine;
+
+    impl StorageEngine for MockEngine {
+        fn table_type(&self) -> &'static CStr {
+            c"MOCK"
+        }
+        fn table_flags(&self) -> u64 {
+            0
+        }
+        fn index_flags(&self, _idx: u32, _part: u32, _all_parts: bool) -> u32 {
+            0
+        }
+        fn create(&mut self, _name: &str) -> EngineResult {
+            Ok(())
+        }
+        fn open(&mut self, _name: &str, _mode: i32) -> EngineResult {
+            Ok(())
+        }
+        fn close(&mut self) -> EngineResult {
+            Ok(())
+        }
+        fn rnd_init(&mut self, _scan: bool) -> EngineResult {
+            Ok(())
+        }
+        fn rnd_next(&mut self, _buf: &mut [u8]) -> EngineResult {
+            Err(EngineError::EndOfFile)
+        }
+        fn rnd_pos(&mut self, _buf: &mut [u8], _pos: &[u8]) -> EngineResult {
+            Err(EngineError::WrongCommand)
+        }
+        fn position(&mut self, _record: &[u8]) {}
+        fn info(&mut self, _flag: u32) -> EngineResult {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn create_context_is_none_before_register() {
+        let registry = EngineRegistry::new();
+        assert!(registry.create_context().is_none());
+    }
+
+    #[test]
+    fn register_then_create_yields_context() {
+        let registry = EngineRegistry::new();
+        registry.register(|| Box::new(MockEngine));
+        assert!(registry.create_context().is_some());
+    }
+
+    #[test]
+    fn duplicate_register_is_ignored() {
+        let registry = EngineRegistry::new();
+        registry.register(|| Box::new(MockEngine));
+        registry.register(|| Box::new(MockEngine));
+        assert!(registry.create_context().is_some());
+    }
+}

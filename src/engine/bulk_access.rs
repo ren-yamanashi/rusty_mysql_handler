@@ -52,3 +52,18 @@ impl BulkAccess {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn per_row_declines_batching() {
+        assert!(BulkAccess::PerRow.to_mysql_bool());
+    }
+
+    #[test]
+    fn batched_accepts_the_bulk_path() {
+        assert!(!BulkAccess::Batched.to_mysql_bool());
+    }
+}
