@@ -26,7 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// Engine-property queries (table_type, table_flags, index_flags).
+// Engine-property queries (table_type, table_flags, index_flags)
 extern "C" {
 const char *rust__handler__table_type(void *ctx);
 uint64_t rust__handler__table_flags(void *ctx);
