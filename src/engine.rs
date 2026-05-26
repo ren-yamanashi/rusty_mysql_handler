@@ -29,15 +29,19 @@ use crate::sys;
 
 mod bulk_access;
 mod error;
+mod parallel_scan_init;
 mod range_key;
 mod reset_cached_state;
 mod rkey_function;
+mod sampling_method;
 
 pub use bulk_access::BulkAccess;
 pub use error::{EngineError, EngineResult};
+pub use parallel_scan_init::ParallelScanInit;
 pub use range_key::RangeKey;
 pub use reset_cached_state::ResetCachedState;
 pub use rkey_function::RKeyFunction;
+pub use sampling_method::SamplingMethod;
 
 /// The safe interface every storage engine implements.
 ///
@@ -663,5 +667,95 @@ pub trait StorageEngine: Send {
         _error_if_not_loaded: bool,
     ) -> EngineResult {
         Err(EngineError::WrongCommand)
+    }
+
+    /// Initialize a parallel scan, returning the engine-owned scan context and
+    /// the number of worker threads the engine will drive (see
+    /// [`ParallelScanInit`]). `use_reserved_threads` permits dipping into the
+    /// reserved pool when the parallel-read cap is hit; `max_desired_threads`
+    /// caps the thread count (`0` means no cap). The default returns a null
+    /// context and zero threads, matching the handler base (no parallel scan).
+    ///
+    /// # Errors
+    /// The default never errors; overrides choose their own variants.
+    fn parallel_scan_init(
+        &mut self,
+        _use_reserved_threads: bool,
+        _max_desired_threads: usize,
+    ) -> EngineResult<ParallelScanInit> {
+        Ok(ParallelScanInit::new(core::ptr::null_mut(), 0))
+    }
+
+    /// Run the parallel read using the context from
+    /// [`parallel_scan_init`](Self::parallel_scan_init). `thread_ctxs` is the
+    /// caller's per-thread context array; `init_fn` / `load_fn` / `end_fn` are
+    /// MySQL `std::function` callbacks passed as opaque pointers. The binding
+    /// cannot invoke those callbacks from Rust yet, so a functioning parallel
+    /// read is not expressible until that wiring lands; the callback exists so
+    /// the surface is complete. None of these pointers may be dereferenced
+    /// except by the code that owns them.
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the handler base.
+    fn parallel_scan(
+        &mut self,
+        _scan_ctx: *mut c_void,
+        _thread_ctxs: *mut *mut c_void,
+        _init_fn: *const c_void,
+        _load_fn: *const c_void,
+        _end_fn: *const c_void,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Release the parallel-scan context from
+    /// [`parallel_scan_init`](Self::parallel_scan_init). The default is a no-op.
+    fn parallel_scan_end(&mut self, _scan_ctx: *mut c_void) {}
+
+    /// Initialize sampling, returning the engine-owned scan context used by
+    /// [`sample_next`](Self::sample_next). `sampling_percentage` is the share of
+    /// rows to return (0–100), `sampling_seed` seeds the engine RNG,
+    /// `sampling_method` selects the algorithm, and `tablesample` marks an SQL
+    /// `TABLESAMPLE` rather than an internal sample. The context pointer is
+    /// round-tripped verbatim and never dereferenced by the binding.
+    ///
+    /// # Errors
+    /// The default delegates to [`rnd_init`](Self::rnd_init) with `scan = true`
+    /// and returns a null context, mirroring the handler base which samples by
+    /// scanning. The percentage filter the base applies relies on handler-
+    /// internal RNG state the binding does not expose, so the default yields
+    /// every row (an effective 100% sample) until an engine overrides this.
+    fn sample_init(
+        &mut self,
+        _sampling_percentage: f64,
+        _sampling_seed: i32,
+        _sampling_method: SamplingMethod,
+        _tablesample: bool,
+    ) -> EngineResult<*mut c_void> {
+        match self.rnd_init(true) {
+            Ok(()) => Ok(core::ptr::null_mut()),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Read the next sampled row into `buf`, using the context from
+    /// [`sample_init`](Self::sample_init).
+    ///
+    /// # Errors
+    /// The default delegates to [`rnd_next`](Self::rnd_next) (no percentage
+    /// filtering); engines return [`EngineError::EndOfFile`] once the sample is
+    /// exhausted.
+    fn sample_next(&mut self, _scan_ctx: *mut c_void, buf: &mut [u8]) -> EngineResult {
+        self.rnd_next(buf)
+    }
+
+    /// End sampling and release the context from
+    /// [`sample_init`](Self::sample_init).
+    ///
+    /// # Errors
+    /// The default delegates to [`rnd_end`](Self::rnd_end), matching the handler
+    /// base.
+    fn sample_end(&mut self, _scan_ctx: *mut c_void) -> EngineResult {
+        self.rnd_end()
     }
 }

@@ -136,6 +136,18 @@ class RustHandlerBase : public handler {
   int load_table(const TABLE &table, bool *skip_metadata_update) override;
   int unload_table(const char *db_name, const char *table_name,
                    bool error_if_not_loaded) override;
+
+  int parallel_scan_init(void *&scan_ctx, size_t *num_threads,
+                         bool use_reserved_threads,
+                         size_t max_desired_threads) override;
+  int parallel_scan(void *scan_ctx, void **thread_ctxs, Load_init_cbk init_fn,
+                    Load_cbk load_fn, Load_end_cbk end_fn) override;
+  void parallel_scan_end(void *scan_ctx) override;
+  int sample_init(void *&scan_ctx, double sampling_percentage,
+                  int sampling_seed, enum_sampling_method sampling_method,
+                  const bool tablesample) override;
+  int sample_next(void *scan_ctx, uchar *buf) override;
+  int sample_end(void *scan_ctx) override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

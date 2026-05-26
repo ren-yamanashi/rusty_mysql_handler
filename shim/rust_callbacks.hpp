@@ -180,6 +180,27 @@ int32_t rust__handler__unload_table(void *ctx, const uint8_t *db_name,
                                     const uint8_t *table_name,
                                     size_t table_name_len,
                                     bool error_if_not_loaded);
+
+// Parallel scan + sampling (handler.h #54-#59). Scan contexts are engine-owned
+// pointers round-tripped verbatim; parallel_scan_init / sample_init write the
+// context (and thread count) through out-pointers. parallel_scan's load
+// callbacks are MySQL std::function objects passed as opaque pointers the
+// engine cannot yet invoke. enum_sampling_method crosses as its int value.
+int32_t rust__handler__parallel_scan_init(void *ctx, void **scan_ctx,
+                                          size_t *num_threads,
+                                          bool use_reserved_threads,
+                                          size_t max_desired_threads);
+int32_t rust__handler__parallel_scan(void *ctx, void *scan_ctx,
+                                     void **thread_ctxs, const void *init_fn,
+                                     const void *load_fn, const void *end_fn);
+void rust__handler__parallel_scan_end(void *ctx, void *scan_ctx);
+int32_t rust__handler__sample_init(void *ctx, void **scan_ctx,
+                                   double sampling_percentage,
+                                   int32_t sampling_seed,
+                                   int32_t sampling_method, bool tablesample);
+int32_t rust__handler__sample_next(void *ctx, void *scan_ctx, uint8_t *buf,
+                                   size_t buf_len);
+int32_t rust__handler__sample_end(void *ctx, void *scan_ctx);
 }
 
 #endif
