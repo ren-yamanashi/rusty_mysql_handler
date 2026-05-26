@@ -35,6 +35,7 @@ use core::ffi::c_void;
 /// [`StorageEngine::parallel_scan_init`]: crate::engine::StorageEngine::parallel_scan_init
 /// [`StorageEngine::parallel_scan_end`]: crate::engine::StorageEngine::parallel_scan_end
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ParallelScanInit {
     scan_ctx: *mut c_void,
     num_threads: usize,
