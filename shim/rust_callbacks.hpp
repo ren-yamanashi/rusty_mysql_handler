@@ -201,6 +201,18 @@ int32_t rust__handler__sample_init(void *ctx, void **scan_ctx,
 int32_t rust__handler__sample_next(void *ctx, void *scan_ctx, uint8_t *buf,
                                    size_t buf_len);
 int32_t rust__handler__sample_end(void *ctx, void *scan_ctx);
+
+// Full-text search (handler.h #60-#63). ft_init_ext / _with_hints return an
+// engine-owned FT_INFO pointer round-tripped verbatim; the String query and
+// Ft_hints cross as opaque pointers. _with_hints' flags are pre-extracted from
+// hints by the shim so the engine never reaches into the opaque hints object.
+int32_t rust__handler__ft_init(void *ctx);
+void *rust__handler__ft_init_ext(void *ctx, uint32_t flags, uint32_t inx,
+                                 const void *key);
+void *rust__handler__ft_init_ext_with_hints(void *ctx, uint32_t flags,
+                                            uint32_t inx, const void *key,
+                                            const void *hints);
+int32_t rust__handler__ft_read(void *ctx, uint8_t *buf, size_t buf_len);
 }
 
 #endif

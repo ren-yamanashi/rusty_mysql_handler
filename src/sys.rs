@@ -92,6 +92,16 @@ pub struct RowsMysql([u8; 0]);
 #[derive(Debug)]
 pub struct BulkLoadStatCallbacks([u8; 0]);
 
+/// Opaque MySQL `String` (a full-text query string, among other uses)
+#[repr(C)]
+#[derive(Debug)]
+pub struct MysqlString([u8; 0]);
+
+/// Opaque MySQL `Ft_hints` (full-text search hints)
+#[repr(C)]
+#[derive(Debug)]
+pub struct FtHints([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;
