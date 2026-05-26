@@ -148,6 +148,12 @@ class RustHandlerBase : public handler {
                   const bool tablesample) override;
   int sample_next(void *scan_ctx, uchar *buf) override;
   int sample_end(void *scan_ctx) override;
+
+  int ft_init() override;
+  FT_INFO *ft_init_ext(uint flags, uint inx, String *key) override;
+  FT_INFO *ft_init_ext_with_hints(uint inx, String *key,
+                                  Ft_hints *hints) override;
+  int ft_read(uchar *buf) override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

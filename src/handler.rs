@@ -39,6 +39,8 @@ pub mod bulk_load;
 #[doc(hidden)]
 pub mod bulk_operations;
 #[doc(hidden)]
+pub mod fulltext;
+#[doc(hidden)]
 pub mod index_basic;
 #[doc(hidden)]
 pub mod index_pushed;

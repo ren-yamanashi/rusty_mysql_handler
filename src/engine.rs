@@ -758,4 +758,54 @@ pub trait StorageEngine: Send {
     fn sample_end(&mut self, _scan_ctx: *mut c_void) -> EngineResult {
         self.rnd_end()
     }
+
+    /// Begin a full-text search scan.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`], matching the handler
+    /// base.
+    fn ft_init(&mut self) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Create a full-text search handle for index `inx` and query `key`, with
+    /// `flags` selecting the search mode. Returns an engine-owned
+    /// `FT_INFO`-compatible pointer that MySQL drives through its vtable, or
+    /// null when the engine cannot serve the search. `key` is MySQL's `String`
+    /// query object, opaque to the binding. The pointer is round-tripped
+    /// verbatim and never dereferenced by the binding; the engine owns its
+    /// lifetime. The default returns null, matching the handler base (which
+    /// raises `ER_TABLE_CANT_HANDLE_FT`).
+    fn ft_init_ext(
+        &mut self,
+        _flags: u32,
+        _inx: u32,
+        _key: Option<&sys::MysqlString>,
+    ) -> *mut c_void {
+        core::ptr::null_mut()
+    }
+
+    /// Hint-aware variant of [`ft_init_ext`](Self::ft_init_ext). `flags` is
+    /// pre-extracted from `hints` by the shim (the binding cannot read the
+    /// opaque `hints` object from Rust); `hints` is still passed for engines
+    /// that grow richer hint handling. The default delegates to
+    /// [`ft_init_ext`](Self::ft_init_ext), mirroring the handler base.
+    fn ft_init_ext_with_hints(
+        &mut self,
+        flags: u32,
+        inx: u32,
+        key: Option<&sys::MysqlString>,
+        _hints: Option<&sys::FtHints>,
+    ) -> *mut c_void {
+        self.ft_init_ext(flags, inx, key)
+    }
+
+    /// Read the next row matching the active full-text search into `buf`.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]; engines return
+    /// [`EngineError::EndOfFile`] once the matches are exhausted.
+    fn ft_read(&mut self, _buf: &mut [u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
 }
