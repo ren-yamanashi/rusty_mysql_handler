@@ -37,7 +37,7 @@ use crate::panic_guard::FfiBoundary;
 use crate::runtime::{EngineContext, FfiPtr};
 use crate::sys;
 
-// Map an engine-provided MRR result to the MySQL return code the shim returns.
+// Map an engine-provided MRR result to the MySQL return code the shim returns
 fn result_code(result: crate::engine::EngineResult) -> i32 {
     match result {
         Ok(()) => 0,
