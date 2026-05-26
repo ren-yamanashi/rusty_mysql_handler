@@ -65,3 +65,32 @@ impl EngineError {
 
 /// Result alias used throughout the [`StorageEngine`](crate::engine::StorageEngine) trait
 pub type EngineResult<T = ()> = Result<T, EngineError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn errno_mapping_matches_ha_err_codes() {
+        assert_eq!(
+            EngineError::EndOfFile.to_mysql_errno(),
+            sys::HA_ERR_END_OF_FILE
+        );
+        assert_eq!(
+            EngineError::WrongCommand.to_mysql_errno(),
+            sys::HA_ERR_WRONG_COMMAND
+        );
+        assert_eq!(
+            EngineError::Unsupported.to_mysql_errno(),
+            sys::HA_ERR_UNSUPPORTED
+        );
+        assert_eq!(
+            EngineError::InvalidName.to_mysql_errno(),
+            sys::HA_ERR_WRONG_TABLE_NAME
+        );
+        assert_eq!(
+            EngineError::Internal.to_mysql_errno(),
+            sys::HA_ERR_INTERNAL_ERROR
+        );
+    }
+}

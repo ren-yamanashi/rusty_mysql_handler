@@ -71,3 +71,41 @@ impl FfiPtr {
         unsafe { slice::from_raw_parts(p, len) }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bytes_to_str_decodes_valid_utf8() {
+        let bytes = b"rusty";
+        // SAFETY: bytes is non-null and covers its length for the call.
+        let decoded = unsafe { FfiPtr::bytes_to_str(bytes.as_ptr(), bytes.len()) };
+        assert_eq!(decoded, Ok("rusty"));
+    }
+
+    #[test]
+    fn bytes_to_str_rejects_invalid_utf8() {
+        let bytes = [0xff_u8, 0xfe];
+        // SAFETY: bytes is non-null and covers its length for the call.
+        let decoded = unsafe { FfiPtr::bytes_to_str(bytes.as_ptr(), bytes.len()) };
+        assert_eq!(decoded, Err(EngineError::InvalidName));
+    }
+
+    #[test]
+    fn slice_const_views_the_bytes() {
+        let data = [10u8, 20, 30];
+        // SAFETY: data is non-null and covers 3 readable bytes for the call.
+        let view = unsafe { FfiPtr::slice_const(data.as_ptr(), data.len()) };
+        assert_eq!(view, &data);
+    }
+
+    #[test]
+    fn slice_mut_allows_write_back() {
+        let mut data = [0u8; 3];
+        // SAFETY: data is non-null and covers 3 writable bytes for the call.
+        let view = unsafe { FfiPtr::slice_mut(data.as_mut_ptr(), data.len()) };
+        view[1] = 42;
+        assert_eq!(data, [0, 42, 0]);
+    }
+}

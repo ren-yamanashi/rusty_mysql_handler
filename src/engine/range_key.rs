@@ -57,3 +57,22 @@ impl<'a> RangeKey<'a> {
         self.flag
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exposes_key_and_flag() {
+        let key = [1u8, 2, 3];
+        let endpoint = RangeKey::new(&key, RKeyFunction::KeyOrNext);
+        assert_eq!(endpoint.key(), &key);
+        assert_eq!(endpoint.flag(), RKeyFunction::KeyOrNext);
+    }
+
+    #[test]
+    fn empty_key_is_preserved() {
+        let endpoint = RangeKey::new(&[], RKeyFunction::KeyExact);
+        assert!(endpoint.key().is_empty());
+    }
+}

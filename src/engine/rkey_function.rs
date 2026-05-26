@@ -88,3 +88,22 @@ impl RKeyFunction {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_known_codes() {
+        assert_eq!(RKeyFunction::from_raw(0), RKeyFunction::KeyExact);
+        assert_eq!(RKeyFunction::from_raw(7), RKeyFunction::PrefixLastOrPrev);
+        assert_eq!(RKeyFunction::from_raw(13), RKeyFunction::NearestNeighbor);
+    }
+
+    #[test]
+    fn unknown_codes_become_invalid() {
+        assert_eq!(RKeyFunction::from_raw(-1), RKeyFunction::Invalid);
+        assert_eq!(RKeyFunction::from_raw(14), RKeyFunction::Invalid);
+        assert_eq!(RKeyFunction::from_raw(i32::MAX), RKeyFunction::Invalid);
+    }
+}
