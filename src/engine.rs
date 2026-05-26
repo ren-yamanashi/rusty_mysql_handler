@@ -75,6 +75,17 @@ pub trait StorageEngine: Send {
     /// only use positioned access (`rnd_pos`). Errors are implementation-defined.
     fn rnd_init(&mut self, scan: bool) -> EngineResult;
 
+    /// End the full table scan started by [`rnd_init`](Self::rnd_init),
+    /// releasing any cursor state. MySQL may call [`rnd_init`](Self::rnd_init)
+    /// again without an intervening `rnd_end`, so implementations must tolerate
+    /// a re-init.
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the handler base.
+    fn rnd_end(&mut self) -> EngineResult {
+        Ok(())
+    }
+
     /// Fetch the next row into `buf`.
     ///
     /// # Errors
@@ -97,6 +108,24 @@ pub trait StorageEngine: Send {
     /// row internally or return [`EngineError::WrongCommand`] from
     /// `rnd_pos` until the wiring is added.
     fn position(&mut self, record: &[u8]);
+
+    /// Read the row whose primary key matches the one encoded in `record` (in
+    /// MySQL's internal record format), overwriting `record` with the full row.
+    /// Only meaningful for engines that advertise
+    /// `HA_PRIMARY_KEY_REQUIRED_FOR_POSITION`.
+    ///
+    /// The handler base implements this by orchestrating
+    /// [`rnd_init`](Self::rnd_init) / [`position`](Self::position) /
+    /// [`rnd_pos`](Self::rnd_pos) / [`rnd_end`](Self::rnd_end) through its
+    /// internal `ref` buffer; the binding does not expose that buffer, so it
+    /// hands the whole operation to the engine instead. The borrow may not be
+    /// retained past the call.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`].
+    fn rnd_pos_by_record(&mut self, _record: &mut [u8]) -> EngineResult {
+        Err(EngineError::WrongCommand)
+    }
 
     /// Refresh statistics (rows, deleted rows, data length, ...) for the
     /// optimizer. Errors are implementation-defined.

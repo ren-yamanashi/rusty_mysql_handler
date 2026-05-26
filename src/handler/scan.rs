@@ -61,6 +61,19 @@ pub unsafe extern "C" fn rust__handler__rnd_next(
     })
 }
 
+/// End the full table scan
+///
+/// # Safety
+/// `ctx` must be non-null.
+#[doc(hidden)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__handler__rnd_end(ctx: *mut EngineContext) -> i32 {
+    FfiBoundary::run(|| {
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
+        unsafe { &mut *ctx }.engine_mut().rnd_end()
+    })
+}
+
 /// Fetch a row by stored position
 ///
 /// # Safety
@@ -104,4 +117,25 @@ pub unsafe extern "C" fn rust__handler__position(
         let record = unsafe { FfiPtr::slice_const(record, record_len) };
         engine.position(record);
     });
+}
+
+/// Read the row matching the primary key encoded in `record`
+///
+/// # Safety
+/// `ctx` must be non-null; `record` must cover `record_len` readable and
+/// writable bytes (it carries the key in and receives the row out).
+#[doc(hidden)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__handler__rnd_pos_by_record(
+    ctx: *mut EngineContext,
+    record: *mut u8,
+    record_len: usize,
+) -> i32 {
+    FfiBoundary::run(|| {
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
+        let engine = unsafe { &mut *ctx }.engine_mut();
+        // SAFETY: caller guarantees record covers record_len read/write bytes.
+        let record = unsafe { FfiPtr::slice_mut(record, record_len) };
+        engine.rnd_pos_by_record(record)
+    })
 }

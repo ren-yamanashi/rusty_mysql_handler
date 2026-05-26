@@ -100,6 +100,11 @@ impl StorageEngine for TrivialEngine {
         Ok(())
     }
 
+    fn rnd_end(&mut self) -> EngineResult {
+        self.current_row = 0;
+        Ok(())
+    }
+
     fn rnd_next(&mut self, _buf: &mut [u8]) -> EngineResult {
         self.yield_next()
     }

@@ -58,9 +58,11 @@ class RustHandlerBase : public handler {
              dd::Table *table_def) override;
 
   int rnd_init(bool scan) override;
+  int rnd_end() override;
   int rnd_next(uchar *buf) override;
   int rnd_pos(uchar *buf, uchar *pos) override;
   void position(const uchar *record) override;
+  int rnd_pos_by_record(uchar *record) override;
 
   int info(uint flag) override;
   THR_LOCK_DATA **store_lock(THD *thd, THR_LOCK_DATA **to,

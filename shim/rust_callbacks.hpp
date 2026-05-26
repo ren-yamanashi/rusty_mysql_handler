@@ -43,11 +43,14 @@ int32_t rust__handler__open(void *ctx, const uint8_t *name, size_t name_len,
 int32_t rust__handler__close(void *ctx);
 
 int32_t rust__handler__rnd_init(void *ctx, bool scan);
+int32_t rust__handler__rnd_end(void *ctx);
 int32_t rust__handler__rnd_next(void *ctx, uint8_t *buf, size_t buf_len);
 int32_t rust__handler__rnd_pos(void *ctx, uint8_t *buf, size_t buf_len,
                                const uint8_t *pos, size_t pos_len);
 void rust__handler__position(void *ctx, const uint8_t *record,
                              size_t record_len);
+int32_t rust__handler__rnd_pos_by_record(void *ctx, uint8_t *record,
+                                         size_t record_len);
 int32_t rust__handler__info(void *ctx, uint32_t flag);
 
 // Table lifecycle (handler.h #4-#11). Opaque MySQL pointers (dd::Table,
