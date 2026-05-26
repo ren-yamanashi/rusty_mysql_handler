@@ -213,6 +213,26 @@ void *rust__handler__ft_init_ext_with_hints(void *ctx, uint32_t flags,
                                             uint32_t inx, const void *key,
                                             const void *hints);
 int32_t rust__handler__ft_read(void *ctx, uint8_t *buf, size_t buf_len);
+
+// Multi-range read (handler.h #64-#67). The base disk-sweep MRR impl drives
+// read_range_first/next, so each callback returns true only when the engine
+// handles the call (result written through the out-pointer) and false to fall
+// back to handler::multi_range_read_*. RANGE_SEQ_IF / Cost_estimate /
+// HANDLER_BUFFER cross as opaque pointers the engine cannot yet drive;
+// seq_init_param and range_info are round-tripped without dereference.
+bool rust__handler__multi_range_read_info_const(
+    void *ctx, uint32_t keyno, const void *seq, void *seq_init_param,
+    uint32_t n_ranges, const void *cost, uint64_t *out_rows);
+bool rust__handler__multi_range_read_info(void *ctx, uint32_t keyno,
+                                          uint32_t n_ranges, uint32_t keys,
+                                          const void *cost, uint64_t *out_rows);
+bool rust__handler__multi_range_read_init(void *ctx, const void *seq,
+                                          void *seq_init_param,
+                                          uint32_t n_ranges, uint32_t mode,
+                                          const void *buf, int32_t *out_result);
+bool rust__handler__multi_range_read_next(void *ctx, uint8_t *buf,
+                                          size_t buf_len, void **range_info,
+                                          int32_t *out_result);
 }
 
 #endif

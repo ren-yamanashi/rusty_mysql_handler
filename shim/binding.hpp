@@ -154,6 +154,19 @@ class RustHandlerBase : public handler {
   FT_INFO *ft_init_ext_with_hints(uint inx, String *key,
                                   Ft_hints *hints) override;
   int ft_read(uchar *buf) override;
+
+  ha_rows multi_range_read_info_const(uint keyno, RANGE_SEQ_IF *seq,
+                                      void *seq_init_param, uint n_ranges,
+                                      uint *bufsz, uint *flags,
+                                      bool *force_default_mrr,
+                                      Cost_estimate *cost) override;
+  ha_rows multi_range_read_info(uint keyno, uint n_ranges, uint keys,
+                                uint *bufsz, uint *flags,
+                                Cost_estimate *cost) override;
+  int multi_range_read_init(RANGE_SEQ_IF *seq, void *seq_init_param,
+                            uint n_ranges, uint mode,
+                            HANDLER_BUFFER *buf) override;
+  int multi_range_read_next(char **range_info) override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs
