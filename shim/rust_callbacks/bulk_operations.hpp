@@ -20,26 +20,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef SHIM_RUST_CALLBACKS_HPP
-#define SHIM_RUST_CALLBACKS_HPP
+#ifndef SHIM_RUST_CALLBACKS_BULK_OPERATIONS_HPP
+#define SHIM_RUST_CALLBACKS_BULK_OPERATIONS_HPP
 
-// Umbrella for the `rust__*` callback declarations, split by handler-API
-// category to keep each header focused and under the source-file size limit.
-// Every shim translation unit includes this header to see the full surface;
-// the per-category headers under rust_callbacks/ map one-to-one to the
-// handler_*.cc files (and to the Rust callback modules under src/handler/).
-#include "rust_callbacks/bulk_load.hpp"
-#include "rust_callbacks/bulk_operations.hpp"
-#include "rust_callbacks/core.hpp"
-#include "rust_callbacks/fulltext.hpp"
-#include "rust_callbacks/index_basic.hpp"
-#include "rust_callbacks/index_pushed.hpp"
-#include "rust_callbacks/index_range.hpp"
-#include "rust_callbacks/lifecycle.hpp"
-#include "rust_callbacks/mrr.hpp"
-#include "rust_callbacks/parallel_scan.hpp"
-#include "rust_callbacks/properties.hpp"
-#include "rust_callbacks/row_operations.hpp"
-#include "rust_callbacks/sampling.hpp"
+#include <cstddef>
+#include <cstdint>
+
+// Bulk operations (handler.h #39-#46). The start_bulk_* callbacks return the
+// inverted MySQL bool (true => bulk not used, normal per-row operation);
+// exec_bulk_update / bulk_update_row write the duplicate-key count through
+// dup_key_found. Record buffers cross as `const uint8_t *` + length and must
+// not be retained by the engine.
+extern "C" {
+void rust__handler__start_bulk_insert(void *ctx, uint64_t rows);
+int32_t rust__handler__end_bulk_insert(void *ctx);
+bool rust__handler__start_bulk_update(void *ctx);
+int32_t rust__handler__exec_bulk_update(void *ctx, uint32_t *dup_key_found);
+void rust__handler__end_bulk_update(void *ctx);
+int32_t rust__handler__bulk_update_row(void *ctx, const uint8_t *old,
+                                       size_t old_len, const uint8_t *new_row,
+                                       size_t new_len, uint32_t *dup_key_found);
+bool rust__handler__start_bulk_delete(void *ctx);
+int32_t rust__handler__end_bulk_delete(void *ctx);
+}
 
 #endif

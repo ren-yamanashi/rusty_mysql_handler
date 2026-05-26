@@ -20,26 +20,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef SHIM_RUST_CALLBACKS_HPP
-#define SHIM_RUST_CALLBACKS_HPP
+#ifndef SHIM_RUST_CALLBACKS_FULLTEXT_HPP
+#define SHIM_RUST_CALLBACKS_FULLTEXT_HPP
 
-// Umbrella for the `rust__*` callback declarations, split by handler-API
-// category to keep each header focused and under the source-file size limit.
-// Every shim translation unit includes this header to see the full surface;
-// the per-category headers under rust_callbacks/ map one-to-one to the
-// handler_*.cc files (and to the Rust callback modules under src/handler/).
-#include "rust_callbacks/bulk_load.hpp"
-#include "rust_callbacks/bulk_operations.hpp"
-#include "rust_callbacks/core.hpp"
-#include "rust_callbacks/fulltext.hpp"
-#include "rust_callbacks/index_basic.hpp"
-#include "rust_callbacks/index_pushed.hpp"
-#include "rust_callbacks/index_range.hpp"
-#include "rust_callbacks/lifecycle.hpp"
-#include "rust_callbacks/mrr.hpp"
-#include "rust_callbacks/parallel_scan.hpp"
-#include "rust_callbacks/properties.hpp"
-#include "rust_callbacks/row_operations.hpp"
-#include "rust_callbacks/sampling.hpp"
+#include <cstddef>
+#include <cstdint>
+
+// Full-text search (handler.h #60-#63). ft_init_ext / _with_hints return an
+// engine-owned FT_INFO pointer round-tripped verbatim; the String query and
+// Ft_hints cross as opaque pointers. _with_hints' flags are pre-extracted from
+// hints by the shim so the engine never reaches into the opaque hints object.
+extern "C" {
+int32_t rust__handler__ft_init(void *ctx);
+void *rust__handler__ft_init_ext(void *ctx, uint32_t flags, uint32_t inx,
+                                 const void *key);
+void *rust__handler__ft_init_ext_with_hints(void *ctx, uint32_t flags,
+                                            uint32_t inx, const void *key,
+                                            const void *hints);
+int32_t rust__handler__ft_read(void *ctx, uint8_t *buf, size_t buf_len);
+}
 
 #endif
