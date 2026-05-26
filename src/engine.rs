@@ -22,6 +22,7 @@
 
 //! Safe storage-engine interface for downstream implementations
 
+use core::ffi::c_void;
 use std::ffi::CStr;
 
 use crate::sys;
@@ -564,5 +565,103 @@ pub trait StorageEngine: Send {
         _max: Option<RangeKey<'_>>,
     ) -> Option<u64> {
         Some(10)
+    }
+
+    /// Report whether the table is ready for a bulk load on session `thd`.
+    /// The default returns `false`, matching the handler base; engines that
+    /// support `ALTER TABLE ... SECONDARY_LOAD`-style bulk loads return `true`.
+    fn bulk_load_check(&self, _thd: Option<&sys::THD>) -> bool {
+        false
+    }
+
+    /// Report the memory budget (in bytes) the engine can devote to a bulk
+    /// load on session `thd`. The default returns `0`, matching the handler
+    /// base.
+    fn bulk_load_available_memory(&self, _thd: Option<&sys::THD>) -> usize {
+        0
+    }
+
+    /// Begin a parallel bulk load, returning an engine-owned context pointer
+    /// that [`bulk_load_execute`](Self::bulk_load_execute) and
+    /// [`bulk_load_end`](Self::bulk_load_end) receive back unchanged. `data_size`
+    /// is the total bytes to load, `memory` the budget granted, `num_threads`
+    /// the concurrency. The binding round-trips the pointer through MySQL
+    /// verbatim and never dereferences it; the engine owns its lifetime and
+    /// must free it in [`bulk_load_end`](Self::bulk_load_end). The default
+    /// returns a null pointer, matching the handler base (load not started).
+    fn bulk_load_begin(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _data_size: usize,
+        _memory: usize,
+        _num_threads: usize,
+    ) -> *mut c_void {
+        core::ptr::null_mut()
+    }
+
+    /// Load `rows` into the table on thread `thread_idx`, using the context
+    /// from [`bulk_load_begin`](Self::bulk_load_begin). `rows` and
+    /// `stat_callbacks` are opaque MySQL handles the binding cannot yet read
+    /// into, so a functioning bulk load is not expressible until that wiring
+    /// lands; the callback exists so the surface is complete. `load_ctx` is the
+    /// engine's own pointer and must be dereferenced only by the engine.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::Unsupported`], matching the handler
+    /// base which reports `HA_ERR_UNSUPPORTED` until the engine opts in.
+    fn bulk_load_execute(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _load_ctx: *mut c_void,
+        _thread_idx: usize,
+        _rows: Option<&sys::RowsMysql>,
+        _stat_callbacks: Option<&sys::BulkLoadStatCallbacks>,
+    ) -> EngineResult {
+        Err(EngineError::Unsupported)
+    }
+
+    /// End the bulk load and release the context from
+    /// [`bulk_load_begin`](Self::bulk_load_begin). Always called once after all
+    /// execute threads finish, even when `is_error` is `true`, so the engine
+    /// can free `load_ctx` on both paths.
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the handler base.
+    fn bulk_load_end(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _load_ctx: *mut c_void,
+        _is_error: bool,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Load `table` (opened in the primary engine) into this secondary engine;
+    /// its read-set selects which columns to load. Returns whether MySQL should
+    /// skip updating the data-dictionary metadata for this load.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]. This diverges from the
+    /// handler base, which asserts (secondary-engine-only); the binding returns
+    /// the error instead of aborting in debug builds.
+    fn load_table(&mut self, _table: Option<&sys::TABLE>) -> EngineResult<bool> {
+        Err(EngineError::WrongCommand)
+    }
+
+    /// Unload the table named `db_name`.`table_name` from this secondary engine.
+    /// When `error_if_not_loaded` is `false`, a missing table must fail
+    /// silently so a `DROP TABLE` cleanup path is not blocked.
+    ///
+    /// # Errors
+    /// The default returns [`EngineError::WrongCommand`]. This diverges from the
+    /// handler base, which asserts (secondary-engine-only); the binding returns
+    /// the error instead of aborting in debug builds.
+    fn unload_table(
+        &mut self,
+        _db_name: &str,
+        _table_name: &str,
+        _error_if_not_loaded: bool,
+    ) -> EngineResult {
+        Err(EngineError::WrongCommand)
     }
 }
