@@ -124,6 +124,18 @@ class RustHandlerBase : public handler {
                       uint *dup_key_found) override;
   bool start_bulk_delete() override;
   int end_bulk_delete() override;
+
+  bool bulk_load_check(THD *thd) const override;
+  size_t bulk_load_available_memory(THD *thd) const override;
+  void *bulk_load_begin(THD *thd, size_t data_size, size_t memory,
+                        size_t num_threads) override;
+  int bulk_load_execute(THD *thd, void *load_ctx, size_t thread_idx,
+                        const Rows_mysql &rows,
+                        Bulk_load::Stat_callbacks &wait_cbk) override;
+  int bulk_load_end(THD *thd, void *load_ctx, bool is_error) override;
+  int load_table(const TABLE &table, bool *skip_metadata_update) override;
+  int unload_table(const char *db_name, const char *table_name,
+                   bool error_if_not_loaded) override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

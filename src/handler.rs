@@ -35,6 +35,8 @@
 //!   retain them.
 
 #[doc(hidden)]
+pub mod bulk_load;
+#[doc(hidden)]
 pub mod bulk_operations;
 #[doc(hidden)]
 pub mod index_basic;

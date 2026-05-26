@@ -157,6 +157,29 @@ int32_t rust__handler__bulk_update_row(void *ctx, const uint8_t *old,
                                        size_t new_len, uint32_t *dup_key_found);
 bool rust__handler__start_bulk_delete(void *ctx);
 int32_t rust__handler__end_bulk_delete(void *ctx);
+
+// Bulk load + secondary-engine load (handler.h #47-#53). Opaque MySQL types
+// (THD, Rows_mysql, Bulk_load::Stat_callbacks, TABLE) cross as void pointers;
+// bulk_load_begin returns an engine-owned context that execute / end pass back
+// unchanged. load_table writes its skip-metadata flag through the out-pointer.
+bool rust__handler__bulk_load_check(void *ctx, const void *thd);
+size_t rust__handler__bulk_load_available_memory(void *ctx, const void *thd);
+void *rust__handler__bulk_load_begin(void *ctx, const void *thd,
+                                     size_t data_size, size_t memory,
+                                     size_t num_threads);
+int32_t rust__handler__bulk_load_execute(void *ctx, const void *thd,
+                                         void *load_ctx, size_t thread_idx,
+                                         const void *rows,
+                                         const void *stat_callbacks);
+int32_t rust__handler__bulk_load_end(void *ctx, const void *thd,
+                                     void *load_ctx, bool is_error);
+int32_t rust__handler__load_table(void *ctx, const void *table,
+                                  bool *skip_metadata_update);
+int32_t rust__handler__unload_table(void *ctx, const uint8_t *db_name,
+                                    size_t db_name_len,
+                                    const uint8_t *table_name,
+                                    size_t table_name_len,
+                                    bool error_if_not_loaded);
 }
 
 #endif

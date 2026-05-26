@@ -82,6 +82,16 @@ pub struct KEY([u8; 0]);
 #[derive(Debug)]
 pub struct ListCreateField([u8; 0]);
 
+/// Opaque MySQL `Rows_mysql` (bulk-load row batch)
+#[repr(C)]
+#[derive(Debug)]
+pub struct RowsMysql([u8; 0]);
+
+/// Opaque MySQL `Bulk_load::Stat_callbacks` (bulk-load progress callbacks)
+#[repr(C)]
+#[derive(Debug)]
+pub struct BulkLoadStatCallbacks([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -35,6 +35,11 @@ pub enum EngineError {
     EndOfFile,
     /// The engine does not support the requested operation
     WrongCommand,
+    /// The requested operation is unsupported on this engine, mapped to
+    /// `HA_ERR_UNSUPPORTED`. Distinct from [`WrongCommand`](Self::WrongCommand):
+    /// MySQL uses this code for capability gaps such as bulk-load execution
+    /// that the engine has not opted into.
+    Unsupported,
     /// The supplied table or schema name is not valid UTF-8 or otherwise
     /// unusable. Mapped to `HA_ERR_WRONG_TABLE_NAME` so operators see a
     /// name-level diagnostic instead of a generic internal error.
@@ -51,6 +56,7 @@ impl EngineError {
         match self {
             Self::EndOfFile => sys::HA_ERR_END_OF_FILE,
             Self::WrongCommand => sys::HA_ERR_WRONG_COMMAND,
+            Self::Unsupported => sys::HA_ERR_UNSUPPORTED,
             Self::InvalidName => sys::HA_ERR_WRONG_TABLE_NAME,
             Self::Internal => sys::HA_ERR_INTERNAL_ERROR,
         }
