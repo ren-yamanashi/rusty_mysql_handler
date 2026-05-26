@@ -20,26 +20,25 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef SHIM_RUST_CALLBACKS_HPP
-#define SHIM_RUST_CALLBACKS_HPP
+#ifndef SHIM_RUST_CALLBACKS_PARALLEL_SCAN_HPP
+#define SHIM_RUST_CALLBACKS_PARALLEL_SCAN_HPP
 
-// Umbrella for the `rust__*` callback declarations, split by handler-API
-// category to keep each header focused and under the source-file size limit.
-// Every shim translation unit includes this header to see the full surface;
-// the per-category headers under rust_callbacks/ map one-to-one to the
-// handler_*.cc files (and to the Rust callback modules under src/handler/).
-#include "rust_callbacks/bulk_load.hpp"
-#include "rust_callbacks/bulk_operations.hpp"
-#include "rust_callbacks/core.hpp"
-#include "rust_callbacks/fulltext.hpp"
-#include "rust_callbacks/index_basic.hpp"
-#include "rust_callbacks/index_pushed.hpp"
-#include "rust_callbacks/index_range.hpp"
-#include "rust_callbacks/lifecycle.hpp"
-#include "rust_callbacks/mrr.hpp"
-#include "rust_callbacks/parallel_scan.hpp"
-#include "rust_callbacks/properties.hpp"
-#include "rust_callbacks/row_operations.hpp"
-#include "rust_callbacks/sampling.hpp"
+#include <cstddef>
+#include <cstdint>
+
+// Parallel scan (handler.h #54-#56). Scan contexts are engine-owned pointers
+// round-tripped verbatim; parallel_scan_init writes the context and thread
+// count through out-pointers. parallel_scan's load callbacks are MySQL
+// std::function objects passed as opaque pointers the engine cannot yet invoke.
+extern "C" {
+int32_t rust__handler__parallel_scan_init(void *ctx, void **scan_ctx,
+                                          size_t *num_threads,
+                                          bool use_reserved_threads,
+                                          size_t max_desired_threads);
+int32_t rust__handler__parallel_scan(void *ctx, void *scan_ctx,
+                                     void **thread_ctxs, const void *init_fn,
+                                     const void *load_fn, const void *end_fn);
+void rust__handler__parallel_scan_end(void *ctx, void *scan_ctx);
+}
 
 #endif

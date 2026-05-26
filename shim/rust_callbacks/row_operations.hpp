@@ -20,26 +20,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef SHIM_RUST_CALLBACKS_HPP
-#define SHIM_RUST_CALLBACKS_HPP
+#ifndef SHIM_RUST_CALLBACKS_ROW_OPERATIONS_HPP
+#define SHIM_RUST_CALLBACKS_ROW_OPERATIONS_HPP
 
-// Umbrella for the `rust__*` callback declarations, split by handler-API
-// category to keep each header focused and under the source-file size limit.
-// Every shim translation unit includes this header to see the full surface;
-// the per-category headers under rust_callbacks/ map one-to-one to the
-// handler_*.cc files (and to the Rust callback modules under src/handler/).
-#include "rust_callbacks/bulk_load.hpp"
-#include "rust_callbacks/bulk_operations.hpp"
-#include "rust_callbacks/core.hpp"
-#include "rust_callbacks/fulltext.hpp"
-#include "rust_callbacks/index_basic.hpp"
-#include "rust_callbacks/index_pushed.hpp"
-#include "rust_callbacks/index_range.hpp"
-#include "rust_callbacks/lifecycle.hpp"
-#include "rust_callbacks/mrr.hpp"
-#include "rust_callbacks/parallel_scan.hpp"
-#include "rust_callbacks/properties.hpp"
-#include "rust_callbacks/row_operations.hpp"
-#include "rust_callbacks/sampling.hpp"
+#include <cstddef>
+#include <cstdint>
+
+// Row operations (handler.h #35-#38). Record buffers cross the FFI as
+// `const uint8_t *` + length; the engine reads them but must not retain them.
+extern "C" {
+int32_t rust__handler__write_row(void *ctx, const uint8_t *buf, size_t buf_len);
+int32_t rust__handler__update_row(void *ctx, const uint8_t *old, size_t old_len,
+                                  const uint8_t *new_row, size_t new_len);
+int32_t rust__handler__delete_row(void *ctx, const uint8_t *buf, size_t buf_len);
+int32_t rust__handler__delete_all_rows(void *ctx);
+}
 
 #endif

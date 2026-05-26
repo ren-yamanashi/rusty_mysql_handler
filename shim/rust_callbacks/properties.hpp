@@ -20,26 +20,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef SHIM_RUST_CALLBACKS_HPP
-#define SHIM_RUST_CALLBACKS_HPP
+#ifndef SHIM_RUST_CALLBACKS_PROPERTIES_HPP
+#define SHIM_RUST_CALLBACKS_PROPERTIES_HPP
 
-// Umbrella for the `rust__*` callback declarations, split by handler-API
-// category to keep each header focused and under the source-file size limit.
-// Every shim translation unit includes this header to see the full surface;
-// the per-category headers under rust_callbacks/ map one-to-one to the
-// handler_*.cc files (and to the Rust callback modules under src/handler/).
-#include "rust_callbacks/bulk_load.hpp"
-#include "rust_callbacks/bulk_operations.hpp"
-#include "rust_callbacks/core.hpp"
-#include "rust_callbacks/fulltext.hpp"
-#include "rust_callbacks/index_basic.hpp"
-#include "rust_callbacks/index_pushed.hpp"
-#include "rust_callbacks/index_range.hpp"
-#include "rust_callbacks/lifecycle.hpp"
-#include "rust_callbacks/mrr.hpp"
-#include "rust_callbacks/parallel_scan.hpp"
-#include "rust_callbacks/properties.hpp"
-#include "rust_callbacks/row_operations.hpp"
-#include "rust_callbacks/sampling.hpp"
+#include <cstddef>
+#include <cstdint>
+
+// Engine-property queries (table_type, table_flags, index_flags)
+extern "C" {
+const char *rust__handler__table_type(void *ctx);
+uint64_t rust__handler__table_flags(void *ctx);
+uint32_t rust__handler__index_flags(void *ctx, uint32_t idx, uint32_t part,
+                                    bool all_parts);
+}
 
 #endif
