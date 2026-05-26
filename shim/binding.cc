@@ -143,6 +143,11 @@ int RustHandlerBase::rnd_init(bool scan) {
   return rust__handler__rnd_init(rust_ctx_, scan);
 }
 
+int RustHandlerBase::rnd_end() {
+  DBUG_TRACE;
+  return rust__handler__rnd_end(rust_ctx_);
+}
+
 int RustHandlerBase::rnd_next(uchar *buf) {
   DBUG_TRACE;
   return rust__handler__rnd_next(rust_ctx_, buf, table->s->rec_buff_length);
@@ -157,6 +162,12 @@ int RustHandlerBase::rnd_pos(uchar *buf, uchar *pos) {
 void RustHandlerBase::position(const uchar *record) {
   DBUG_TRACE;
   rust__handler__position(rust_ctx_, record, ref_length);
+}
+
+int RustHandlerBase::rnd_pos_by_record(uchar *record) {
+  DBUG_TRACE;
+  return rust__handler__rnd_pos_by_record(rust_ctx_, record,
+                                          table->s->rec_buff_length);
 }
 
 int RustHandlerBase::info(uint flag) {
