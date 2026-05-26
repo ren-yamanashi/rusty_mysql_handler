@@ -16,7 +16,7 @@ RENAME TABLE t1 TO t2;
 DROP TABLE t2;
 
 -- max_supported_keys() >= 1 lets an indexed table be created, which makes the
--- index (p2-03) and range-scan (p2-04) handler paths reachable from SQL.
+-- index and range-scan handler paths reachable from SQL.
 -- id is NOT NULL because TrivialEngine's index_flags does not advertise
 -- HA_NULL_IN_KEY (a capability bound later); a nullable indexed column is
 -- rejected with ER_NULL_COLUMN_IN_INDEX otherwise.
