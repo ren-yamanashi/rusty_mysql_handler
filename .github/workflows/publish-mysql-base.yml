@@ -12,6 +12,10 @@ on:
     paths:
       - 'tests/e2e/Dockerfile.base'
       - '.github/workflows/publish-mysql-base.yml'
+  pull_request:
+    paths:
+      - 'tests/e2e/Dockerfile.base'
+      - '.github/workflows/publish-mysql-base.yml'
 
 concurrency:
   group: ${{ github.workflow }}
@@ -42,9 +46,13 @@ jobs:
         run: |
           cid="$(docker create mysql-base-builder)"
           trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
-          docker cp "$cid:/workspace/mysql-server" mysql-server
-          docker cp "$cid:/workspace/build" build
-          tar czf "mysql-build-base-${MYSQL_VERSION}.tar.gz" mysql-server build
+          # Copy into a fresh staging dir: docker cp nests the source under an
+          # already-existing destination, and the checkout leaves an empty
+          # mysql-server/ submodule mount point that would cause that.
+          rm -rf base-stage && mkdir base-stage
+          docker cp "$cid:/workspace/mysql-server" base-stage/mysql-server
+          docker cp "$cid:/workspace/build" base-stage/build
+          tar czf "mysql-build-base-${MYSQL_VERSION}.tar.gz" -C base-stage mysql-server build
           sha256sum "mysql-build-base-${MYSQL_VERSION}.tar.gz" \
             | tee "mysql-build-base-${MYSQL_VERSION}.tar.gz.sha256"
 
