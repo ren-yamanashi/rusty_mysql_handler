@@ -24,10 +24,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-[[ -f mysql-server/CMakeLists.txt ]] || {
-  echo "e2e: mysql-server submodule missing. run: make setup" >&2
-  exit 1
-}
+# The plugin is compiled inside the image against the prebuilt build base
+# (ghcr.io/.../rusty-mysql-build-base, see tests/e2e/Dockerfile.base), which
+# carries the mysql-server source + cmake config. No local submodule needed.
 
 IMAGE="rusty-mysql-handler-e2e"
 CONTAINER="rusty-e2e-$$"

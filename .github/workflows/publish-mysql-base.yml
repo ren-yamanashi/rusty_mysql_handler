@@ -1,0 +1,62 @@
+name: Publish mysql build base
+
+# Builds the configured mysql-server tree (tests/e2e/Dockerfile.base) and
+# publishes it as a GitHub Release asset, so the E2E workflow only downloads +
+# extracts it instead of cloning mysql-server and running cmake configure on
+# every run. Runs rarely: on demand, or when the base recipe changes.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tests/e2e/Dockerfile.base'
+      - '.github/workflows/publish-mysql-base.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  MYSQL_VERSION: "8.4.9"
+
+jobs:
+  publish-base:
+    name: Publish base
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Build configured mysql-server tree
+        run: docker build -f tests/e2e/Dockerfile.base -t mysql-base-builder tests/e2e
+
+      - name: Extract and package the tree
+        run: |
+          cid="$(docker create mysql-base-builder)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/workspace/mysql-server" mysql-server
+          docker cp "$cid:/workspace/build" build
+          tar czf "mysql-build-base-${MYSQL_VERSION}.tar.gz" mysql-server build
+
+      - name: Publish as a release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="mysql-base-${MYSQL_VERSION}"
+          asset="mysql-build-base-${MYSQL_VERSION}.tar.gz"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber
+          else
+            gh release create "$tag" "$asset" \
+              --prerelease \
+              --title "MySQL build base ${MYSQL_VERSION}" \
+              --notes "Configured mysql-server tree consumed by tests/e2e/Dockerfile. Build artifact, not a product release."
+          fi
