@@ -29,10 +29,14 @@
 
 // Lets the Rust explain_extra callback hand an owned string back across the
 // FFI: it copies len bytes into the std::string the shim is about to return.
+// clear()+append() instead of assign()/operator=: GCC 13's _M_replace cold
+// path (_M_replace_cold, GLIBCXX_3.4.31) is absent from the el9 runtime's
+// libstdc++ (GLIBCXX_3.4.29); append() routes through the older _M_append.
 extern "C" void mysql__std_string__assign(void *s, const uint8_t *bytes,
                                           size_t len) noexcept {
-  static_cast<std::string *>(s)->assign(reinterpret_cast<const char *>(bytes),
-                                        len);
+  std::string *str = static_cast<std::string *>(s);
+  str->clear();
+  str->append(reinterpret_cast<const char *>(bytes), len);
 }
 
 // Each override lets the engine supply a capability, falling back to the
