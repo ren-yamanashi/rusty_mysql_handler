@@ -3,11 +3,16 @@ name: Publish mysql build base
 # Builds the configured mysql-server tree (tests/e2e/Dockerfile.base) and
 # publishes it as a GitHub Release asset, so the E2E workflow only downloads +
 # extracts it instead of cloning mysql-server and running cmake configure on
-# every run. Runs rarely: on demand, or when the base recipe changes.
+# every run. Runs rarely: on demand, on main when the base recipe changes, or
+# on a PR that touches the recipe (so the asset exists for that PR's E2E).
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - 'tests/e2e/Dockerfile.base'
+      - '.github/workflows/publish-mysql-base.yml'
+  pull_request:
     paths:
       - 'tests/e2e/Dockerfile.base'
       - '.github/workflows/publish-mysql-base.yml'
