@@ -55,7 +55,7 @@ ARG MYSQL_BASE_URL=https://github.com/ren-yamanashi/rusty_mysql_handler/releases
 # release asset cannot silently swap the build base. Take the value from the
 # publish-mysql-base.yml run log and commit it as the default below. Use the
 # 64-hex digest only — not the whole `<hash>  <file>` line of the .sha256 asset.
-ARG MYSQL_BASE_SHA256=
+ARG MYSQL_BASE_SHA256=5bdc9d0f846d8e40d903572fa3805c4a9531134c7a4768caabcbaf411a625424
 RUN test -n "$MYSQL_BASE_SHA256" \
       || { echo "MYSQL_BASE_SHA256 unset; pin it from publish-mysql-base.yml" >&2; exit 1; }; \
     curl -fsSL "$MYSQL_BASE_URL" -o base.tar.gz \
