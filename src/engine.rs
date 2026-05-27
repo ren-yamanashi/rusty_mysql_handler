@@ -28,6 +28,7 @@ use std::ffi::CStr;
 use crate::sys;
 
 mod bulk_access;
+mod cost_estimate;
 mod error;
 mod parallel_scan_init;
 mod range_key;
@@ -36,6 +37,7 @@ mod rkey_function;
 mod sampling_method;
 
 pub use bulk_access::BulkAccess;
+pub use cost_estimate::CostEstimate;
 pub use error::{EngineError, EngineResult};
 pub use parallel_scan_init::ParallelScanInit;
 pub use range_key::RangeKey;
@@ -1024,6 +1026,110 @@ pub trait StorageEngine: Send {
     /// DISABLE KEYS`), as the raw handler int (`0` = enabled). Return `None`
     /// (the default) to use the handler base (`0`); engines return `Some(code)`.
     fn indexes_are_disabled(&mut self) -> Option<i32> {
+        None
+    }
+
+    /// Estimated cost of a full table scan, in MySQL's legacy cost unit. Return
+    /// `None` (the default) to use the handler base, which derives it from
+    /// `stats.data_file_length`; engines return `Some(time)`.
+    ///
+    /// MySQL recommends overriding this rather than
+    /// [`table_scan_cost`](Self::table_scan_cost), whose base implementation is
+    /// built from this value.
+    fn scan_time(&mut self) -> Option<f64> {
+        None
+    }
+
+    /// Estimated cost of reading `ranges` ranges totalling `rows` rows through
+    /// index `index`, in MySQL's legacy cost unit. Return `None` (the default)
+    /// to use the handler base; engines return `Some(time)`.
+    fn read_time(&mut self, _index: u32, _ranges: u32, _rows: u64) -> Option<f64> {
+        None
+    }
+
+    /// Estimated cost of an index-only read of `records` rows through index
+    /// `keynr`, in MySQL's legacy cost unit. Return `None` (the default) to use
+    /// the handler base; engines return `Some(time)`.
+    fn index_only_read_time(&mut self, _keynr: u32, _records: f64) -> Option<f64> {
+        None
+    }
+
+    /// Cost estimate for a full table scan. Return `None` (the default) to use
+    /// the handler base, which derives it from [`scan_time`](Self::scan_time);
+    /// engines return `Some(cost)`.
+    fn table_scan_cost(&mut self) -> Option<CostEstimate> {
+        None
+    }
+
+    /// Cost estimate for reading `ranges` ranges spanning `rows` rows from index
+    /// `index` without fetching the full row. Return `None` (the default) to use
+    /// the handler base, derived from
+    /// [`index_only_read_time`](Self::index_only_read_time); engines return
+    /// `Some(cost)`.
+    fn index_scan_cost(&mut self, _index: u32, _ranges: f64, _rows: f64) -> Option<CostEstimate> {
+        None
+    }
+
+    /// Cost estimate for reading `ranges` ranges spanning `rows` rows from index
+    /// `index`, including fetching the full rows. Return `None` (the default) to
+    /// use the handler base, derived from [`read_time`](Self::read_time); engines
+    /// return `Some(cost)`.
+    fn read_cost(&mut self, _index: u32, _ranges: f64, _rows: f64) -> Option<CostEstimate> {
+        None
+    }
+
+    /// Estimated cost of `reads` non-sequential accesses against index `index`,
+    /// in the same unit as [`worst_seek_times`](Self::worst_seek_times). Return
+    /// `None` (the default) to use the handler base (`Cost_model::page_read_cost`);
+    /// engines return `Some(cost)`.
+    fn page_read_cost(&mut self, _index: u32, _reads: f64) -> Option<f64> {
+        None
+    }
+
+    /// Upper-bound cost of `reads` seek-and-read key lookups, in the same unit as
+    /// [`page_read_cost`](Self::page_read_cost). Return `None` (the default) to
+    /// use the handler base; engines return `Some(cost)`.
+    fn worst_seek_times(&mut self, _reads: f64) -> Option<f64> {
+        None
+    }
+
+    /// Exact number of rows in the table. Return `None` (the default) to use the
+    /// handler base, which counts rows with a full table scan; engines that can
+    /// answer directly return `Some(Ok(rows))`, or `Some(Err(_))` to surface a
+    /// failure.
+    ///
+    /// # Errors
+    /// The error variant is implementation-defined and maps to the matching
+    /// `HA_ERR_*` code at the FFI boundary.
+    fn records(&mut self) -> Option<EngineResult<u64>> {
+        None
+    }
+
+    /// Exact number of rows counted through index `index`. Return `None` (the
+    /// default) to use the handler base, which counts rows with an index scan;
+    /// engines return `Some(Ok(rows))` or `Some(Err(_))`.
+    ///
+    /// # Errors
+    /// The error variant is implementation-defined and maps to the matching
+    /// `HA_ERR_*` code at the FFI boundary.
+    fn records_from_index(&mut self, _index: u32) -> Option<EngineResult<u64>> {
+        None
+    }
+
+    /// Upper bound on the number of rows a full table scan may return. Return
+    /// `None` (the default) to use the handler base (`stats.records` plus a
+    /// margin); engines return `Some(rows)`.
+    fn estimate_rows_upper_bound(&mut self) -> Option<u64> {
+        None
+    }
+
+    /// Hash value of the key columns in `field_array` for hash partitioning.
+    /// `field_array` is a null-terminated `Field**` the binding round-trips as an
+    /// opaque pointer valid for the call only (it cannot yet drive `Field` from
+    /// Rust). Return `None` (the default) to use the handler base, which asserts
+    /// — so only engines advertising hash partitioning should override and return
+    /// `Some(hash)`.
+    fn calculate_key_hash_value(&mut self, _field_array: *const c_void) -> Option<u32> {
         None
     }
 }

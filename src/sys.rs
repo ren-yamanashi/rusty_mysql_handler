@@ -117,6 +117,11 @@ pub struct CostEstimate([u8; 0]);
 #[derive(Debug)]
 pub struct HandlerBuffer([u8; 0]);
 
+/// Opaque MySQL `Field` (one table column's metadata and value accessors)
+#[repr(C)]
+#[derive(Debug)]
+pub struct Field([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

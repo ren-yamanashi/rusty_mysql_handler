@@ -28,14 +28,15 @@
 use std::ffi::CStr;
 
 use mysql_handler::engine::{EngineError, EngineResult, RKeyFunction, RangeKey, StorageEngine};
-use mysql_handler::panic_guard::FfiBoundary;
-use mysql_handler::runtime::register_engine_factory;
 use mysql_handler::sys::{self, HA_BINLOG_ROW_CAPABLE, HA_BINLOG_STMT_CAPABLE};
 
 #[cfg(not(test))]
 #[doc(hidden)]
 #[allow(missing_docs, missing_debug_implementations)]
 pub mod plugin_manifest;
+
+#[doc(hidden)]
+pub mod registration;
 
 /// Trivial in-memory engine yielding a fixed number of empty rows
 #[derive(Debug)]
@@ -225,16 +226,16 @@ impl StorageEngine for TrivialEngine {
     fn max_supported_key_parts(&self) -> Option<u32> {
         Some(8)
     }
-}
 
-/// Plugin entry point; the shim calls this once at `INSTALL PLUGIN`.
-///
-/// # Safety
-/// Called once from `rusty_init_func` on the mysqld thread running
-/// `INSTALL PLUGIN`. Panic-safe via [`FfiBoundary::run_void`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__plugin_init() {
-    FfiBoundary::run_void(|| {
-        register_engine_factory(|| Box::new(TrivialEngine::default()));
-    });
+    fn scan_time(&mut self) -> Option<f64> {
+        Some(f64::from(self.num_rows))
+    }
+
+    fn records(&mut self) -> Option<EngineResult<u64>> {
+        Some(Ok(u64::from(self.num_rows)))
+    }
+
+    fn estimate_rows_upper_bound(&mut self) -> Option<u64> {
+        Some(u64::from(self.num_rows))
+    }
 }

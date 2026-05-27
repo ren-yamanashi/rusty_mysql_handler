@@ -192,6 +192,20 @@ class RustHandlerBase : public handler {
   bool is_record_buffer_wanted(ha_rows *max_rows) const override;
   std::string explain_extra() const override;
   int indexes_are_disabled() override;
+
+  double scan_time() override;
+  double read_time(uint index, uint ranges, ha_rows rows) override;
+  double index_only_read_time(uint keynr, double records) override;
+  Cost_estimate table_scan_cost() override;
+  Cost_estimate index_scan_cost(uint index, double ranges, double rows) override;
+  Cost_estimate read_cost(uint index, double ranges, double rows) override;
+  double page_read_cost(uint index, double reads) override;
+  double worst_seek_times(double reads) override;
+
+  int records(ha_rows *num_rows) override;
+  int records_from_index(ha_rows *num_rows, uint index) override;
+  ha_rows estimate_rows_upper_bound() override;
+  uint32 calculate_key_hash_value(Field **field_array) override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

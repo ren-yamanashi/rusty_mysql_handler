@@ -32,6 +32,7 @@
 #include "rust_callbacks/bulk_operations.hpp"
 #include "rust_callbacks/caps.hpp"
 #include "rust_callbacks/core.hpp"
+#include "rust_callbacks/cost.hpp"
 #include "rust_callbacks/fulltext.hpp"
 #include "rust_callbacks/index_basic.hpp"
 #include "rust_callbacks/index_pushed.hpp"
@@ -41,6 +42,7 @@
 #include "rust_callbacks/mrr.hpp"
 #include "rust_callbacks/parallel_scan.hpp"
 #include "rust_callbacks/properties.hpp"
+#include "rust_callbacks/records.hpp"
 #include "rust_callbacks/row_operations.hpp"
 #include "rust_callbacks/sampling.hpp"
 
