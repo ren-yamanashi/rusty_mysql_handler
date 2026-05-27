@@ -20,19 +20,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] yields three
-//! empty rows then `EndOfFile`; see `trivial_engine` for the `StorageEngine`
-//! impl and `registration` for the plugin entry point.
+// Locking overrides (handler.h #104-#109)
 
-#![allow(unsafe_code)]
+#include "binding.hpp"
+#include "rust_callbacks.hpp"
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
+// The handler base default of each locking method is trivial, so these delegate
+// straight to the engine; the Rust trait defaults reproduce the base behaviour.
 
-#[doc(hidden)]
-pub mod registration;
-pub mod trivial_engine;
+int RustHandlerBase::external_lock(THD *thd, int lock_type) {
+  return rust__handler__external_lock(rust_ctx_, static_cast<const void *>(thd),
+                                      lock_type);
+}
 
-pub use trivial_engine::TrivialEngine;
+uint RustHandlerBase::lock_count() const {
+  return rust__handler__lock_count(rust_ctx_);
+}
+
+void RustHandlerBase::unlock_row() { rust__handler__unlock_row(rust_ctx_); }
+
+int RustHandlerBase::start_stmt(THD *thd, thr_lock_type lock_type) {
+  return rust__handler__start_stmt(rust_ctx_, static_cast<const void *>(thd),
+                                   static_cast<int32_t>(lock_type));
+}
+
+bool RustHandlerBase::was_semi_consistent_read() {
+  return rust__handler__was_semi_consistent_read(rust_ctx_);
+}
+
+void RustHandlerBase::try_semi_consistent_read(bool yes) {
+  rust__handler__try_semi_consistent_read(rust_ctx_, yes);
+}

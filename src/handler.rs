@@ -57,6 +57,8 @@ pub mod index_range;
 #[doc(hidden)]
 pub mod limits;
 #[doc(hidden)]
+pub mod locking;
+#[doc(hidden)]
 pub mod mrr;
 #[doc(hidden)]
 pub mod open_close;
@@ -64,6 +66,8 @@ pub mod open_close;
 pub mod parallel_scan;
 #[doc(hidden)]
 pub mod properties;
+#[doc(hidden)]
+pub mod read_removal_autoinc;
 #[doc(hidden)]
 pub mod records;
 #[doc(hidden)]

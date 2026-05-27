@@ -20,19 +20,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] yields three
-//! empty rows then `EndOfFile`; see `trivial_engine` for the `StorageEngine`
-//! impl and `registration` for the plugin entry point.
+#ifndef SHIM_RUST_CALLBACKS_LOCKING_HPP
+#define SHIM_RUST_CALLBACKS_LOCKING_HPP
 
-#![allow(unsafe_code)]
+#include <cstdint>
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
+// Locking methods (handler.h #104-#109). The handler base default of each is
+// trivial, so these delegate straight to the engine (no base fallback). THD
+// crosses as an opaque `const void *`.
+extern "C" {
+int rust__handler__external_lock(void *ctx, const void *thd, int32_t lock_type);
+uint32_t rust__handler__lock_count(void *ctx);
+void rust__handler__unlock_row(void *ctx);
+int rust__handler__start_stmt(void *ctx, const void *thd, int32_t lock_type);
+bool rust__handler__was_semi_consistent_read(void *ctx);
+void rust__handler__try_semi_consistent_read(void *ctx, bool enable);
+}
 
-#[doc(hidden)]
-pub mod registration;
-pub mod trivial_engine;
-
-pub use trivial_engine::TrivialEngine;
+#endif

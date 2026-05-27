@@ -206,6 +206,19 @@ class RustHandlerBase : public handler {
   int records_from_index(ha_rows *num_rows, uint index) override;
   ha_rows estimate_rows_upper_bound() override;
   uint32 calculate_key_hash_value(Field **field_array) override;
+
+  int external_lock(THD *thd, int lock_type) override;
+  uint lock_count() const override;
+  void unlock_row() override;
+  int start_stmt(THD *thd, thr_lock_type lock_type) override;
+  bool was_semi_consistent_read() override;
+  void try_semi_consistent_read(bool yes) override;
+  bool start_read_removal() override;
+  ha_rows end_read_removal() override;
+  void get_auto_increment(ulonglong offset, ulonglong increment,
+                          ulonglong nb_desired_values, ulonglong *first_value,
+                          ulonglong *nb_reserved_values) override;
+  void release_auto_increment() override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

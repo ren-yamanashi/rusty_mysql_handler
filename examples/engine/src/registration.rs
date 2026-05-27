@@ -22,8 +22,6 @@
 
 //! Plugin bootstrap: registers the engine factory MySQL calls at load time.
 
-#![allow(unsafe_code)]
-
 use mysql_handler::panic_guard::FfiBoundary;
 use mysql_handler::runtime::register_engine_factory;
 
