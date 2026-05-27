@@ -20,19 +20,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] yields three
-//! empty rows then `EndOfFile`; see `trivial_engine` for the `StorageEngine`
-//! impl and `registration` for the plugin entry point.
+#ifndef SHIM_RUST_CALLBACKS_READ_REMOVAL_AUTOINC_HPP
+#define SHIM_RUST_CALLBACKS_READ_REMOVAL_AUTOINC_HPP
 
-#![allow(unsafe_code)]
+#include <cstdint>
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
+// Read-before-write removal and auto-increment methods (handler.h #110-#113).
+// The bool-returning callbacks report true when the engine overrides (values
+// written through the out-pointers) and false to fall back to the handler base;
+// release_auto_increment is a plain void delegation.
+extern "C" {
+bool rust__handler__start_read_removal(void *ctx, bool *out);
+bool rust__handler__end_read_removal(void *ctx, uint64_t *out);
+bool rust__handler__get_auto_increment(void *ctx, uint64_t offset,
+                                       uint64_t increment, uint64_t nb_desired,
+                                       uint64_t *first_value,
+                                       uint64_t *nb_reserved);
+void rust__handler__release_auto_increment(void *ctx);
+}
 
-#[doc(hidden)]
-pub mod registration;
-pub mod trivial_engine;
-
-pub use trivial_engine::TrivialEngine;
+#endif

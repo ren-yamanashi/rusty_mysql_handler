@@ -1132,4 +1132,76 @@ pub trait StorageEngine: Send {
     fn calculate_key_hash_value(&mut self, _field_array: *const c_void) -> Option<u32> {
         None
     }
+
+    /// Acquire or release a table-level lock for the session `thd`. `lock_type`
+    /// is the raw `F_RDLCK` / `F_WRLCK` / `F_UNLCK` integer.
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the handler base (always succeeds).
+    fn external_lock(&mut self, _thd: Option<&sys::THD>, _lock_type: i32) -> EngineResult {
+        Ok(())
+    }
+
+    /// Number of `THR_LOCK` entries the engine hands MySQL via `store_lock`. The
+    /// default is `1`, matching the handler base.
+    fn lock_count(&self) -> u32 {
+        1
+    }
+
+    /// Release the lock held on the most recently read row. The default is a
+    /// no-op, matching the handler base.
+    fn unlock_row(&mut self) {}
+
+    /// Begin a statement while the table is already locked (called instead of
+    /// [`external_lock`](Self::external_lock) under `LOCK TABLES`). `lock_type`
+    /// is the raw `thr_lock_type` integer.
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the handler base.
+    fn start_stmt(&mut self, _thd: Option<&sys::THD>, _lock_type: i32) -> EngineResult {
+        Ok(())
+    }
+
+    /// Whether the last row was read with a semi-consistent read (skipped under
+    /// an existing lock rather than waiting). The default is `false`, matching
+    /// the handler base.
+    fn was_semi_consistent_read(&mut self) -> bool {
+        false
+    }
+
+    /// Enable or disable semi-consistent reads for subsequent row reads. The
+    /// default is a no-op, matching the handler base.
+    fn try_semi_consistent_read(&mut self, _enable: bool) {}
+
+    /// Begin read-before-write removal (`HA_READ_BEFORE_WRITE_REMOVAL`). Return
+    /// `None` (the default) to use the handler base, which asserts — only engines
+    /// advertising the capability should override and return `Some(active)`.
+    fn start_read_removal(&mut self) -> Option<bool> {
+        None
+    }
+
+    /// End read-before-write removal and report the number of rows actually
+    /// written. Return `None` (the default) to use the handler base, which
+    /// asserts; engines advertising the capability return `Some(rows)`.
+    fn end_read_removal(&mut self) -> Option<u64> {
+        None
+    }
+
+    /// Reserve a block of auto-increment values. `offset` and `increment` define
+    /// the value series and `nb_desired` how many values MySQL wants. Return
+    /// `Some((first_value, nb_reserved))` to supply the block, or `None` (the
+    /// default) to use the handler base, which derives values from table stats.
+    fn get_auto_increment(
+        &mut self,
+        _offset: u64,
+        _increment: u64,
+        _nb_desired: u64,
+    ) -> Option<(u64, u64)> {
+        None
+    }
+
+    /// Release auto-increment values reserved by
+    /// [`get_auto_increment`](Self::get_auto_increment) but not used. The default
+    /// is a no-op, matching the handler base.
+    fn release_auto_increment(&mut self) {}
 }

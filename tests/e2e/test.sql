@@ -44,5 +44,18 @@ SHOW TABLE STATUS LIKE 'idx1';
 
 DROP TABLE idx1;
 
+-- Locking paths: external_lock(F_WRLCK) + start_stmt on LOCK, external_lock(F_UNLCK) on UNLOCK.
+CREATE TABLE lk1 (id INT) ENGINE=RUSTY;
+LOCK TABLES lk1 WRITE;
+SELECT * FROM lk1;
+UNLOCK TABLES;
+DROP TABLE lk1;
+
+-- Auto-increment path: get_auto_increment / release_auto_increment on INSERT ... VALUES ().
+CREATE TABLE ai1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY) ENGINE=RUSTY;
+INSERT INTO ai1 VALUES ();
+INSERT INTO ai1 VALUES ();
+DROP TABLE ai1;
+
 -- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran
 SELECT 3;
