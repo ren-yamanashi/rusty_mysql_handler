@@ -30,9 +30,9 @@
 // Lets the Rust explain_extra callback hand an owned string back across the
 // FFI: it copies len bytes into the std::string the shim is about to return.
 extern "C" void mysql__std_string__assign(void *s, const uint8_t *bytes,
-                                          size_t len) {
-  *static_cast<std::string *>(s) =
-      std::string(reinterpret_cast<const char *>(bytes), len);
+                                          size_t len) noexcept {
+  static_cast<std::string *>(s)->assign(reinterpret_cast<const char *>(bytes),
+                                        len);
 }
 
 // Each override lets the engine supply a capability, falling back to the
