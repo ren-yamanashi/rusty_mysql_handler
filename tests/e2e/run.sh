@@ -24,10 +24,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-# The plugin is compiled inside the image against the prebuilt build base
-# downloaded from a GitHub Release asset (produced by publish-mysql-base.yml
-# from tests/e2e/Dockerfile.base), which carries the mysql-server source +
-# cmake config. No local submodule needed.
+# Builds tests/e2e/Dockerfile (which pulls the prebuilt mysql base from a
+# Release asset, so no local submodule is needed) and runs the smoke test.
 
 IMAGE="rusty-mysql-handler-e2e"
 CONTAINER="rusty-e2e-$$"

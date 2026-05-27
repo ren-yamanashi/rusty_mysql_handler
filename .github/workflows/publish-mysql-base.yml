@@ -1,15 +1,7 @@
 name: Publish mysql build base
 
-# Builds the configured mysql-server tree (tests/e2e/Dockerfile.base) and
-# publishes it as a GitHub Release asset, so the E2E workflow only downloads +
-# extracts it instead of cloning mysql-server and running cmake configure on
-# every run.
-#
-# Manual (workflow_dispatch) only, on purpose: each publish re-tars the tree, so
-# the asset checksum changes and the pin in tests/e2e/Dockerfile must be updated
-# by hand. An automatic trigger would re-publish (and break the pin) on every
-# push, so updating the base is a deliberate two-step: dispatch this workflow,
-# then commit the new MYSQL_BASE_SHA256 it prints.
+# Publishes the e2e mysql build base. Manual only — see "Updating the E2E build
+# base" in CONTRIBUTING.md.
 on:
   workflow_dispatch:
 
@@ -35,34 +27,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
-      - name: Build configured mysql-server tree
-        run: docker build -f tests/e2e/Dockerfile.base -t mysql-base-builder tests/e2e
-
-      - name: Extract and package the tree
-        run: |
-          cid="$(docker create mysql-base-builder)"
-          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
-          # Copy into a fresh staging dir: docker cp nests the source under an
-          # already-existing destination, and the checkout leaves an empty
-          # mysql-server/ submodule mount point that would cause that.
-          rm -rf base-stage && mkdir base-stage
-          docker cp "$cid:/workspace/mysql-server" base-stage/mysql-server
-          docker cp "$cid:/workspace/build" base-stage/build
-          tar czf "mysql-build-base-${MYSQL_VERSION}.tar.gz" -C base-stage mysql-server build
-          sha256sum "mysql-build-base-${MYSQL_VERSION}.tar.gz" \
-            | tee "mysql-build-base-${MYSQL_VERSION}.tar.gz.sha256"
-
-      - name: Publish as a release asset
+      - name: Build and publish the base asset
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="mysql-base-${MYSQL_VERSION}"
-          asset="mysql-build-base-${MYSQL_VERSION}.tar.gz"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$asset" "$asset.sha256" --clobber
-          else
-            gh release create "$tag" "$asset" "$asset.sha256" \
-              --prerelease \
-              --title "MySQL build base ${MYSQL_VERSION}" \
-              --notes "Configured mysql-server tree consumed by tests/e2e/Dockerfile. Build artifact, not a product release."
-          fi
+        run: bash tests/e2e/publish-base.sh

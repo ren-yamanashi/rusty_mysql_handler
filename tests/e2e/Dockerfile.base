@@ -20,16 +20,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-# Recipe that produces the configured mysql-server tree for the e2e build.
-# Clones mysql-server (pinned to the mysql-8.4.9 tag, matching the mysql:8.4.9
-# runtime and the repo's mysql-server submodule) and runs the Boost download +
-# cmake configure. .github/workflows/publish-mysql-base.yml builds this image,
-# extracts /workspace/{mysql-server,build}, tars it, and uploads it as a GitHub
-# Release asset. tests/e2e/Dockerfile then downloads that tarball instead of
-# cloning + configuring on every run.
-#
-# Built in rust:1.95.0-slim so the generated headers match the e2e builder's
-# toolchain. Re-published only when this file changes (or on demand).
+# Recipe for the configured mysql-server tree that the e2e build compiles
+# against (cloned + cmake-configured). Built in rust:1.95.0-slim so the
+# generated headers match the e2e builder's toolchain; published as a Release
+# asset (see "Updating the E2E build base" in CONTRIBUTING.md).
 
 FROM rust:1.95.0-slim
 
