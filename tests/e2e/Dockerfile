@@ -51,7 +51,14 @@ WORKDIR /workspace
 # Configured mysql-server tree (source + cmake build dir) as a release tarball.
 # Pinned to the mysql-8.4.9 base release; override to test a different base.
 ARG MYSQL_BASE_URL=https://github.com/ren-yamanashi/rusty_mysql_handler/releases/download/mysql-base-8.4.9/mysql-build-base-8.4.9.tar.gz
-RUN curl -fsSL "$MYSQL_BASE_URL" -o base.tar.gz \
+# Expected SHA-256 of the tarball, pinned in-repo so a re-uploaded (--clobber)
+# release asset cannot silently swap the build base. Take the value from the
+# publish-mysql-base.yml run log and commit it as the default below.
+ARG MYSQL_BASE_SHA256=
+RUN test -n "$MYSQL_BASE_SHA256" \
+      || { echo "MYSQL_BASE_SHA256 unset; pin it from publish-mysql-base.yml" >&2; exit 1; }; \
+    curl -fsSL "$MYSQL_BASE_URL" -o base.tar.gz \
+    && echo "$MYSQL_BASE_SHA256  base.tar.gz" | sha256sum -c - \
     && tar xzf base.tar.gz \
     && rm base.tar.gz
 

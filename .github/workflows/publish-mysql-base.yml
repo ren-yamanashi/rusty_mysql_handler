@@ -12,9 +12,6 @@ on:
       - 'tests/e2e/Dockerfile.base'
       - '.github/workflows/publish-mysql-base.yml'
 
-permissions:
-  contents: write
-
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -27,6 +24,8 @@ jobs:
     name: Publish base
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -45,6 +44,8 @@ jobs:
           docker cp "$cid:/workspace/mysql-server" mysql-server
           docker cp "$cid:/workspace/build" build
           tar czf "mysql-build-base-${MYSQL_VERSION}.tar.gz" mysql-server build
+          sha256sum "mysql-build-base-${MYSQL_VERSION}.tar.gz" \
+            | tee "mysql-build-base-${MYSQL_VERSION}.tar.gz.sha256"
 
       - name: Publish as a release asset
         env:
@@ -53,9 +54,9 @@ jobs:
           tag="mysql-base-${MYSQL_VERSION}"
           asset="mysql-build-base-${MYSQL_VERSION}.tar.gz"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$asset" --clobber
+            gh release upload "$tag" "$asset" "$asset.sha256" --clobber
           else
-            gh release create "$tag" "$asset" \
+            gh release create "$tag" "$asset" "$asset.sha256" \
               --prerelease \
               --title "MySQL build base ${MYSQL_VERSION}" \
               --notes "Configured mysql-server tree consumed by tests/e2e/Dockerfile. Build artifact, not a product release."

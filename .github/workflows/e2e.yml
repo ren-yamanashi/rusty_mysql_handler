@@ -11,7 +11,6 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
-      - 'mysql-server'
       - '.github/workflows/e2e.yml'
   push:
     branches: [main]
@@ -24,12 +23,10 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
-      - 'mysql-server'
       - '.github/workflows/e2e.yml'
 
 permissions:
   contents: read
-  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
