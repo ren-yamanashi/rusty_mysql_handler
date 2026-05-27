@@ -25,6 +25,11 @@ jobs:
     name: Publish base
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # Only the repository owner may publish the base asset. workflow_dispatch is
+    # already restricted to users with write access; this additionally blocks
+    # any write-access collaborator from (re)publishing, keeping the release
+    # asset under the author's control.
+    if: github.actor == github.repository_owner
     permissions:
       contents: write
     steps:
