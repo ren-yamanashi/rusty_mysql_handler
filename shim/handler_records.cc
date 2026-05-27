@@ -34,7 +34,7 @@ int RustHandlerBase::records(ha_rows *num_rows) {
     bool handled = false;
     int rc = rust__handler__records(rust_ctx_, &n, &handled);
     if (handled) {
-      if (rc == 0) *num_rows = n;
+      *num_rows = (rc == 0) ? n : HA_POS_ERROR;
       return rc;
     }
   }
@@ -47,7 +47,7 @@ int RustHandlerBase::records_from_index(ha_rows *num_rows, uint index) {
     bool handled = false;
     int rc = rust__handler__records_from_index(rust_ctx_, index, &n, &handled);
     if (handled) {
-      if (rc == 0) *num_rows = n;
+      *num_rows = (rc == 0) ? n : HA_POS_ERROR;
       return rc;
     }
   }
