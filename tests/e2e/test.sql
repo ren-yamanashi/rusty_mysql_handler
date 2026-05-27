@@ -32,6 +32,10 @@ SELECT * FROM idx1 WHERE id BETWEEN 1 AND 10;
 -- records_in_range (optimizer row-count estimate)
 EXPLAIN SELECT * FROM idx1 WHERE id > 5;
 
+-- get_real_row_type / get_default_index_algorithm (capability queries)
+SHOW CREATE TABLE idx1;
+SHOW TABLE STATUS LIKE 'idx1';
+
 DROP TABLE idx1;
 
 -- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran

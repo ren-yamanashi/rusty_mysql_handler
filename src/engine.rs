@@ -948,4 +948,82 @@ pub trait StorageEngine: Send {
     fn memory_buffer_size(&self) -> Option<i64> {
         None
     }
+
+    /// Whether the engine stores multi-byte values low byte first
+    /// (little-endian). Return `None` (the default) to use the handler base
+    /// (`true`); engines return `Some(flag)`.
+    fn low_byte_first(&self) -> Option<bool> {
+        None
+    }
+
+    /// Live checksum of the table, or `None` (the default) to use the handler
+    /// base (`0`, no checksum). Engines that maintain one return `Some(sum)`.
+    fn checksum(&self) -> Option<u32> {
+        None
+    }
+
+    /// Whether the table is marked crashed and needs repair. Return `None` (the
+    /// default) to use the handler base (`false`); engines return `Some(flag)`.
+    fn is_crashed(&self) -> Option<bool> {
+        None
+    }
+
+    /// Whether MySQL should attempt automatic repair when the table is found
+    /// crashed on open. Return `None` (the default) to use the handler base
+    /// (`false`); engines return `Some(flag)`.
+    fn auto_repair(&self) -> Option<bool> {
+        None
+    }
+
+    /// Whether the primary key is clustered (rows stored in PK order). Return
+    /// `None` (the default) to use the handler base (`false`); engines return
+    /// `Some(flag)`.
+    fn primary_key_is_clustered(&self) -> Option<bool> {
+        None
+    }
+
+    /// Resolve the real `row_type` for a table created from `create_info` (an
+    /// opaque MySQL `HA_CREATE_INFO`), as the raw `enum row_type` integer.
+    /// Return `None` (the default) to use the handler base, which derives the
+    /// type from the create options; engines return `Some(row_type)`.
+    fn real_row_type(&self, _create_info: Option<&sys::HA_CREATE_INFO>) -> Option<i32> {
+        None
+    }
+
+    /// Default index algorithm as the raw `enum ha_key_alg` integer, used when
+    /// the user did not specify one. Return `None` (the default) to use the
+    /// handler base (`HA_KEY_ALG_SE_SPECIFIC`); engines return `Some(alg)`.
+    fn default_index_algorithm(&self) -> Option<i32> {
+        None
+    }
+
+    /// Whether the engine supports index algorithm `key_alg` (a raw
+    /// `enum ha_key_alg` integer). Return `None` (the default) to use the
+    /// handler base (supports only its default algorithm); engines return
+    /// `Some(flag)`.
+    fn is_index_algorithm_supported(&self, _key_alg: i32) -> Option<bool> {
+        None
+    }
+
+    /// Whether the engine wants MySQL to allocate a record buffer for
+    /// prefetching, and for how many rows. Return `Some(max_rows)` to request a
+    /// buffer sized for `max_rows`; `None` (the default) uses the handler base
+    /// (no buffer wanted).
+    fn record_buffer_wanted(&self) -> Option<u64> {
+        None
+    }
+
+    /// Engine-specific text appended to the `Extra` column of `EXPLAIN`. Return
+    /// `None` (the default) to use the handler base (empty string); engines
+    /// return `Some(text)`.
+    fn explain_extra(&self) -> Option<String> {
+        None
+    }
+
+    /// Whether indexes are currently disabled (e.g. after `ALTER TABLE ...
+    /// DISABLE KEYS`), as the raw handler int (`0` = enabled). Return `None`
+    /// (the default) to use the handler base (`0`); engines return `Some(code)`.
+    fn indexes_are_disabled(&mut self) -> Option<i32> {
+        None
+    }
 }

@@ -30,6 +30,7 @@
 // handler_*.cc files (and to the Rust callback modules under src/handler/).
 #include "rust_callbacks/bulk_load.hpp"
 #include "rust_callbacks/bulk_operations.hpp"
+#include "rust_callbacks/caps.hpp"
 #include "rust_callbacks/core.hpp"
 #include "rust_callbacks/fulltext.hpp"
 #include "rust_callbacks/index_basic.hpp"
