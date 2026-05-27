@@ -242,7 +242,7 @@ impl StorageEngine for TrivialEngine {
     ) -> Option<(u64, u64)> {
         let first = self.next_auto_inc;
         let reserved = nb_desired.max(1);
-        self.next_auto_inc = first + reserved * increment.max(1);
+        self.next_auto_inc = first.saturating_add(reserved.saturating_mul(increment.max(1)));
         Some((first, reserved))
     }
 }
