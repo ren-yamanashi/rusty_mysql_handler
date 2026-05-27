@@ -43,6 +43,10 @@ pub mod caps;
 #[doc(hidden)]
 pub mod caps_features;
 #[doc(hidden)]
+pub mod cost;
+#[doc(hidden)]
+pub mod cost_time;
+#[doc(hidden)]
 pub mod fulltext;
 #[doc(hidden)]
 pub mod index_basic;
@@ -60,6 +64,8 @@ pub mod open_close;
 pub mod parallel_scan;
 #[doc(hidden)]
 pub mod properties;
+#[doc(hidden)]
+pub mod records;
 #[doc(hidden)]
 pub mod row_operations;
 #[doc(hidden)]

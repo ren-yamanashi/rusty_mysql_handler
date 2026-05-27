@@ -7,6 +7,12 @@ SELECT COUNT(*) FROM t1;
 
 INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c');
 
+-- Cost-estimation paths: EXPLAIN drives scan_time / table_scan_cost / read_cost
+-- through the optimizer; COUNT(*) drives the records() exact-count path.
+EXPLAIN SELECT * FROM t1;
+EXPLAIN SELECT * FROM t1 WHERE id = 1;
+SELECT COUNT(*) FROM t1;
+
 -- Drives the sampling handler path (sample_init -> sample_next -> sample_end);
 -- histogram building calls it unconditionally via ha_sample_*.
 ANALYZE TABLE t1 UPDATE HISTOGRAM ON id WITH 10 BUCKETS;

@@ -53,9 +53,35 @@ pub(super) fn report_i32(out: *mut i32, value: Option<i32>) -> bool {
     }
 }
 
+pub(super) fn report_u64(out: *mut u64, value: Option<u64>) -> bool {
+    match value {
+        Some(v) => {
+            if !out.is_null() {
+                // SAFETY: out is writable for one u64 when non-null.
+                unsafe { *out = v };
+            }
+            true
+        }
+        None => false,
+    }
+}
+
+pub(super) fn report_f64(out: *mut f64, value: Option<f64>) -> bool {
+    match value {
+        Some(v) => {
+            if !out.is_null() {
+                // SAFETY: out is writable for one f64 when non-null.
+                unsafe { *out = v };
+            }
+            true
+        }
+        None => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{report_bool, report_i32};
+    use super::{report_bool, report_f64, report_i32, report_u64};
 
     #[test]
     fn report_bool_writes_and_signals_handled() {
@@ -86,8 +112,38 @@ mod tests {
     }
 
     #[test]
+    fn report_u64_writes_and_signals_handled() {
+        let mut out = 0;
+        assert!(report_u64(&mut out, Some(42)));
+        assert_eq!(out, 42);
+    }
+
+    #[test]
+    fn report_u64_none_leaves_buffer_and_signals_unhandled() {
+        let mut out = 7;
+        assert!(!report_u64(&mut out, None));
+        assert_eq!(out, 7);
+    }
+
+    #[test]
+    fn report_f64_writes_and_signals_handled() {
+        let mut out = 0.0;
+        assert!(report_f64(&mut out, Some(2.5)));
+        assert_eq!(out, 2.5);
+    }
+
+    #[test]
+    fn report_f64_none_leaves_buffer_and_signals_unhandled() {
+        let mut out = 9.0;
+        assert!(!report_f64(&mut out, None));
+        assert_eq!(out, 9.0);
+    }
+
+    #[test]
     fn report_helpers_tolerate_null_out() {
         assert!(report_bool(core::ptr::null_mut(), Some(true)));
         assert!(report_i32(core::ptr::null_mut(), Some(1)));
+        assert!(report_u64(core::ptr::null_mut(), Some(1)));
+        assert!(report_f64(core::ptr::null_mut(), Some(1.0)));
     }
 }
