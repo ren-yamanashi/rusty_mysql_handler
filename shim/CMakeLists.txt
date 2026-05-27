@@ -56,7 +56,8 @@ include_directories(
 # build.rs) can pull it in. The final ha_rusty.{so,dylib} is produced
 # by `cargo build --release -p engine`, not by this CMakeLists.
 add_library(ha_rusty_shim STATIC binding.cc handler_bulk_load.cc
-                                 handler_bulk_operations.cc handler_fulltext.cc
+                                 handler_bulk_operations.cc handler_caps.cc
+                                 handler_fulltext.cc
                                  handler_index_basic.cc handler_index_pushed.cc
                                  handler_index_range.cc handler_lifecycle.cc
                                  handler_limits.cc handler_mrr.cc

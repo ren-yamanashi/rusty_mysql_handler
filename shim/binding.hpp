@@ -23,6 +23,8 @@
 #ifndef SHIM_BINDING_HPP
 #define SHIM_BINDING_HPP
 
+#include <string>
+
 #include "my_base.h"
 #include "sql/handler.h"
 #include "thr_lock.h"
@@ -177,6 +179,19 @@ class RustHandlerBase : public handler {
   uint min_record_length(uint options) const override;
   uint extra_rec_buf_length() const override;
   longlong get_memory_buffer_size() const override;
+
+  bool low_byte_first() const override;
+  ha_checksum checksum() const override;
+  bool is_crashed() const override;
+  bool auto_repair() const override;
+  bool primary_key_is_clustered() const override;
+  enum row_type get_real_row_type(
+      const HA_CREATE_INFO *create_info) const override;
+  enum ha_key_alg get_default_index_algorithm() const override;
+  bool is_index_algorithm_supported(enum ha_key_alg key_alg) const override;
+  bool is_record_buffer_wanted(ha_rows *max_rows) const override;
+  std::string explain_extra() const override;
+  int indexes_are_disabled() override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

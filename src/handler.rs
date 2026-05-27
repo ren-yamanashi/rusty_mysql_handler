@@ -39,6 +39,10 @@ pub mod bulk_load;
 #[doc(hidden)]
 pub mod bulk_operations;
 #[doc(hidden)]
+pub mod caps;
+#[doc(hidden)]
+pub mod caps_features;
+#[doc(hidden)]
 pub mod fulltext;
 #[doc(hidden)]
 pub mod index_basic;
@@ -66,3 +70,6 @@ pub mod scan;
 pub mod statistics;
 #[doc(hidden)]
 pub mod table_lifecycle;
+
+// Internal helper shared by the capability callbacks; not a callback module
+mod report;
