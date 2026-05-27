@@ -11,7 +11,6 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
-      - 'mysql-server'
       - '.github/workflows/e2e.yml'
   push:
     branches: [main]
@@ -24,12 +23,10 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
-      - 'mysql-server'
       - '.github/workflows/e2e.yml'
 
 permissions:
   contents: read
-  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,9 +42,6 @@ jobs:
         with:
           persist-credentials: false
           submodules: false
-
-      - name: Init mysql-server submodule (shallow)
-        run: git submodule update --init --depth 1 -- mysql-server
 
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 

@@ -20,13 +20,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-# Smoke-test image: compiles the engine cdylib against the prebuilt mysql-server
-# tree (downloaded from a Release asset) and bakes the plugin into a mysql:8.4
-# runtime. Driven by tests/e2e/run.sh; build base is documented in CONTRIBUTING.md.
+# Recipe for the configured mysql-server tree that the e2e build compiles
+# against (cloned + cmake-configured). Built in rust:1.95.0-slim so the
+# generated headers match the e2e builder's toolchain; published as a Release
+# asset (see "Updating the E2E build base" in CONTRIBUTING.md).
 
-FROM rust:1.95.0-slim AS builder
+FROM rust:1.95.0-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+      git \
       cmake \
       make \
       clang \
@@ -38,36 +40,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libncurses-dev \
       libtirpc-dev \
       zlib1g-dev \
-      curl \
-      ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 
-ARG MYSQL_BASE_URL=https://github.com/ren-yamanashi/rusty_mysql_handler/releases/download/mysql-base-8.4.9/mysql-build-base-8.4.9.tar.gz
-# Verified against this pin (fail-closed); updated when the base is re-published.
-ARG MYSQL_BASE_SHA256=e15fb561edccf787e9e5280f3e1f2b9538bc1efd8845a112abf406d00955ac96
-RUN test -n "$MYSQL_BASE_SHA256" \
-      || { echo "MYSQL_BASE_SHA256 unset; pin it from publish-mysql-base.yml" >&2; exit 1; }; \
-    curl -fsSL "$MYSQL_BASE_URL" -o base.tar.gz \
-    && echo "$MYSQL_BASE_SHA256  base.tar.gz" | sha256sum -c - \
-    && tar xzf base.tar.gz \
-    && rm base.tar.gz
-
 # build.rs (MYSQL_HANDLER_FROM_SOURCE) reads these to locate the source and the
-# cmake-configured build dir extracted above.
+# cmake-configured build dir; pinning them here decouples the downstream build
+# from CARGO_MANIFEST_DIR / WORKDIR.
 ENV MYSQL_SOURCE_DIR=/workspace/mysql-server \
     MYSQL_BUILD_DIR=/workspace/build/mysql
 
-COPY Cargo.toml Cargo.lock build.rs rust-toolchain.toml ./
-COPY src ./src
-COPY shim ./shim
-COPY examples ./examples
+# Pinned to the mysql-8.4.9 tag (matches the runtime image and the submodule),
+# then verified by commit SHA so a moved tag cannot swap the source under us.
+RUN git clone --depth 1 --branch mysql-8.4.9 \
+      https://github.com/mysql/mysql-server.git "$MYSQL_SOURCE_DIR" \
+    && test "$(git -C "$MYSQL_SOURCE_DIR" rev-parse HEAD)" \
+       = f9c88132a87a7d9e740e50bce2621999695bd3fe
 
-RUN MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release -p engine
-
-FROM mysql:8.4.9
-
-COPY --from=builder \
-     /workspace/target/release/libengine.so \
-     /usr/lib64/mysql/plugin/ha_rusty.so
+RUN mkdir -p "$MYSQL_BUILD_DIR" \
+    && cd "$MYSQL_BUILD_DIR" \
+    && cmake "$MYSQL_SOURCE_DIR" \
+        -DDOWNLOAD_BOOST=1 \
+        -DWITH_BOOST="$MYSQL_SOURCE_DIR/extra/boost" \
+        -DWITHOUT_SERVER=ON \
+        -DCMAKE_BUILD_TYPE=Release

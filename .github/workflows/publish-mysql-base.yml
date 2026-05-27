@@ -1,0 +1,33 @@
+name: Publish mysql build base
+
+# Publishes the e2e mysql build base. Manual only — see "Updating the E2E build
+# base" in CONTRIBUTING.md.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  MYSQL_VERSION: "8.4.9"
+
+jobs:
+  publish-base:
+    name: Publish base
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Build and publish the base asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tests/e2e/publish-base.sh

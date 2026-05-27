@@ -24,10 +24,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-[[ -f mysql-server/CMakeLists.txt ]] || {
-  echo "e2e: mysql-server submodule missing. run: make setup" >&2
-  exit 1
-}
+# Builds tests/e2e/Dockerfile (which pulls the prebuilt mysql base from a
+# Release asset, so no local submodule is needed) and runs the smoke test.
 
 IMAGE="rusty-mysql-handler-e2e"
 CONTAINER="rusty-e2e-$$"
