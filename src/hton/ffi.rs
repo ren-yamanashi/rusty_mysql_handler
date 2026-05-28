@@ -47,3 +47,18 @@ pub unsafe extern "C" fn rust__hton__flags() -> u32 {
         },
     )
 }
+
+/// Whether an engine-level [`Handlerton`](crate::hton::Handlerton) is
+/// registered.
+///
+/// `rusty_init_func` uses this to decide whether to wire the always-on hook
+/// callbacks (`close_connection`, `kill_connection`, ...): a zero-config
+/// engine that registers no handlerton keeps those pointers NULL, exactly as
+/// before.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_registered() -> bool {
+    FfiBoundary::run_default(false, || runtime::handlerton().is_some())
+}

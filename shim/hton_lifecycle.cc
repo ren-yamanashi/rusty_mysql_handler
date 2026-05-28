@@ -20,18 +20,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef SHIM_RUST_CALLBACKS_HTON_CORE_HPP
-#define SHIM_RUST_CALLBACKS_HTON_CORE_HPP
+// Engine-level lifecycle hooks (handler.h handlerton callbacks #2-#5). These
+// thunks match the handlerton function-pointer typedefs and forward to the
+// Rust singleton; the handlerton pointer is unused because the singleton is
+// process-global.
 
-#include <cstdint>
+#include "binding.hpp"
+#include "rust_callbacks.hpp"
 
-// Engine-level handlerton accessors queried by rusty_init_func to populate the
-// handlerton struct from the registered Rust Handlerton singleton. Returns the
-// zero-config default when no handlerton is registered.
-extern "C" {
-uint32_t rust__hton__flags();
-// Whether a Rust Handlerton is registered; gates wiring of the always-on hooks.
-bool rust__hton__is_registered();
+namespace {
+int rusty_hton_close_connection(handlerton *, THD *thd) {
+  return rust__hton__close_connection(static_cast<const void *>(thd));
 }
+void rusty_hton_kill_connection(handlerton *, THD *thd) {
+  rust__hton__kill_connection(static_cast<const void *>(thd));
+}
+void rusty_hton_pre_dd_shutdown(handlerton *) { rust__hton__pre_dd_shutdown(); }
+void rusty_hton_reset_plugin_vars(THD *thd) {
+  rust__hton__reset_plugin_vars(static_cast<const void *>(thd));
+}
+}  // namespace
 
-#endif
+void rusty_hton_wire_lifecycle(handlerton *hton) {
+  hton->close_connection = rusty_hton_close_connection;
+  hton->kill_connection = rusty_hton_kill_connection;
+  hton->pre_dd_shutdown = rusty_hton_pre_dd_shutdown;
+  hton->reset_plugin_vars = rusty_hton_reset_plugin_vars;
+}
