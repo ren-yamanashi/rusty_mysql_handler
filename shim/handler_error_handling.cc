@@ -46,9 +46,17 @@ void RustHandlerBase::print_error(int error, myf errflag) {
 }
 
 bool RustHandlerBase::get_error_message(int error, String *buf) {
-  if (rust_ctx_ && rust__handler__get_error_message(rust_ctx_, error,
-                                                    static_cast<void *>(buf)))
-    return true;
+  if (rust_ctx_) {
+    // MySQL detects message presence via a non-empty buf and reads the bool
+    // return as "is this a temporary error" (see handler::print_error). Clear
+    // buf, let the callback fill it when the engine has a message, and fall back
+    // to the base only when nothing was written.
+    buf->length(0);
+    const bool temporary =
+        rust__handler__get_error_message(rust_ctx_, error,
+                                         static_cast<void *>(buf));
+    if (!buf->is_empty()) return temporary;
+  }
   return handler::get_error_message(error, buf);
 }
 

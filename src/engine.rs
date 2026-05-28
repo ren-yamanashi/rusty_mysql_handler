@@ -1213,10 +1213,12 @@ pub trait StorageEngine: Send {
         false
     }
 
-    /// Engine-specific message for handler error code `error`. Return
-    /// `Some(message)` to surface it to the client, or `None` (the default) to
-    /// use the handler base (no engine message).
-    fn error_message(&mut self, _error: i32) -> Option<String> {
+    /// Engine-specific message for handler error code `error`, paired with a
+    /// flag marking the error as transient. Return `Some((message, temporary))`
+    /// to surface `message` to the client — formatted as a temporary error when
+    /// `temporary` is `true` — or `None` (the default) to use the handler base
+    /// (no engine message).
+    fn error_message(&mut self, _error: i32) -> Option<(String, bool)> {
         None
     }
 

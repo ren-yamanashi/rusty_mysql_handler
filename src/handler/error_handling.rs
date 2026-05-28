@@ -96,7 +96,10 @@ pub unsafe extern "C" fn rust__handler__print_error(
     })
 }
 
-/// Write an engine-specific error message into `buf`; returns whether it did
+/// Write an engine-specific error message into `buf`; returns the temporary-error
+/// flag. Message *presence* is signalled to the shim by `buf` being non-empty
+/// (matching MySQL's `handler::get_error_message` contract), so the return value
+/// carries only the temporary/permanent distinction.
 ///
 /// # Safety
 /// `ctx` non-null; `buf` a valid MySQL `String *` for the call.
@@ -110,11 +113,11 @@ pub unsafe extern "C" fn rust__handler__get_error_message(
     FfiBoundary::run_default(false, || {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         match unsafe { &mut *ctx }.engine_mut().error_message(error) {
-            Some(msg) => {
+            Some((msg, temporary)) => {
                 // SAFETY: buf is a valid String* for the call; bytes/len describe
                 // msg's buffer, copied by the shim before returning.
                 unsafe { mysql__mysql_string__set(buf, msg.as_ptr(), msg.len()) };
-                true
+                temporary
             }
             None => false,
         }
