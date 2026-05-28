@@ -79,5 +79,13 @@ OPTIMIZE TABLE mt1;
 REPAIR TABLE mt1;
 DROP TABLE mt1;
 
+-- Create-info / metadata: SHOW CREATE TABLE drives update_create_info and
+-- append_create_info. (cmp_ref / set_ha_share_ref run on the open/positioning
+-- path; the remaining misc methods are secondary-engine / partition specific
+-- and stay build-only.)
+CREATE TABLE md1 (id INT) ENGINE=RUSTY;
+SHOW CREATE TABLE md1;
+DROP TABLE md1;
+
 -- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran
 SELECT 3;

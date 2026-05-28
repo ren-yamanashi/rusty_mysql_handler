@@ -1507,4 +1507,68 @@ pub trait StorageEngine: Send {
     fn tables_in_pushed_join(&self) -> u64 {
         0
     }
+
+    /// Populate engine-specific fields of `create_info` (an opaque MySQL
+    /// `HA_CREATE_INFO`) before `SHOW CREATE TABLE`. The default is a no-op,
+    /// matching the handler base; the binding cannot mutate `HA_CREATE_INFO`
+    /// from Rust yet, so this is a notification.
+    fn update_create_info(&mut self, _create_info: Option<&sys::HA_CREATE_INFO>) {}
+
+    /// Engine-specific text appended to the `CREATE TABLE` statement (after the
+    /// closing paren). Return `Some(text)` to append it, or `None` (the default)
+    /// to append nothing, matching the handler base.
+    fn append_create_info(&mut self) -> Option<String> {
+        None
+    }
+
+    /// Prepare the handler to position rows by a hidden primary key. The default
+    /// is a no-op notification; the shim always runs the handler base, which
+    /// sets up the hidden-key iteration state.
+    fn use_hidden_primary_key(&mut self) {}
+
+    /// Adopt the shared `Handler_share` state (`arg` is an opaque
+    /// `Handler_share **` the binding round-trips). Return `Some(false)` on
+    /// success, `Some(true)` on error, or `None` (the default) to use the handler
+    /// base, which stores the reference for cross-handler sharing.
+    fn set_ha_share_ref(&mut self, _arg: *mut c_void) -> Option<bool> {
+        None
+    }
+
+    /// Compare two row-position references `ref1` and `ref2` (each the handler's
+    /// `ref_length` bytes). Return `None` (the default) to use the handler base
+    /// (`memcmp`); engines with a structured position return
+    /// `Some(ordering)`.
+    fn cmp_ref(&mut self, _ref1: &[u8], _ref2: &[u8]) -> Option<core::cmp::Ordering> {
+        None
+    }
+
+    /// Record `reason` as the error to raise for a failed external (secondary)
+    /// engine offload. The default is a no-op, matching the handler base.
+    fn set_external_table_offload_error(&mut self, _reason: &str) {}
+
+    /// Raise the error previously recorded by
+    /// [`set_external_table_offload_error`](Self::set_external_table_offload_error).
+    /// The default is a no-op, matching the handler base.
+    fn external_table_offload_error(&self) {}
+
+    /// Create a clone of this handler for `name` allocated in `mem_root` (an
+    /// opaque `MEM_ROOT *`), returning an opaque `handler *`. Return a null
+    /// pointer (the default) to use the handler base, which builds a fresh
+    /// handler of the same type — engines cannot construct a `handler` from Rust.
+    fn clone_handler(&mut self, _name: &str, _mem_root: *mut c_void) -> *mut c_void {
+        core::ptr::null_mut()
+    }
+
+    /// Capacity for multi-valued index keys as `(max_keys, max_total_bytes)`.
+    /// Return `None` (the default) to use the handler base (`(0, 0)`, no
+    /// multi-valued index support); engines return `Some((keys, bytes))`.
+    fn mv_key_capacity(&self) -> Option<(u32, u64)> {
+        None
+    }
+
+    /// The engine's `Partition_handler *` as an opaque pointer, or null (the
+    /// default) when the engine does not implement native partitioning.
+    fn get_partition_handler(&mut self) -> *mut c_void {
+        core::ptr::null_mut()
+    }
 }
