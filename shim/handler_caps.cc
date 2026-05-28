@@ -36,7 +36,14 @@ extern "C" void mysql__std_string__assign(void *s, const uint8_t *bytes,
                                           size_t len) noexcept {
   std::string *str = static_cast<std::string *>(s);
   str->clear();
-  str->append(reinterpret_cast<const char *>(bytes), len);
+  // append() may throw bad_alloc/length_error; this is a noexcept FFI boundary,
+  // so an escaping exception would terminate mysqld. On failure leave the
+  // string cleared and let the caller fall back to an empty result.
+  try {
+    str->append(reinterpret_cast<const char *>(bytes), len);
+  } catch (...) {
+    str->clear();
+  }
 }
 
 // Each override lets the engine supply a capability, falling back to the
