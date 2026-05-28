@@ -36,12 +36,18 @@ trap 'docker rm -f "$CONTAINER" >/dev/null 2>&1 || true' EXIT
 # MYSQL_PWD avoids the "Using a password on the command line interface" warning
 # that `-p<pw>` triggers. Container-scoped, never reaches the host process list.
 mysql() { docker exec -i -e MYSQL_PWD="$ROOT_PW" "$CONTAINER" mysql -uroot "$@"; }
-# `mysqladmin ping` returns success even when auth fails, which makes it
-# fire during the mysql:8.4 image's temporary-server init phase (root has
-# no password yet). Run an authenticated query instead so we only break out
-# of the wait loop once the real server with MYSQL_ROOT_PASSWORD is up.
+# The mysql:8.4 entrypoint runs a throwaway temporary server to initialise the
+# data dir before starting the real one, and it sets the root password during
+# that phase — so an authenticated `SELECT 1` can succeed against the temp
+# server, break the wait loop early, and then race its shutdown before the real
+# server is up (observed as a false "not ready"). The temp server runs with
+# `--skip-networking`; the real server does not. Gate readiness on
+# `@@skip_networking` so the loop only trips for the real server.
 ping_mysqld() {
-  docker exec -e MYSQL_PWD="$ROOT_PW" "$CONTAINER" mysql -uroot -e "SELECT 1" &>/dev/null
+  local sn
+  sn="$(docker exec -e MYSQL_PWD="$ROOT_PW" "$CONTAINER" \
+    mysql -uroot --batch --skip-column-names -e "SELECT @@skip_networking" 2>/dev/null)" || return 1
+  [[ "$sn" == "0" ]]
 }
 
 docker build -f tests/e2e/Dockerfile -t "$IMAGE" .
