@@ -99,23 +99,28 @@ pub unsafe extern "C" fn rust__handler__rnd_pos(
     })
 }
 
-/// Store the current row's position
+/// Store the current row's position into `ref_out` (MySQL's `handler::ref`)
 ///
 /// # Safety
-/// `ctx` must be non-null; `record` must cover `record_len` readable bytes.
+/// `ctx` must be non-null; `record` must cover `record_len` readable bytes;
+/// `ref_out` must cover `ref_len` writable bytes.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__position(
     ctx: *mut EngineContext,
     record: *const u8,
     record_len: usize,
+    ref_out: *mut u8,
+    ref_len: usize,
 ) {
     FfiBoundary::run_void(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees record covers record_len readable bytes.
         let record = unsafe { FfiPtr::slice_const(record, record_len) };
-        engine.position(record);
+        // SAFETY: caller guarantees ref_out covers ref_len writable bytes.
+        let ref_out = unsafe { FfiPtr::slice_mut(ref_out, ref_len) };
+        engine.position(record, ref_out);
     });
 }
 

@@ -108,13 +108,13 @@ pub trait StorageEngine: Send {
     /// access path; other variants are implementation-defined.
     fn rnd_pos(&mut self, buf: &mut [u8], pos: &[u8]) -> EngineResult;
 
-    /// Notify the engine of the row just read so a later
-    /// [`rnd_pos`](Self::rnd_pos) can replay it. The shim does not yet
-    /// expose MySQL's `handler::ref` buffer to Rust, so engines have no
-    /// place to persist a position — implementations either remember the
-    /// row internally or return [`EngineError::WrongCommand`] from
-    /// `rnd_pos` until the wiring is added.
-    fn position(&mut self, record: &[u8]);
+    /// Record the position of the row just read so a later
+    /// [`rnd_pos`](Self::rnd_pos) can replay it. `ref_out` is MySQL's
+    /// `handler::ref` buffer (`ref_length` bytes); write the engine's rowid or
+    /// primary-key encoding for `record` into it, and `rnd_pos` receives the
+    /// same bytes back. `record` holds the row in MySQL's internal record
+    /// format; neither borrow may be retained past the call.
+    fn position(&mut self, record: &[u8], ref_out: &mut [u8]);
 
     /// Read the row whose primary key matches the one encoded in `record` (in
     /// MySQL's internal record format), overwriting `record` with the full row.
@@ -123,10 +123,10 @@ pub trait StorageEngine: Send {
     ///
     /// The handler base implements this by orchestrating
     /// [`rnd_init`](Self::rnd_init) / [`position`](Self::position) /
-    /// [`rnd_pos`](Self::rnd_pos) / [`rnd_end`](Self::rnd_end) through its
-    /// internal `ref` buffer; the binding does not expose that buffer, so it
-    /// hands the whole operation to the engine instead. The borrow may not be
-    /// retained past the call.
+    /// [`rnd_pos`](Self::rnd_pos) / [`rnd_end`](Self::rnd_end) across several
+    /// calls through its internal `ref` buffer; the binding hands the whole
+    /// operation to the engine in one call instead of replicating that
+    /// orchestration. The borrow may not be retained past the call.
     ///
     /// # Errors
     /// The default returns [`EngineError::WrongCommand`].

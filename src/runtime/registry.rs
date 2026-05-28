@@ -107,7 +107,7 @@ mod tests {
         fn rnd_pos(&mut self, _buf: &mut [u8], _pos: &[u8]) -> EngineResult {
             Err(EngineError::WrongCommand)
         }
-        fn position(&mut self, _record: &[u8]) {}
+        fn position(&mut self, _record: &[u8], _ref_out: &mut [u8]) {}
         fn info(&mut self, _flag: u32) -> EngineResult {
             Ok(())
         }

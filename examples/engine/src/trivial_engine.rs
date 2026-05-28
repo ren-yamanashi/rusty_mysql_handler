@@ -109,7 +109,7 @@ impl StorageEngine for TrivialEngine {
         Err(EngineError::WrongCommand)
     }
 
-    fn position(&mut self, _record: &[u8]) {}
+    fn position(&mut self, _record: &[u8], _ref_out: &mut [u8]) {}
 
     fn info(&mut self, _flag: u32) -> EngineResult {
         Ok(())

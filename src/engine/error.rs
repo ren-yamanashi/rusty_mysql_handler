@@ -63,6 +63,21 @@ impl EngineError {
     }
 }
 
+impl core::fmt::Display for EngineError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Self::EndOfFile => "end of table or index scan",
+            Self::WrongCommand => "operation not supported by the engine",
+            Self::Unsupported => "operation unsupported on this engine",
+            Self::InvalidName => "invalid table or schema name",
+            Self::Internal => "internal engine error",
+        };
+        f.write_str(message)
+    }
+}
+
+impl std::error::Error for EngineError {}
+
 /// Result alias used throughout the [`StorageEngine`](crate::engine::StorageEngine) trait
 pub type EngineResult<T = ()> = Result<T, EngineError>;
 
@@ -92,5 +107,29 @@ mod tests {
             EngineError::Internal.to_mysql_errno(),
             sys::HA_ERR_INTERNAL_ERROR
         );
+    }
+
+    #[test]
+    fn display_renders_a_distinct_message_per_variant() {
+        let variants = [
+            EngineError::EndOfFile,
+            EngineError::WrongCommand,
+            EngineError::Unsupported,
+            EngineError::InvalidName,
+            EngineError::Internal,
+        ];
+        let messages: Vec<String> = variants.iter().map(ToString::to_string).collect();
+        assert!(messages.iter().all(|m| !m.is_empty()));
+        for (i, a) in messages.iter().enumerate() {
+            for b in &messages[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+    }
+
+    #[test]
+    fn usable_as_std_error() {
+        fn take(_: &dyn std::error::Error) {}
+        take(&EngineError::Internal);
     }
 }
