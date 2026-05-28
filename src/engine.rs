@@ -1465,8 +1465,9 @@ pub trait StorageEngine: Send {
     }
 
     /// Offer the index condition `idx_cond` on index `keyno` for engine-side
-    /// evaluation (opaque `Item *`, round-tripped). Return the part not handled:
-    /// `idx_cond` (the default) means no pushdown, null means fully handled.
+    /// evaluation (an opaque `Item *` the binding round-trips without
+    /// dereference). Return the part not handled: `idx_cond` (the default) means
+    /// no pushdown, null means fully handled.
     fn idx_cond_push(&mut self, _keyno: u32, idx_cond: *mut c_void) -> *mut c_void {
         idx_cond
     }
