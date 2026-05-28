@@ -245,4 +245,9 @@ impl StorageEngine for TrivialEngine {
         self.next_auto_inc = first.saturating_add(reserved.saturating_mul(increment.max(1)));
         Some((first, reserved))
     }
+
+    fn reset(&mut self) -> EngineResult {
+        self.current_row = 0;
+        Ok(())
+    }
 }

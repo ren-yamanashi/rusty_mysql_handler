@@ -57,5 +57,10 @@ INSERT INTO ai1 VALUES ();
 INSERT INTO ai1 VALUES ();
 DROP TABLE ai1;
 
+-- extra (HA_EXTRA_* hints) and reset run implicitly on every statement above,
+-- so the hint/reset bindings are already exercised by the normal query path.
+-- The SQL HANDLER interface needs engine support TrivialEngine does not provide,
+-- so init_table_handle_for_HANDLER stays build-only.
+
 -- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran
 SELECT 3;

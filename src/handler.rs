@@ -47,7 +47,11 @@ pub mod cost;
 #[doc(hidden)]
 pub mod cost_time;
 #[doc(hidden)]
+pub mod error_handling;
+#[doc(hidden)]
 pub mod fulltext;
+#[doc(hidden)]
+pub mod hints;
 #[doc(hidden)]
 pub mod index_basic;
 #[doc(hidden)]

@@ -219,6 +219,19 @@ class RustHandlerBase : public handler {
                           ulonglong nb_desired_values, ulonglong *first_value,
                           ulonglong *nb_reserved_values) override;
   void release_auto_increment() override;
+
+  void print_error(int error, myf errflag) override;
+  bool get_error_message(int error, String *buf) override;
+  bool get_foreign_dup_key(char *child_table_name, uint child_table_name_len,
+                           char *child_key_name,
+                           uint child_key_name_len) override;
+  bool is_ignorable_error(int error) override;
+  bool is_fatal_error(int error) override;
+  int extra(enum ha_extra_function operation) override;
+  int extra_opt(enum ha_extra_function operation, ulong cache_size) override;
+  int reset() override;
+  void column_bitmaps_signal() override;
+  void init_table_handle_for_HANDLER() override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs
