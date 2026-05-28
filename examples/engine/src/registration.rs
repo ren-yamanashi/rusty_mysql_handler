@@ -23,9 +23,9 @@
 //! Plugin bootstrap: registers the engine factory MySQL calls at load time.
 
 use mysql_handler::panic_guard::FfiBoundary;
-use mysql_handler::runtime::register_engine_factory;
+use mysql_handler::runtime::{register_engine_factory, register_handlerton};
 
-use crate::TrivialEngine;
+use crate::{TrivialEngine, TrivialHandlerton};
 
 /// Plugin entry point; the shim calls this once at `INSTALL PLUGIN`.
 ///
@@ -36,5 +36,6 @@ use crate::TrivialEngine;
 pub unsafe extern "C" fn rust__plugin_init() {
     FfiBoundary::run_void(|| {
         register_engine_factory(|| Box::new(TrivialEngine::default()));
+        register_handlerton(Box::new(TrivialHandlerton));
     });
 }

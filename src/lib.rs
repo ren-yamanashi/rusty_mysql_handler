@@ -24,6 +24,7 @@
 
 pub mod engine;
 pub mod handler;
+pub mod hton;
 pub mod panic_guard;
 pub mod runtime;
 pub mod sys;

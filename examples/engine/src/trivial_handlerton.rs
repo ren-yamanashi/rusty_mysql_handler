@@ -20,22 +20,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] yields three
-//! empty rows then `EndOfFile`; see `trivial_engine` for the `StorageEngine`
-//! impl, `trivial_handlerton` for the engine-level [`TrivialHandlerton`], and
-//! `registration` for the plugin entry point.
+//! Minimal engine-level handlerton for the reference engine.
 
-#![allow(unsafe_code)]
+use mysql_handler::hton::Handlerton;
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
+/// The reference engine's handlerton. Declares no extra capabilities and keeps
+/// the default flags, so registering it loads the plugin exactly as a
+/// handler-only engine would — it exists to exercise the registration path,
+/// not to add engine-level behaviour.
+#[derive(Debug, Default)]
+pub struct TrivialHandlerton;
 
-#[doc(hidden)]
-pub mod registration;
-pub mod trivial_engine;
-pub mod trivial_handlerton;
-
-pub use trivial_engine::TrivialEngine;
-pub use trivial_handlerton::TrivialHandlerton;
+impl Handlerton for TrivialHandlerton {}

@@ -20,22 +20,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] yields three
-//! empty rows then `EndOfFile`; see `trivial_engine` for the `StorageEngine`
-//! impl, `trivial_handlerton` for the engine-level [`TrivialHandlerton`], and
-//! `registration` for the plugin entry point.
+//! `rust__hton__*` callbacks: the C++ shim queries the registered handlerton
+//! singleton through these to populate the `handlerton` struct in
+//! `rusty_init_func`.
 
 #![allow(unsafe_code)]
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
+use crate::hton::HtonFlags;
+use crate::panic_guard::FfiBoundary;
+use crate::runtime;
 
-#[doc(hidden)]
-pub mod registration;
-pub mod trivial_engine;
-pub mod trivial_handlerton;
-
-pub use trivial_engine::TrivialEngine;
-pub use trivial_handlerton::TrivialHandlerton;
+/// The `handlerton` flags (`HTON_*`) `rusty_init_func` should set.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton
+/// and returns the zero-config default ([`HtonFlags::CAN_RECREATE`]) when no
+/// handlerton is registered, so an engine that skips registration is wired
+/// exactly as before.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__flags() -> u32 {
+    FfiBoundary::run_default(
+        HtonFlags::CAN_RECREATE.bits(),
+        || match runtime::handlerton() {
+            Some(h) => h.flags().bits(),
+            None => HtonFlags::CAN_RECREATE.bits(),
+        },
+    )
+}

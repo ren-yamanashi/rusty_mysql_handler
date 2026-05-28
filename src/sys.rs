@@ -40,6 +40,15 @@ pub const HA_BINLOG_ROW_CAPABLE: u64 = 1 << 34;
 /// `HA_BINLOG_STMT_CAPABLE` from `sql/handler.h`
 pub const HA_BINLOG_STMT_CAPABLE: u64 = 1 << 35;
 
+/// `HTON_CAN_RECREATE` from `sql/handler.h`: the engine implements `TRUNCATE`
+/// by recreating the table. This is the flag the zero-config handlerton sets,
+/// so it backs [`HtonFlags::CAN_RECREATE`]. Hand-written as `u32` because
+/// `sql/handler.h` is not a bindgen input; `shim/binding.cc` static-asserts
+/// the value to catch upstream drift.
+///
+/// [`HtonFlags::CAN_RECREATE`]: crate::hton::HtonFlags::CAN_RECREATE
+pub const HTON_CAN_RECREATE: u32 = 1 << 2;
+
 /// Opaque C++ `RustHandlerBase` from `shim/binding.hpp`
 #[repr(C)]
 #[derive(Debug)]
@@ -144,5 +153,10 @@ mod tests {
     #[test]
     fn ha_binlog_stmt_capable_bit() {
         assert_eq!(HA_BINLOG_STMT_CAPABLE, 1u64 << 35);
+    }
+
+    #[test]
+    fn hton_can_recreate_bit() {
+        assert_eq!(HTON_CAN_RECREATE, 1u32 << 2);
     }
 }
