@@ -69,5 +69,15 @@ ALTER TABLE al1 ADD COLUMN name VARCHAR(50);
 SHOW CREATE TABLE al1;
 DROP TABLE al1;
 
+-- Table-maintenance admin commands: check / analyze / optimize / repair. The
+-- engine declines (base fallback) so each returns a "not implemented" note
+-- rather than an error.
+CREATE TABLE mt1 (id INT) ENGINE=RUSTY;
+CHECK TABLE mt1;
+ANALYZE TABLE mt1;
+OPTIMIZE TABLE mt1;
+REPAIR TABLE mt1;
+DROP TABLE mt1;
+
 -- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran
 SELECT 3;
