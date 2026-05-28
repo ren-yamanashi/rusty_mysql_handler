@@ -39,6 +39,7 @@
 #include "rust_callbacks/index_basic.hpp"
 #include "rust_callbacks/index_pushed.hpp"
 #include "rust_callbacks/index_range.hpp"
+#include "rust_callbacks/inplace_alter.hpp"
 #include "rust_callbacks/lifecycle.hpp"
 #include "rust_callbacks/limits.hpp"
 #include "rust_callbacks/locking.hpp"

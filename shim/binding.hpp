@@ -232,6 +232,24 @@ class RustHandlerBase : public handler {
   int reset() override;
   void column_bitmaps_signal() override;
   void init_table_handle_for_HANDLER() override;
+
+  enum_alter_inplace_result check_if_supported_inplace_alter(
+      TABLE *altered_table, Alter_inplace_info *ha_alter_info) override;
+  bool prepare_inplace_alter_table(TABLE *altered_table,
+                                   Alter_inplace_info *ha_alter_info,
+                                   const dd::Table *old_table_def,
+                                   dd::Table *new_table_def) override;
+  bool inplace_alter_table(TABLE *altered_table,
+                           Alter_inplace_info *ha_alter_info,
+                           const dd::Table *old_table_def,
+                           dd::Table *new_table_def) override;
+  bool commit_inplace_alter_table(TABLE *altered_table,
+                                  Alter_inplace_info *ha_alter_info, bool commit,
+                                  const dd::Table *old_table_def,
+                                  dd::Table *new_table_def) override;
+  void notify_table_changed(Alter_inplace_info *ha_alter_info) override;
+  bool check_if_incompatible_data(HA_CREATE_INFO *create_info,
+                                  uint table_changes) override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

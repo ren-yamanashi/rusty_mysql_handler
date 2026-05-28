@@ -122,6 +122,11 @@ pub struct HandlerBuffer([u8; 0]);
 #[derive(Debug)]
 pub struct Field([u8; 0]);
 
+/// Opaque MySQL `Alter_inplace_info` (in-place `ALTER TABLE` change descriptor)
+#[repr(C)]
+#[derive(Debug)]
+pub struct AlterInplaceInfo([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -62,5 +62,12 @@ DROP TABLE ai1;
 -- The SQL HANDLER interface needs engine support TrivialEngine does not provide,
 -- so init_table_handle_for_HANDLER stays build-only.
 
+-- In-place ALTER path: check_if_supported_inplace_alter (and the copy fallback
+-- it selects) on ADD COLUMN.
+CREATE TABLE al1 (id INT) ENGINE=RUSTY;
+ALTER TABLE al1 ADD COLUMN name VARCHAR(50);
+SHOW CREATE TABLE al1;
+DROP TABLE al1;
+
 -- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran
 SELECT 3;
