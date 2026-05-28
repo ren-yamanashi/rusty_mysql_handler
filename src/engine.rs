@@ -1204,4 +1204,77 @@ pub trait StorageEngine: Send {
     /// [`get_auto_increment`](Self::get_auto_increment) but not used. The default
     /// is a no-op, matching the handler base.
     fn release_auto_increment(&mut self) {}
+
+    /// Print a diagnostic for handler error code `error` (`errflag` carries the
+    /// `myf` formatting flags). Return `true` when the engine emitted its own
+    /// message; `false` (the default) lets the handler base print the standard
+    /// `HA_ERR_*` diagnostic.
+    fn print_error(&mut self, _error: i32, _errflag: u64) -> bool {
+        false
+    }
+
+    /// Engine-specific message for handler error code `error`, paired with a
+    /// flag marking the error as transient. Return `Some((message, temporary))`
+    /// to surface `message` to the client — formatted as a temporary error when
+    /// `temporary` is `true` — or `None` (the default) to use the handler base
+    /// (no engine message).
+    fn error_message(&mut self, _error: i32) -> Option<(String, bool)> {
+        None
+    }
+
+    /// Names of the child table and key for the most recent
+    /// `HA_ERR_FOREIGN_DUPLICATE_KEY`. Return `Some((table, key))` to report
+    /// them, or `None` (the default) to use the handler base (names unavailable).
+    fn foreign_dup_key(&mut self) -> Option<(String, String)> {
+        None
+    }
+
+    /// Whether handler error code `error` may be ignored (e.g. duplicate-key
+    /// under `INSERT IGNORE`). Return `None` (the default) to use the handler
+    /// base classification; engines return `Some(flag)` to override it.
+    fn is_ignorable_error(&mut self, _error: i32) -> Option<bool> {
+        None
+    }
+
+    /// Whether handler error code `error` is fatal to the running statement.
+    /// Return `None` (the default) to use the handler base classification;
+    /// engines return `Some(flag)` to override it.
+    fn is_fatal_error(&mut self, _error: i32) -> Option<bool> {
+        None
+    }
+
+    /// Perform an `HA_EXTRA_*` hint operation (`operation` is the raw
+    /// `ha_extra_function` integer). Hints are advisory.
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the handler base (hints ignored).
+    fn extra(&mut self, _operation: i32) -> EngineResult {
+        Ok(())
+    }
+
+    /// Perform an `HA_EXTRA_*` hint with a size argument (`cache_size`). The
+    /// default forwards to [`extra`](Self::extra), matching the handler base.
+    ///
+    /// # Errors
+    /// Propagates whatever [`extra`](Self::extra) returns.
+    fn extra_opt(&mut self, operation: i32, _cache_size: u64) -> EngineResult {
+        self.extra(operation)
+    }
+
+    /// Reset per-statement state so the handler can be reused for the next
+    /// statement (clears hints, range state, etc.).
+    ///
+    /// # Errors
+    /// The default returns `Ok(())`, matching the handler base.
+    fn reset(&mut self) -> EngineResult {
+        Ok(())
+    }
+
+    /// Notify the engine that MySQL changed the read/write column bitmaps. The
+    /// default is a no-op, matching the handler base.
+    fn column_bitmaps_signal(&mut self) {}
+
+    /// Prepare engine state for use through the SQL `HANDLER` interface. The
+    /// default is a no-op, matching the handler base.
+    fn init_table_handle_for_handler(&mut self) {}
 }
