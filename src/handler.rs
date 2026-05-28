@@ -77,6 +77,8 @@ pub mod parallel_scan;
 #[doc(hidden)]
 pub mod properties;
 #[doc(hidden)]
+pub mod pushdown;
+#[doc(hidden)]
 pub mod read_removal_autoinc;
 #[doc(hidden)]
 pub mod records;
