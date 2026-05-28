@@ -1277,4 +1277,74 @@ pub trait StorageEngine: Send {
     /// Prepare engine state for use through the SQL `HANDLER` interface. The
     /// default is a no-op, matching the handler base.
     fn init_table_handle_for_handler(&mut self) {}
+
+    /// Report which in-place `ALTER TABLE` algorithm the engine supports for the
+    /// change described by `alter_info` on `altered_table`, as the raw
+    /// `enum_alter_inplace_result` integer. Return `None` (the default) to use
+    /// the handler base, which classifies the change from the alter flags;
+    /// engines return `Some(result)` to override.
+    fn check_if_supported_inplace_alter(
+        &mut self,
+        _altered_table: Option<&sys::TABLE>,
+        _alter_info: Option<&sys::AlterInplaceInfo>,
+    ) -> Option<i32> {
+        None
+    }
+
+    /// Prepare an in-place `ALTER TABLE` (allocate resources, validate) before
+    /// the change is applied. Return `Some(true)` on error, `Some(false)` on
+    /// success, or `None` (the default) to use the handler base (success).
+    fn prepare_inplace_alter_table(
+        &mut self,
+        _altered_table: Option<&sys::TABLE>,
+        _alter_info: Option<&sys::AlterInplaceInfo>,
+        _old_table_def: Option<&sys::DdTable>,
+        _new_table_def: Option<&sys::DdTable>,
+    ) -> Option<bool> {
+        None
+    }
+
+    /// Apply an in-place `ALTER TABLE` change. Return `Some(true)` on error,
+    /// `Some(false)` on success, or `None` (the default) to use the handler base
+    /// (success / no-op).
+    fn inplace_alter_table(
+        &mut self,
+        _altered_table: Option<&sys::TABLE>,
+        _alter_info: Option<&sys::AlterInplaceInfo>,
+        _old_table_def: Option<&sys::DdTable>,
+        _new_table_def: Option<&sys::DdTable>,
+    ) -> Option<bool> {
+        None
+    }
+
+    /// Commit (`commit == true`) or roll back an in-place `ALTER TABLE`. Return
+    /// `Some(true)` on error, `Some(false)` on success, or `None` (the default)
+    /// to use the handler base, which clears the group-commit context.
+    fn commit_inplace_alter_table(
+        &mut self,
+        _altered_table: Option<&sys::TABLE>,
+        _alter_info: Option<&sys::AlterInplaceInfo>,
+        _commit: bool,
+        _old_table_def: Option<&sys::DdTable>,
+        _new_table_def: Option<&sys::DdTable>,
+    ) -> Option<bool> {
+        None
+    }
+
+    /// Notify the engine that an in-place `ALTER TABLE` finished and the table
+    /// definition was updated. The default is a no-op, matching the handler
+    /// base. No error may be reported here.
+    fn notify_table_changed(&mut self, _alter_info: Option<&sys::AlterInplaceInfo>) {}
+
+    /// Whether the create options in `create_info` (with `table_changes` flags)
+    /// are incompatible with the existing data, for the deprecated copy-based
+    /// ALTER path. Return `None` (the default) to use the handler base
+    /// (`COMPATIBLE_DATA_NO`, i.e. incompatible); engines return `Some(flag)`.
+    fn check_if_incompatible_data(
+        &mut self,
+        _create_info: Option<&sys::HA_CREATE_INFO>,
+        _table_changes: u32,
+    ) -> Option<bool> {
+        None
+    }
 }
