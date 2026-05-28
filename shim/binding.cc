@@ -161,7 +161,10 @@ int RustHandlerBase::rnd_pos(uchar *buf, uchar *pos) {
 
 void RustHandlerBase::position(const uchar *record) {
   DBUG_TRACE;
-  rust__handler__position(rust_ctx_, record, ref_length);
+  // record is the row buffer (rec_buff_length); ref is the position output
+  // buffer the base class allocated to ref_length bytes in ha_open().
+  rust__handler__position(rust_ctx_, record, table->s->rec_buff_length, ref,
+                          ref_length);
 }
 
 int RustHandlerBase::rnd_pos_by_record(uchar *record) {
