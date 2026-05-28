@@ -263,6 +263,15 @@ class RustHandlerBase : public handler {
   int enable_indexes(uint mode) override;
   int discard_or_import_tablespace(bool discard,
                                    dd::Table *table_def) override;
+
+  const Item *cond_push(const Item *cond) override;
+  Item *idx_cond_push(uint keyno, Item *idx_cond) override;
+  void cancel_pushed_idx_cond() override;
+  const handlerton *hton_supporting_engine_pushdown() override;
+  uint number_of_pushed_joins() const override;
+  const TABLE *member_of_pushed_join() const override;
+  const TABLE *parent_of_pushed_join() const override;
+  table_map tables_in_pushed_join() const override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

@@ -1453,4 +1453,57 @@ pub trait StorageEngine: Send {
     ) -> Option<i32> {
         None
     }
+
+    /// Offer the WHERE condition `cond` (an opaque `Item *` the binding
+    /// round-trips without dereference) for engine-side evaluation. Return the
+    /// part the engine will *not* handle: `cond` (the default) means no
+    /// pushdown, a null pointer means the engine took the whole condition.
+    /// Engines cannot yet construct `Item`s, so only pass-through or null are
+    /// expressible.
+    fn cond_push(&mut self, cond: *const c_void) -> *const c_void {
+        cond
+    }
+
+    /// Offer the index condition `idx_cond` on index `keyno` for engine-side
+    /// evaluation (opaque `Item *`, round-tripped). Return the part not handled:
+    /// `idx_cond` (the default) means no pushdown, null means fully handled.
+    fn idx_cond_push(&mut self, _keyno: u32, idx_cond: *mut c_void) -> *mut c_void {
+        idx_cond
+    }
+
+    /// Discard any index condition previously accepted via
+    /// [`idx_cond_push`](Self::idx_cond_push). The default is a no-op; the shim
+    /// always resets the handler base's pushed-condition state regardless.
+    fn cancel_pushed_idx_cond(&mut self) {}
+
+    /// The `handlerton *` of the secondary engine this handler can push work
+    /// down to, as an opaque pointer. Return null (the default) when the engine
+    /// supports no pushdown; round-trip a handlerton pointer otherwise.
+    fn hton_supporting_engine_pushdown(&mut self) -> *const c_void {
+        core::ptr::null()
+    }
+
+    /// Number of joins pushed down to the engine for the current query. The
+    /// default is `0`, matching the handler base.
+    fn number_of_pushed_joins(&self) -> u32 {
+        0
+    }
+
+    /// The `TABLE *` of this handler's member in a pushed join, as an opaque
+    /// pointer, or null (the default) when not part of a pushed join.
+    fn member_of_pushed_join(&self) -> *const c_void {
+        core::ptr::null()
+    }
+
+    /// The `TABLE *` of the root of this handler's pushed join, as an opaque
+    /// pointer, or null (the default) when not part of a pushed join.
+    fn parent_of_pushed_join(&self) -> *const c_void {
+        core::ptr::null()
+    }
+
+    /// Bitmap (`table_map`) of the tables in this handler's pushed join. The
+    /// default is `0`, matching the handler base.
+    fn tables_in_pushed_join(&self) -> u64 {
+        0
+    }
 }

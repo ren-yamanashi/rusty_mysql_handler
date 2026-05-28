@@ -48,6 +48,7 @@
 #include "rust_callbacks/mrr.hpp"
 #include "rust_callbacks/parallel_scan.hpp"
 #include "rust_callbacks/properties.hpp"
+#include "rust_callbacks/pushdown.hpp"
 #include "rust_callbacks/read_removal_autoinc.hpp"
 #include "rust_callbacks/records.hpp"
 #include "rust_callbacks/row_operations.hpp"
