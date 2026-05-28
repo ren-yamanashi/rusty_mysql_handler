@@ -1535,10 +1535,10 @@ pub trait StorageEngine: Send {
     }
 
     /// Compare two row-position references `ref1` and `ref2` (each the handler's
-    /// `ref_length` bytes), returning an ordering as a negative / zero / positive
-    /// `i32`. Return `None` (the default) to use the handler base (`memcmp`);
-    /// engines with a structured position return `Some(ordering)`.
-    fn cmp_ref(&mut self, _ref1: &[u8], _ref2: &[u8]) -> Option<i32> {
+    /// `ref_length` bytes). Return `None` (the default) to use the handler base
+    /// (`memcmp`); engines with a structured position return
+    /// `Some(ordering)`.
+    fn cmp_ref(&mut self, _ref1: &[u8], _ref2: &[u8]) -> Option<core::cmp::Ordering> {
         None
     }
 

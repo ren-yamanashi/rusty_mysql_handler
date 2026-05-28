@@ -132,6 +132,7 @@ pub unsafe extern "C" fn rust__handler__cmp_ref(
                 FfiPtr::slice_const(ref2, len),
             )
         };
-        report_i32(out, engine.cmp_ref(a, b))
+        // Ordering is repr(i8) Less=-1 / Equal=0 / Greater=1, the C++ int contract.
+        report_i32(out, engine.cmp_ref(a, b).map(|ord| ord as i32))
     })
 }

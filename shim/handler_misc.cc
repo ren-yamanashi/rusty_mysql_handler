@@ -23,19 +23,19 @@
 // Secondary-engine offload, clone, mv-key and partitioning overrides
 // (handler.h #154-#158)
 
-#include <cstring>  // strlen
-
 #include "binding.hpp"
 #include "rust_callbacks.hpp"
+#include "safe_name.hpp"
 
-// reason / name are null-terminated MySQL-internal strings, so strlen here is
-// bounded by their NUL; the byte length is handed to Rust for a bounded view.
+// A null reason / name falls through to the base: FfiPtr::bytes_to_str requires
+// a non-null pointer even at len 0, so null must never reach the Rust side.
+// shim::safe_name_len bounds the scan if the null-termination contract breaks.
 
 void RustHandlerBase::set_external_table_offload_error(const char *reason) {
-  if (rust_ctx_) {
+  if (rust_ctx_ && reason) {
     rust__handler__set_external_table_offload_error(
         rust_ctx_, reinterpret_cast<const uint8_t *>(reason),
-        reason ? strlen(reason) : 0);
+        shim::safe_name_len(reason));
     return;
   }
   handler::set_external_table_offload_error(reason);
@@ -50,10 +50,10 @@ void RustHandlerBase::external_table_offload_error() const {
 }
 
 handler *RustHandlerBase::clone(const char *name, MEM_ROOT *mem_root) {
-  if (rust_ctx_) {
+  if (rust_ctx_ && name) {
     handler *cloned = static_cast<handler *>(rust__handler__clone(
         rust_ctx_, reinterpret_cast<const uint8_t *>(name),
-        name ? strlen(name) : 0, static_cast<void *>(mem_root)));
+        shim::safe_name_len(name), static_cast<void *>(mem_root)));
     if (cloned) return cloned;
   }
   return handler::clone(name, mem_root);
