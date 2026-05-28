@@ -53,6 +53,8 @@ pub mod fulltext;
 #[doc(hidden)]
 pub mod hints;
 #[doc(hidden)]
+pub mod index_admin;
+#[doc(hidden)]
 pub mod index_basic;
 #[doc(hidden)]
 pub mod index_pushed;
@@ -64,6 +66,8 @@ pub mod inplace_alter;
 pub mod limits;
 #[doc(hidden)]
 pub mod locking;
+#[doc(hidden)]
+pub mod maintenance;
 #[doc(hidden)]
 pub mod mrr;
 #[doc(hidden)]

@@ -127,6 +127,11 @@ pub struct Field([u8; 0]);
 #[derive(Debug)]
 pub struct AlterInplaceInfo([u8; 0]);
 
+/// Opaque MySQL `HA_CHECK_OPT` (options for `CHECK` / `REPAIR` / `ANALYZE` etc.)
+#[repr(C)]
+#[derive(Debug)]
+pub struct HaCheckOpt([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

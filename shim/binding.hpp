@@ -250,6 +250,19 @@ class RustHandlerBase : public handler {
   void notify_table_changed(Alter_inplace_info *ha_alter_info) override;
   bool check_if_incompatible_data(HA_CREATE_INFO *create_info,
                                   uint table_changes) override;
+
+  int check(THD *thd, HA_CHECK_OPT *check_opt) override;
+  int repair(THD *thd, HA_CHECK_OPT *check_opt) override;
+  int optimize(THD *thd, HA_CHECK_OPT *check_opt) override;
+  int analyze(THD *thd, HA_CHECK_OPT *check_opt) override;
+  bool check_and_repair(THD *thd) override;
+  int check_for_upgrade(HA_CHECK_OPT *check_opt) override;
+  int assign_to_keycache(THD *thd, HA_CHECK_OPT *check_opt) override;
+  int preload_keys(THD *thd, HA_CHECK_OPT *check_opt) override;
+  int disable_indexes(uint mode) override;
+  int enable_indexes(uint mode) override;
+  int discard_or_import_tablespace(bool discard,
+                                   dd::Table *table_def) override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

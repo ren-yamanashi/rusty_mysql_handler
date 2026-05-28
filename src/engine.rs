@@ -1347,4 +1347,110 @@ pub trait StorageEngine: Send {
     ) -> Option<bool> {
         None
     }
+
+    /// Run `CHECK TABLE` for `check_opt`, returning a raw `HA_ADMIN_*` code.
+    /// Return `None` (the default) to use the handler base
+    /// (`HA_ADMIN_NOT_IMPLEMENTED`); engines return `Some(code)`.
+    fn check(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _check_opt: Option<&sys::HaCheckOpt>,
+    ) -> Option<i32> {
+        None
+    }
+
+    /// Run `REPAIR TABLE` for `check_opt`, returning a raw `HA_ADMIN_*` code.
+    /// Return `None` (the default) to use the handler base
+    /// (`HA_ADMIN_NOT_IMPLEMENTED`); engines that advertise `HA_CAN_REPAIR`
+    /// return `Some(code)`.
+    fn repair(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _check_opt: Option<&sys::HaCheckOpt>,
+    ) -> Option<i32> {
+        None
+    }
+
+    /// Run `OPTIMIZE TABLE` for `check_opt`, returning a raw `HA_ADMIN_*` code.
+    /// Return `None` (the default) to use the handler base
+    /// (`HA_ADMIN_NOT_IMPLEMENTED`); engines return `Some(code)`.
+    fn optimize(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _check_opt: Option<&sys::HaCheckOpt>,
+    ) -> Option<i32> {
+        None
+    }
+
+    /// Run `ANALYZE TABLE` for `check_opt`, returning a raw `HA_ADMIN_*` code.
+    /// Return `None` (the default) to use the handler base
+    /// (`HA_ADMIN_NOT_IMPLEMENTED`); engines return `Some(code)`.
+    fn analyze(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _check_opt: Option<&sys::HaCheckOpt>,
+    ) -> Option<i32> {
+        None
+    }
+
+    /// Check and, if needed, repair the table on crash recovery. Return
+    /// `Some(true)` on error / not supported, `Some(false)` on success, or
+    /// `None` (the default) to use the handler base (`true`).
+    fn check_and_repair(&mut self, _thd: Option<&sys::THD>) -> Option<bool> {
+        None
+    }
+
+    /// Check whether the table needs upgrading, returning a raw `HA_ADMIN_*`
+    /// code. Return `None` (the default) to use the handler base (`0`, no
+    /// upgrade needed); engines return `Some(code)`.
+    fn check_for_upgrade(&mut self, _check_opt: Option<&sys::HaCheckOpt>) -> Option<i32> {
+        None
+    }
+
+    /// Preload indexes into a named key cache (`ASSIGN_TO_KEYCACHE`), returning a
+    /// raw `HA_ADMIN_*` code. Return `None` (the default) to use the handler base
+    /// (`HA_ADMIN_NOT_IMPLEMENTED`); engines return `Some(code)`.
+    fn assign_to_keycache(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _check_opt: Option<&sys::HaCheckOpt>,
+    ) -> Option<i32> {
+        None
+    }
+
+    /// Preload index blocks into the default key cache (`LOAD INDEX`), returning
+    /// a raw `HA_ADMIN_*` code. Return `None` (the default) to use the handler
+    /// base (`HA_ADMIN_NOT_IMPLEMENTED`); engines return `Some(code)`.
+    fn preload_keys(
+        &mut self,
+        _thd: Option<&sys::THD>,
+        _check_opt: Option<&sys::HaCheckOpt>,
+    ) -> Option<i32> {
+        None
+    }
+
+    /// Disable indexes in the given `mode` (`ALTER TABLE ... DISABLE KEYS`),
+    /// returning a raw handler code. Return `None` (the default) to use the
+    /// handler base (`HA_ERR_WRONG_COMMAND`); engines return `Some(code)`.
+    fn disable_indexes(&mut self, _mode: u32) -> Option<i32> {
+        None
+    }
+
+    /// Enable indexes in the given `mode` (`ALTER TABLE ... ENABLE KEYS`),
+    /// returning a raw handler code. Return `None` (the default) to use the
+    /// handler base (`HA_ERR_WRONG_COMMAND`); engines return `Some(code)`.
+    fn enable_indexes(&mut self, _mode: u32) -> Option<i32> {
+        None
+    }
+
+    /// Discard (`discard == true`) or import the tablespace for `table_def`,
+    /// returning a raw handler code. Return `None` (the default) to use the
+    /// handler base (`HA_ERR_WRONG_COMMAND`); engines return `Some(code)`.
+    fn discard_or_import_tablespace(
+        &mut self,
+        _discard: bool,
+        _table_def: Option<&sys::DdTable>,
+    ) -> Option<i32> {
+        None
+    }
 }
