@@ -25,10 +25,10 @@
 /// The set of engine-level features a [`Handlerton`](crate::hton::Handlerton)
 /// opts into.
 ///
-/// Each capability gates a group of `handlerton` callbacks. A group is wired
-/// into the `handlerton` struct only when its bit is set here, because MySQL
-/// reads a non-NULL function pointer as a declaration that the engine supports
-/// that feature — a non-NULL `commit`, for example, marks the engine
+/// Each capability gates a group of `handlerton` callbacks. A group will be
+/// wired into the `handlerton` struct only when its bit is set here, because
+/// MySQL reads a non-NULL function pointer as a declaration that the engine
+/// supports that feature — a non-NULL `commit`, for example, marks the engine
 /// transactional. Declaring a capability the engine does not implement would
 /// route work to callbacks that cannot honour it, so default to the smallest
 /// set that is actually backed by code.
