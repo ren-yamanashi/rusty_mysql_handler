@@ -48,13 +48,19 @@ static handler *rusty_create_handler(handlerton *hton, TABLE_SHARE *table,
   return new (mem_root) RustHandlerBase(hton, table);
 }
 
+// Mirrors the hand-written `HTON_CAN_RECREATE` value in `src/sys.rs`; the
+// Rust accessor returns it as the zero-config default, so a drift in the
+// upstream macro would silently change the flag an unregistered engine gets.
+static_assert(HTON_CAN_RECREATE == (1u << 2),
+              "HTON_CAN_RECREATE drifted; update src/sys.rs HTON_CAN_RECREATE");
+
 extern "C" int rusty_init_func(void *p) {
   DBUG_TRACE;
   rust__plugin_init();
   auto *hton = static_cast<handlerton *>(p);
   hton->state = SHOW_OPTION_YES;
   hton->create = rusty_create_handler;
-  hton->flags = HTON_CAN_RECREATE;
+  hton->flags = rust__hton__flags();
   return 0;
 }
 

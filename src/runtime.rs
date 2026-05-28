@@ -29,15 +29,19 @@
 
 mod context;
 #[doc(hidden)]
+pub mod hton_registry;
+#[doc(hidden)]
 pub mod ptr;
 #[doc(hidden)]
 pub mod registry;
 
 pub use context::EngineContext;
+use hton_registry::HandlertonRegistry;
 pub(crate) use ptr::FfiPtr;
 pub use registry::EngineFactory;
 use registry::EngineRegistry;
 
+use crate::hton::Handlerton;
 use crate::panic_guard::FfiBoundary;
 
 static REGISTRY: EngineRegistry = EngineRegistry::new();
@@ -46,6 +50,25 @@ static REGISTRY: EngineRegistry = EngineRegistry::new();
 /// from the plugin's `rust__plugin_init`; later calls are ignored.
 pub fn register_engine_factory(factory: EngineFactory) {
     REGISTRY.register(factory);
+}
+
+static HANDLERTON: HandlertonRegistry = HandlertonRegistry::new();
+
+/// Install `handlerton` as the process-wide engine-level handlerton.
+///
+/// Optional and independent of [`register_engine_factory`]: call it once from
+/// the plugin's `rust__plugin_init` only when the engine implements
+/// engine-level behaviour (transactions, savepoints, ...). Later calls are
+/// ignored, and an engine that never calls it keeps the zero-config handlerton
+/// defaults.
+pub fn register_handlerton(handlerton: Box<dyn Handlerton>) {
+    HANDLERTON.register(handlerton);
+}
+
+/// The registered engine-level handlerton, or `None` when the engine kept the
+/// zero-config defaults. Read by the `rust__hton__*` FFI accessors.
+pub(crate) fn handlerton() -> Option<&'static dyn Handlerton> {
+    HANDLERTON.get()
 }
 
 /// Allocate an `EngineContext`; null if no factory or the factory panics

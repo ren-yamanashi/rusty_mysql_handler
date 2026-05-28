@@ -36,6 +36,7 @@
 #include "rust_callbacks/error_handling.hpp"
 #include "rust_callbacks/fulltext.hpp"
 #include "rust_callbacks/hints.hpp"
+#include "rust_callbacks/hton_core.hpp"
 #include "rust_callbacks/index_admin.hpp"
 #include "rust_callbacks/index_basic.hpp"
 #include "rust_callbacks/index_pushed.hpp"

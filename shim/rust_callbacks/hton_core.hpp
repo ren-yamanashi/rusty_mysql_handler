@@ -20,22 +20,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] yields three
-//! empty rows then `EndOfFile`; see `trivial_engine` for the `StorageEngine`
-//! impl, `trivial_handlerton` for the engine-level [`TrivialHandlerton`], and
-//! `registration` for the plugin entry point.
+#ifndef SHIM_RUST_CALLBACKS_HTON_CORE_HPP
+#define SHIM_RUST_CALLBACKS_HTON_CORE_HPP
 
-#![allow(unsafe_code)]
+#include <cstdint>
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
+// Engine-level handlerton accessors queried by rusty_init_func to populate the
+// handlerton struct from the registered Rust Handlerton singleton. Returns the
+// zero-config default when no handlerton is registered.
+extern "C" {
+uint32_t rust__hton__flags();
+}
 
-#[doc(hidden)]
-pub mod registration;
-pub mod trivial_engine;
-pub mod trivial_handlerton;
-
-pub use trivial_engine::TrivialEngine;
-pub use trivial_handlerton::TrivialHandlerton;
+#endif
