@@ -272,6 +272,17 @@ class RustHandlerBase : public handler {
   const TABLE *member_of_pushed_join() const override;
   const TABLE *parent_of_pushed_join() const override;
   table_map tables_in_pushed_join() const override;
+
+  void update_create_info(HA_CREATE_INFO *create_info) override;
+  void append_create_info(String *packet) override;
+  void use_hidden_primary_key() override;
+  bool set_ha_share_ref(Handler_share **arg_ha_share) override;
+  int cmp_ref(const uchar *ref1, const uchar *ref2) const override;
+  void set_external_table_offload_error(const char *reason) override;
+  void external_table_offload_error() const override;
+  handler *clone(const char *name, MEM_ROOT *mem_root) override;
+  void mv_key_capacity(uint *num_keys, size_t *keys_length) const override;
+  Partition_handler *get_partition_handler() override;
 };
 
 // C linkage so the Rust-side plugin manifest in examples/engine/src/lib.rs

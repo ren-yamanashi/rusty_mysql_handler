@@ -69,6 +69,10 @@ pub mod locking;
 #[doc(hidden)]
 pub mod maintenance;
 #[doc(hidden)]
+pub mod metadata;
+#[doc(hidden)]
+pub mod misc;
+#[doc(hidden)]
 pub mod mrr;
 #[doc(hidden)]
 pub mod open_close;

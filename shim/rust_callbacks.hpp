@@ -45,6 +45,8 @@
 #include "rust_callbacks/limits.hpp"
 #include "rust_callbacks/locking.hpp"
 #include "rust_callbacks/maintenance.hpp"
+#include "rust_callbacks/metadata.hpp"
+#include "rust_callbacks/misc.hpp"
 #include "rust_callbacks/mrr.hpp"
 #include "rust_callbacks/parallel_scan.hpp"
 #include "rust_callbacks/properties.hpp"
