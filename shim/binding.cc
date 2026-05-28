@@ -61,6 +61,11 @@ extern "C" int rusty_init_func(void *p) {
   hton->state = SHOW_OPTION_YES;
   hton->create = rusty_create_handler;
   hton->flags = rust__hton__flags();
+  // Always-on hooks are wired only when an engine registers a Handlerton, so a
+  // zero-config engine keeps these handlerton pointers NULL as before.
+  if (rust__hton__is_registered()) {
+    rusty_hton_wire_lifecycle(hton);
+  }
   return 0;
 }
 

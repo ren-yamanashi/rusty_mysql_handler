@@ -20,18 +20,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef SHIM_RUST_CALLBACKS_HTON_CORE_HPP
-#define SHIM_RUST_CALLBACKS_HTON_CORE_HPP
+#ifndef SHIM_RUST_CALLBACKS_HTON_LIFECYCLE_HPP
+#define SHIM_RUST_CALLBACKS_HTON_LIFECYCLE_HPP
 
 #include <cstdint>
 
-// Engine-level handlerton accessors queried by rusty_init_func to populate the
-// handlerton struct from the registered Rust Handlerton singleton. Returns the
-// zero-config default when no handlerton is registered.
+// Core engine-lifecycle callbacks delegating to the registered Rust Handlerton
+// singleton. THD crosses as an opaque `const void *` (never retained past the
+// call).
 extern "C" {
-uint32_t rust__hton__flags();
-// Whether a Rust Handlerton is registered; gates wiring of the always-on hooks.
-bool rust__hton__is_registered();
+int32_t rust__hton__close_connection(const void *thd);
+void rust__hton__kill_connection(const void *thd);
+void rust__hton__pre_dd_shutdown();
+void rust__hton__reset_plugin_vars(const void *thd);
 }
 
 #endif

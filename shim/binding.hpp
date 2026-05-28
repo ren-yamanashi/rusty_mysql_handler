@@ -292,4 +292,10 @@ int rusty_init_func(void *p);
 int rusty_deinit_func(void *p);
 }
 
+// Wires the always-on engine-lifecycle hooks (close_connection, kill_connection,
+// pre_dd_shutdown, reset_plugin_vars) onto the handlerton. Called from
+// rusty_init_func only when a Rust Handlerton is registered; internal to the
+// shim, so C++ linkage.
+void rusty_hton_wire_lifecycle(handlerton *hton);
+
 #endif

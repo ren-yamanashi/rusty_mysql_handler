@@ -34,9 +34,14 @@ mod capabilities;
 #[doc(hidden)]
 pub mod ffi;
 mod flags;
+#[doc(hidden)]
+pub mod lifecycle;
 
 pub use capabilities::HtonCapabilities;
 pub use flags::HtonFlags;
+
+use crate::engine::EngineResult;
+use crate::sys;
 
 /// The engine-level handlerton interface: the capabilities and `handlerton`
 /// struct fields that apply to the engine as a whole rather than to a single
@@ -79,4 +84,30 @@ pub trait Handlerton: Send + Sync {
     fn flags(&self) -> HtonFlags {
         HtonFlags::CAN_RECREATE
     }
+
+    /// Called when a connection that has touched this engine closes, so the
+    /// engine can release per-connection state.
+    ///
+    /// MySQL only invokes this for a connection whose `thd->ha_data` slot is
+    /// non-empty, so a handler-only engine that never stores per-connection
+    /// state does not see it. Defaults to success (nothing to release).
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if releasing the
+    /// connection's state fails; MySQL logs it and the connection still closes.
+    fn close_connection(&self, _thd: Option<&sys::THD>) -> EngineResult {
+        Ok(())
+    }
+
+    /// Notification that a connection or its current statement is being
+    /// terminated (`KILL`). Defaults to no-op.
+    fn kill_connection(&self, _thd: Option<&sys::THD>) {}
+
+    /// Called before the data dictionary shuts down so the engine can stop
+    /// background tasks that might still access it. Defaults to no-op.
+    fn pre_dd_shutdown(&self) {}
+
+    /// Reset session-scoped plugin variables before the connection ends.
+    /// Defaults to no-op.
+    fn reset_plugin_vars(&self, _thd: Option<&sys::THD>) {}
 }
