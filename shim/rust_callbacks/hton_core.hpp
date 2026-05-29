@@ -32,6 +32,9 @@ extern "C" {
 uint32_t rust__hton__flags();
 // Whether a Rust Handlerton is registered; gates wiring of the always-on hooks.
 bool rust__hton__is_registered();
+// Whether the handlerton declares TRANSACTIONS; gates commit/rollback/prepare
+// wiring and transaction registration in external_lock.
+bool rust__hton__is_transactional();
 }
 
 #endif

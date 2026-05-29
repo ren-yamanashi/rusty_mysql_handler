@@ -20,24 +20,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] yields three
-//! empty rows then `EndOfFile`; see `trivial_engine` for the `StorageEngine`
-//! impl, `trivial_handlerton` for the engine-level [`TrivialHandlerton`], and
-//! `registration` for the plugin entry point.
+//! Per-connection transaction state for the reference engine.
 
-#![allow(unsafe_code)]
+use mysql_handler::engine::EngineResult;
+use mysql_handler::hton::TxnSession;
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
+/// The reference engine's per-connection transaction. It accepts both commit
+/// and rollback boundaries and succeeds; the reference engine does not persist
+/// rows, so there is nothing to flush or undo.
+#[derive(Debug, Default)]
+pub struct TrivialTxn;
 
-#[doc(hidden)]
-pub mod registration;
-pub mod trivial_engine;
-pub mod trivial_handlerton;
-pub mod trivial_txn;
+impl TxnSession for TrivialTxn {
+    fn commit(&mut self, _all: bool) -> EngineResult {
+        Ok(())
+    }
 
-pub use trivial_engine::TrivialEngine;
-pub use trivial_handlerton::TrivialHandlerton;
-pub use trivial_txn::TrivialTxn;
+    fn rollback(&mut self, _all: bool) -> EngineResult {
+        Ok(())
+    }
+}

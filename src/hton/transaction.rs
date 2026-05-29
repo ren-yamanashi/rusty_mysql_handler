@@ -1,0 +1,77 @@
+// Copyright (C) 2026 ren-yamanashi
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License, version 2.0,
+// as published by the Free Software Foundation.
+//
+// This program is designed to work with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms,
+// as designated in a particular file or component or in included license
+// documentation. The authors of this program hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have either included with
+// the program or referenced in the documentation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, see <https://www.gnu.org/licenses/>.
+
+//! Per-connection transaction state.
+
+use crate::engine::EngineResult;
+
+/// The transaction state for one connection.
+///
+/// A transactional [`Handlerton`](crate::hton::Handlerton) creates one of these
+/// per connection (via [`Handlerton::begin_transaction`]). MySQL stores it in
+/// the connection's `ha_data` slot and drives it through `commit` / `rollback`,
+/// so a `TxnSession` outlives the per-table handler and accumulates work across
+/// every statement of the transaction.
+///
+/// The `Send` bound is required because a connection may be served by different
+/// threads over its lifetime, so the session moves across threads — do not
+/// relax it.
+///
+/// `all` distinguishes the two boundaries MySQL signals on the same callback:
+/// `true` is a real transaction commit/rollback (the connection is in
+/// autocommit, or `COMMIT` / `ROLLBACK` ran); `false` is the end of a single
+/// statement within a larger transaction.
+///
+/// [`Handlerton::begin_transaction`]: crate::hton::Handlerton::begin_transaction
+pub trait TxnSession: Send {
+    /// Commit the work accumulated so far.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the commit
+    /// fails; MySQL surfaces it to the client and the statement / transaction
+    /// is reported as failed.
+    fn commit(&mut self, all: bool) -> EngineResult;
+
+    /// Discard the work accumulated so far.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the rollback
+    /// fails; this is reported to MySQL but the transaction is still considered
+    /// rolled back.
+    fn rollback(&mut self, all: bool) -> EngineResult;
+
+    /// Prepare phase: flush the transaction so a following `commit` is durable.
+    ///
+    /// MySQL drives this whenever the engine takes part in two-phase commit —
+    /// most importantly alongside the binary log, which is on by default — so a
+    /// transactional engine must handle it. The default reports success, which
+    /// is correct for an engine with nothing durable to prepare; override it to
+    /// flush real state.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the engine
+    /// cannot prepare; MySQL then rolls the transaction back.
+    fn prepare(&mut self, all: bool) -> EngineResult {
+        let _ = all;
+        Ok(())
+    }
+}

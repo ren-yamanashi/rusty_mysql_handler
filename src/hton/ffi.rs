@@ -26,7 +26,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::hton::HtonFlags;
+use crate::hton::{HtonCapabilities, HtonFlags};
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
 
@@ -61,4 +61,23 @@ pub unsafe extern "C" fn rust__hton__flags() -> u32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__is_registered() -> bool {
     FfiBoundary::run_default(false, || runtime::handlerton().is_some())
+}
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::TRANSACTIONS`](crate::hton::HtonCapabilities::TRANSACTIONS).
+///
+/// `rusty_init_func` uses this to gate the transaction callbacks
+/// (`commit` / `rollback` / `prepare`), and the handler's `external_lock` uses
+/// it to decide whether to register the engine in the transaction. Non-NULL
+/// `commit` is what tells MySQL the engine is transactional, so this must be
+/// false unless the engine truly implements transactions.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_transactional() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::TRANSACTIONS),
+        None => false,
+    })
 }

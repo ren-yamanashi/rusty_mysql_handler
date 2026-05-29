@@ -22,13 +22,22 @@
 
 //! Minimal engine-level handlerton for the reference engine.
 
-use mysql_handler::hton::Handlerton;
+use mysql_handler::hton::{Handlerton, HtonCapabilities, TxnSession};
 
-/// The reference engine's handlerton. Declares no extra capabilities and keeps
-/// the default flags, so registering it loads the plugin exactly as a
-/// handler-only engine would — it exists to exercise the registration path,
-/// not to add engine-level behaviour.
+use crate::TrivialTxn;
+
+/// The reference engine's handlerton. Declares the `TRANSACTIONS` capability and
+/// hands out a [`TrivialTxn`] per connection so the commit / rollback callbacks
+/// are wired and exercised; everything else keeps the zero-config defaults.
 #[derive(Debug, Default)]
 pub struct TrivialHandlerton;
 
-impl Handlerton for TrivialHandlerton {}
+impl Handlerton for TrivialHandlerton {
+    fn capabilities(&self) -> HtonCapabilities {
+        HtonCapabilities::TRANSACTIONS
+    }
+
+    fn begin_transaction(&self) -> Box<dyn TxnSession> {
+        Box::new(TrivialTxn)
+    }
+}
