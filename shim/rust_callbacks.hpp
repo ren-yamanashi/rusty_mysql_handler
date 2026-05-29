@@ -38,6 +38,7 @@
 #include "rust_callbacks/hints.hpp"
 #include "rust_callbacks/hton_core.hpp"
 #include "rust_callbacks/hton_lifecycle.hpp"
+#include "rust_callbacks/hton_transactions.hpp"
 #include "rust_callbacks/index_admin.hpp"
 #include "rust_callbacks/index_basic.hpp"
 #include "rust_callbacks/index_pushed.hpp"

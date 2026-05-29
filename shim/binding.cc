@@ -65,6 +65,11 @@ extern "C" int rusty_init_func(void *p) {
   // zero-config engine keeps these handlerton pointers NULL as before.
   if (rust__hton__is_registered()) {
     rusty_hton_wire_lifecycle(hton);
+    // commit/rollback/prepare are capability-gated: a non-NULL commit is what
+    // tells MySQL the engine is transactional, so only wire them when declared.
+    if (rust__hton__is_transactional()) {
+      rusty_hton_wire_transactions(hton);
+    }
   }
   return 0;
 }

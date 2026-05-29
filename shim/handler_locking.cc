@@ -29,6 +29,12 @@
 // straight to the engine; the Rust trait defaults reproduce the base behaviour.
 
 int RustHandlerBase::external_lock(THD *thd, int lock_type) {
+  // A transactional engine must register in the current transaction here, or
+  // MySQL never calls its commit / rollback. Register on lock acquisition
+  // (not on F_UNLCK release).
+  if (lock_type != F_UNLCK && rust__hton__is_transactional()) {
+    rusty_hton_register_txn(thd, ht);
+  }
   return rust__handler__external_lock(rust_ctx_, static_cast<const void *>(thd),
                                       lock_type);
 }
@@ -40,6 +46,10 @@ uint RustHandlerBase::lock_count() const {
 void RustHandlerBase::unlock_row() { rust__handler__unlock_row(rust_ctx_); }
 
 int RustHandlerBase::start_stmt(THD *thd, thr_lock_type lock_type) {
+  // Statements under LOCK TABLES skip external_lock, so register here too.
+  if (rust__hton__is_transactional()) {
+    rusty_hton_register_txn(thd, ht);
+  }
   return rust__handler__start_stmt(rust_ctx_, static_cast<const void *>(thd),
                                    static_cast<int32_t>(lock_type));
 }

@@ -36,9 +36,15 @@ pub mod ffi;
 mod flags;
 #[doc(hidden)]
 pub mod lifecycle;
+mod transaction;
+#[doc(hidden)]
+pub mod txn_context;
+#[doc(hidden)]
+pub mod txn_ffi;
 
 pub use capabilities::HtonCapabilities;
 pub use flags::HtonFlags;
+pub use transaction::TxnSession;
 
 use crate::engine::EngineResult;
 use crate::sys;
@@ -110,4 +116,31 @@ pub trait Handlerton: Send + Sync {
     /// Reset session-scoped plugin variables before the connection ends.
     /// Defaults to no-op.
     fn reset_plugin_vars(&self, _thd: Option<&sys::THD>) {}
+
+    /// Create the per-connection [`TxnSession`] for a new transaction.
+    ///
+    /// Invoked (through the shim) when a connection first joins a transaction,
+    /// but only for an engine that declares
+    /// [`HtonCapabilities::TRANSACTIONS`]. The returned session is stored in
+    /// the connection's `ha_data` and driven through `commit` / `rollback`
+    /// until the transaction ends. The default returns an inert session, so an
+    /// engine declaring `TRANSACTIONS` must override this to do real work.
+    fn begin_transaction(&self) -> Box<dyn TxnSession> {
+        Box::new(NoopTxnSession)
+    }
+}
+
+/// Inert default session returned by [`Handlerton::begin_transaction`] (see
+/// there). Accepts and discards transaction boundaries without doing work.
+#[derive(Debug)]
+struct NoopTxnSession;
+
+impl TxnSession for NoopTxnSession {
+    fn commit(&mut self, _all: bool) -> EngineResult {
+        Ok(())
+    }
+
+    fn rollback(&mut self, _all: bool) -> EngineResult {
+        Ok(())
+    }
 }

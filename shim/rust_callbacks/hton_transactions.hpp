@@ -20,24 +20,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] yields three
-//! empty rows then `EndOfFile`; see `trivial_engine` for the `StorageEngine`
-//! impl, `trivial_handlerton` for the engine-level [`TrivialHandlerton`], and
-//! `registration` for the plugin entry point.
+#ifndef SHIM_RUST_CALLBACKS_HTON_TRANSACTIONS_HPP
+#define SHIM_RUST_CALLBACKS_HTON_TRANSACTIONS_HPP
 
-#![allow(unsafe_code)]
+#include <cstdint>
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
+// Per-connection transaction lifecycle. The shim owns the connection's
+// `ha_data` slot (it has the handlerton); the context pointer below is the
+// opaque Rust TxnContext stored there, passed back on every commit / rollback.
+extern "C" {
+void *rust__hton__txn_begin();
+int32_t rust__hton__txn_commit(void *ctx, bool all);
+int32_t rust__hton__txn_rollback(void *ctx, bool all);
+int32_t rust__hton__txn_prepare(void *ctx, bool all);
+void rust__hton__txn_free(void *ctx);
+}
 
-#[doc(hidden)]
-pub mod registration;
-pub mod trivial_engine;
-pub mod trivial_handlerton;
-pub mod trivial_txn;
-
-pub use trivial_engine::TrivialEngine;
-pub use trivial_handlerton::TrivialHandlerton;
-pub use trivial_txn::TrivialTxn;
+#endif

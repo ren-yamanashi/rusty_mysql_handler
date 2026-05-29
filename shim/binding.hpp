@@ -298,4 +298,14 @@ int rusty_deinit_func(void *p);
 // shim, so C++ linkage.
 void rusty_hton_wire_lifecycle(handlerton *hton);
 
+// Wires the transaction callbacks (commit, rollback, prepare) onto the
+// handlerton. Called from rusty_init_func only when the handlerton declares the
+// TRANSACTIONS capability.
+void rusty_hton_wire_transactions(handlerton *hton);
+
+// Allocates the per-connection transaction context (if absent) and registers
+// the engine in the current statement / transaction. Called from the handler's
+// external_lock / start_stmt for a transactional engine.
+void rusty_hton_register_txn(THD *thd, handlerton *ht);
+
 #endif

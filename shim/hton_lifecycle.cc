@@ -22,15 +22,25 @@
 
 // Engine-level lifecycle hooks (handler.h handlerton callbacks #2-#5). These
 // thunks match the handlerton function-pointer typedefs and forward to the
-// Rust singleton; the handlerton pointer is unused because the singleton is
-// process-global.
+// Rust singleton; close_connection additionally uses the handlerton to reach
+// the connection's ha_data, the others ignore it (the singleton is global).
 
 #include "binding.hpp"
+#include "mysql/plugin.h"
 #include "rust_callbacks.hpp"
 
 namespace {
-int rusty_hton_close_connection(handlerton *, THD *thd) {
-  return rust__hton__close_connection(static_cast<const void *>(thd));
+int rusty_hton_close_connection(handlerton *hton, THD *thd) {
+  int rc = rust__hton__close_connection(static_cast<const void *>(thd));
+  // Safety net: a transaction context still attached here means the connection
+  // ended abnormally (KILL / disconnect mid-transaction) before commit/rollback
+  // freed it. close_connection only fires when ha_data is set, so free it.
+  void *ctx = thd_get_ha_data(thd, hton);
+  if (ctx) {
+    rust__hton__txn_free(ctx);
+    thd_set_ha_data(thd, hton, nullptr);
+  }
+  return rc;
 }
 void rusty_hton_kill_connection(handlerton *, THD *thd) {
   rust__hton__kill_connection(static_cast<const void *>(thd));
