@@ -41,6 +41,8 @@ mod transaction;
 pub mod txn_context;
 #[doc(hidden)]
 pub mod txn_ffi;
+#[doc(hidden)]
+pub mod xa;
 
 pub use capabilities::HtonCapabilities;
 pub use flags::HtonFlags;
@@ -127,6 +129,53 @@ pub trait Handlerton: Send + Sync {
     /// engine declaring `TRANSACTIONS` must override this to do real work.
     fn begin_transaction(&self) -> Box<dyn TxnSession> {
         Box::new(NoopTxnSession)
+    }
+
+    /// Commit the prepared XA transaction identified by `xid`, found during
+    /// recovery. Wired only under [`HtonCapabilities::XA`]; `xid` is opaque
+    /// (inspect only the bytes the engine needs). Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default; an XA engine overrides this and errors only on a real failure.
+    fn commit_by_xid(&self, xid: Option<&sys::XID>) -> EngineResult {
+        let _ = xid;
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Roll back the prepared XA transaction identified by `xid`. Wired only
+    /// under [`HtonCapabilities::XA`]. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn rollback_by_xid(&self, xid: Option<&sys::XID>) -> EngineResult {
+        let _ = xid;
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Mark the connection's externally-coordinated transactions as prepared in
+    /// the server transaction coordinator. Wired only under
+    /// [`HtonCapabilities::XA`]. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn set_prepared_in_tc(&self, thd: Option<&sys::THD>) -> EngineResult {
+        let _ = thd;
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Mark the prepared XA transaction identified by `xid` as prepared in the
+    /// server transaction coordinator. Wired only under
+    /// [`HtonCapabilities::XA`]. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn set_prepared_in_tc_by_xid(&self, xid: Option<&sys::XID>) -> EngineResult {
+        let _ = xid;
+        Err(crate::engine::EngineError::Unsupported)
     }
 }
 
