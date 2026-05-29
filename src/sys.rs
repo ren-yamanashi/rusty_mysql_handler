@@ -69,6 +69,11 @@ pub struct TABLE_SHARE([u8; 0]);
 #[derive(Debug)]
 pub struct THD([u8; 0]);
 
+/// Opaque MySQL `XID` (X/Open distributed-transaction identifier)
+#[repr(C)]
+#[derive(Debug)]
+pub struct XID([u8; 0]);
+
 /// Opaque MySQL data-dictionary `dd::Table`
 #[repr(C)]
 #[derive(Debug)]

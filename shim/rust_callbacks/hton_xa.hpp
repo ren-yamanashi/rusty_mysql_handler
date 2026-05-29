@@ -20,23 +20,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-#ifndef SHIM_RUST_CALLBACKS_HTON_CORE_HPP
-#define SHIM_RUST_CALLBACKS_HTON_CORE_HPP
+#ifndef SHIM_RUST_CALLBACKS_HTON_XA_HPP
+#define SHIM_RUST_CALLBACKS_HTON_XA_HPP
 
 #include <cstdint>
 
-// Engine-level handlerton accessors queried by rusty_init_func to populate the
-// handlerton struct from the registered Rust Handlerton singleton. Returns the
-// zero-config default when no handlerton is registered.
+// XA recovery callbacks. XID / THD cross as opaque `const void *`. Each returns
+// 0 on success or an HA_ERR code; the shim maps that to xa_status_code for the
+// by-xid callbacks. recover / recover_prepared_in_tc are deliberately not bound
+// (they fill MySQL-owned output the opaque pass-through cannot populate).
 extern "C" {
-uint32_t rust__hton__flags();
-// Whether a Rust Handlerton is registered; gates wiring of the always-on hooks.
-bool rust__hton__is_registered();
-// Whether the handlerton declares TRANSACTIONS; gates commit/rollback/prepare
-// wiring and transaction registration in external_lock.
-bool rust__hton__is_transactional();
-// Whether the handlerton declares XA; gates the XA recovery callbacks.
-bool rust__hton__is_xa();
+int32_t rust__hton__commit_by_xid(const void *xid);
+int32_t rust__hton__rollback_by_xid(const void *xid);
+int32_t rust__hton__set_prepared_in_tc(const void *thd);
+int32_t rust__hton__set_prepared_in_tc_by_xid(const void *xid);
 }
 
 #endif

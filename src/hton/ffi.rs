@@ -81,3 +81,19 @@ pub unsafe extern "C" fn rust__hton__is_transactional() -> bool {
         None => false,
     })
 }
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::XA`](crate::hton::HtonCapabilities::XA).
+///
+/// `rusty_init_func` uses this to gate the XA recovery callbacks
+/// (`commit_by_xid` / `rollback_by_xid` / `set_prepared_in_tc[_by_xid]`).
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_xa() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::XA),
+        None => false,
+    })
+}

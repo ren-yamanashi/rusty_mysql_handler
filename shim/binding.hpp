@@ -308,4 +308,10 @@ void rusty_hton_wire_transactions(handlerton *hton);
 // external_lock / start_stmt for a transactional engine.
 void rusty_hton_register_txn(THD *thd, handlerton *ht);
 
+// Wires the XA recovery callbacks (commit_by_xid, rollback_by_xid,
+// set_prepared_in_tc, set_prepared_in_tc_by_xid) onto the handlerton. Called
+// from rusty_init_func only when the handlerton declares the XA capability;
+// recover / recover_prepared_in_tc stay NULL.
+void rusty_hton_wire_xa(handlerton *hton);
+
 #endif
