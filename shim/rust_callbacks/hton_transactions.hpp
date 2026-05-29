@@ -34,7 +34,7 @@ void *rust__hton__txn_begin();
 int32_t rust__hton__txn_commit(void *ctx, bool all);
 int32_t rust__hton__txn_rollback(void *ctx, bool all);
 int32_t rust__hton__txn_prepare(void *ctx, bool all);
-// Stage a row write (table name + row image) into the transaction context.
+// Stage a row write (table name + row image) into the transaction context
 int32_t rust__hton__txn_write_row(void *ctx, const uint8_t *table,
                                   size_t table_len, const uint8_t *row,
                                   size_t row_len);

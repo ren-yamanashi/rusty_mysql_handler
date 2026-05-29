@@ -90,15 +90,20 @@ DROP TABLE md1;
 -- Transaction observability: a transactional handlerton registers in
 -- external_lock when a statement touches a RUSTY table, so COMMIT must make its
 -- insert durable to the next statement and ROLLBACK must discard its insert.
--- The committed count is therefore 1, and the sentinel below is 3 only when
--- that holds — so run.sh's "last line == 3" check now asserts real commit /
--- rollback semantics, not merely that the DDL ran.
+-- Capture the count after COMMIT and again after ROLLBACK so each half is
+-- asserted independently (a COMMIT that drops its row and a ROLLBACK that keeps
+-- its row would both net to 1 and slip past a single net check). run.sh only
+-- inspects the last non-empty line, so the final sentinel is 3 only when
+-- after-commit == 1 (COMMIT persisted) AND after-rollback == 1 (ROLLBACK
+-- discarded).
 CREATE TABLE tx1 (id INT) ENGINE=RUSTY;
 BEGIN;
 INSERT INTO tx1 VALUES (1);
 COMMIT;
+SELECT @after_commit := COUNT(*) FROM tx1;
 BEGIN;
 INSERT INTO tx1 VALUES (2);
 ROLLBACK;
-SELECT IF(COUNT(*) = 1, 3, 0) AS sentinel FROM tx1;
+SELECT @after_rollback := COUNT(*) FROM tx1;
+SELECT IF(@after_commit = 1 AND @after_rollback = 1, 3, 0) AS sentinel;
 DROP TABLE tx1;
