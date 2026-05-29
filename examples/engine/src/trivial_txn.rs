@@ -29,13 +29,23 @@ use mysql_handler::hton::TxnSession;
 
 use crate::store;
 
+/// Read the snapshot-stack index `TrivialTxn` wrote into a savepoint's `sv`.
+fn sv_index(sv: &[u8]) -> Option<usize> {
+    let bytes: [u8; 8] = sv.get(..8)?.try_into().ok()?;
+    usize::try_from(u64::from_le_bytes(bytes)).ok()
+}
+
 /// The reference engine's per-connection transaction. It buffers each row write
 /// per table; a transaction commit (`all`) flushes the counts to the shared
 /// committed store, and a transaction rollback (`all`) discards them, so the
-/// effect of COMMIT vs ROLLBACK is visible to later statements.
+/// effect of COMMIT vs ROLLBACK is visible to later statements. A savepoint
+/// snapshots the staged counts; rolling back to it restores that snapshot and
+/// drops later snapshots, while releasing it drops its snapshot but keeps the
+/// work.
 #[derive(Debug, Default)]
 pub struct TrivialTxn {
     staged: HashMap<String, u64>,
+    savepoints: Vec<HashMap<String, u64>>,
 }
 
 impl TxnSession for TrivialTxn {
@@ -58,6 +68,38 @@ impl TxnSession for TrivialTxn {
     fn rollback(&mut self, all: bool) -> EngineResult {
         if all {
             self.staged.clear();
+        }
+        Ok(())
+    }
+
+    fn savepoint_set(&mut self, sv: &mut [u8]) -> EngineResult {
+        let index = self.savepoints.len() as u64;
+        self.savepoints.push(self.staged.clone());
+        if sv.len() >= 8 {
+            sv[..8].copy_from_slice(&index.to_le_bytes());
+        }
+        Ok(())
+    }
+
+    fn savepoint_rollback(&mut self, sv: &[u8]) -> EngineResult {
+        let index = match sv_index(sv) {
+            Some(i) => i,
+            None => return Ok(()),
+        };
+        if let Some(snapshot) = self.savepoints.get(index) {
+            self.staged = snapshot.clone();
+        }
+        // ROLLBACK TO destroys savepoints established after this one, so drop
+        // their snapshots to keep the stack bounded.
+        self.savepoints.truncate(index.saturating_add(1));
+        Ok(())
+    }
+
+    fn savepoint_release(&mut self, sv: &[u8]) -> EngineResult {
+        // Releasing keeps the work (staged is untouched) and drops the
+        // savepoint's snapshot (and later ones, LIFO) to bound the stack.
+        if let Some(index) = sv_index(sv) {
+            self.savepoints.truncate(index);
         }
         Ok(())
     }

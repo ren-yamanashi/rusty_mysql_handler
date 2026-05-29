@@ -105,5 +105,35 @@ BEGIN;
 INSERT INTO tx1 VALUES (2);
 ROLLBACK;
 SELECT @after_rollback := COUNT(*) FROM tx1;
-SELECT IF(@after_commit = 1 AND @after_rollback = 1, 3, 0) AS sentinel;
 DROP TABLE tx1;
+
+-- Savepoint observability: ROLLBACK TO SAVEPOINT must undo the insert done
+-- after the savepoint while keeping the one before it, so the committed count
+-- is 1 (not 2 if the savepoint rollback were a no-op).
+CREATE TABLE sp1 (id INT) ENGINE=RUSTY;
+BEGIN;
+INSERT INTO sp1 VALUES (1);
+SAVEPOINT s1;
+INSERT INTO sp1 VALUES (2);
+ROLLBACK TO SAVEPOINT s1;
+COMMIT;
+SELECT @after_savepoint := COUNT(*) FROM sp1;
+DROP TABLE sp1;
+
+-- RELEASE SAVEPOINT keeps the released savepoint's work (the engine's
+-- savepoint_release callback only drops its snapshot), so both inserts commit
+-- and the count is 2.
+CREATE TABLE sp2 (id INT) ENGINE=RUSTY;
+BEGIN;
+INSERT INTO sp2 VALUES (1);
+SAVEPOINT r1;
+INSERT INTO sp2 VALUES (2);
+RELEASE SAVEPOINT r1;
+COMMIT;
+SELECT @after_release := COUNT(*) FROM sp2;
+DROP TABLE sp2;
+
+-- sentinel: 3 only when COMMIT persisted (1), ROLLBACK discarded (1),
+-- ROLLBACK TO SAVEPOINT undid only the post-savepoint insert (1), and
+-- RELEASE SAVEPOINT kept both inserts (2)
+SELECT IF(@after_commit = 1 AND @after_rollback = 1 AND @after_savepoint = 1 AND @after_release = 2, 3, 0) AS sentinel;

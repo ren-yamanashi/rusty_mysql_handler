@@ -36,6 +36,8 @@ pub mod ffi;
 mod flags;
 #[doc(hidden)]
 pub mod lifecycle;
+#[doc(hidden)]
+pub mod savepoint_ffi;
 mod transaction;
 #[doc(hidden)]
 pub mod txn_context;
@@ -91,6 +93,14 @@ pub trait Handlerton: Send + Sync {
     /// zero-config engine sets today. Return [`HtonFlags::NONE`] to opt out.
     fn flags(&self) -> HtonFlags {
         HtonFlags::CAN_RECREATE
+    }
+
+    /// Bytes of per-savepoint scratch the engine needs (`handlerton`'s
+    /// `savepoint_offset`). MySQL allocates this much per savepoint and hands it
+    /// to the savepoint callbacks as their `sv` buffer. Only consulted when the
+    /// engine declares [`HtonCapabilities::SAVEPOINTS`]; defaults to 0.
+    fn savepoint_offset(&self) -> u32 {
+        0
     }
 
     /// Called when a connection that has touched this engine closes, so the

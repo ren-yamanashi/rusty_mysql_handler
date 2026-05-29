@@ -20,29 +20,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Minimal engine-level handlerton for the reference engine.
+#ifndef SHIM_RUST_CALLBACKS_HTON_SAVEPOINT_HPP
+#define SHIM_RUST_CALLBACKS_HTON_SAVEPOINT_HPP
 
-use mysql_handler::hton::{Handlerton, HtonCapabilities, TxnSession};
+#include <cstddef>
+#include <cstdint>
 
-use crate::TrivialTxn;
-
-/// The reference engine's handlerton. Declares the `TRANSACTIONS` capability and
-/// hands out a [`TrivialTxn`] per connection so the commit / rollback callbacks
-/// are wired and exercised; everything else keeps the zero-config defaults.
-#[derive(Debug, Default)]
-pub struct TrivialHandlerton;
-
-impl Handlerton for TrivialHandlerton {
-    fn capabilities(&self) -> HtonCapabilities {
-        HtonCapabilities::TRANSACTIONS | HtonCapabilities::SAVEPOINTS
-    }
-
-    fn savepoint_offset(&self) -> u32 {
-        // 8 bytes hold the u64 snapshot index TrivialTxn writes per savepoint
-        8
-    }
-
-    fn begin_transaction(&self) -> Box<dyn TxnSession> {
-        Box::new(TrivialTxn::default())
-    }
+// Savepoint callbacks. `ctx` is the opaque per-connection TxnContext (from
+// ha_data); `sv` is MySQL's per-savepoint scratch, savepoint_offset bytes.
+extern "C" {
+int32_t rust__hton__savepoint_set(void *ctx, uint8_t *sv, size_t sv_len);
+int32_t rust__hton__savepoint_rollback(void *ctx, const uint8_t *sv,
+                                       size_t sv_len);
+int32_t rust__hton__savepoint_release(void *ctx, const uint8_t *sv,
+                                      size_t sv_len);
+bool rust__hton__savepoint_can_release_mdl(void *ctx);
 }
+
+#endif

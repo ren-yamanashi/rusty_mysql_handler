@@ -76,6 +76,11 @@ extern "C" int rusty_init_func(void *p) {
     if (rust__hton__is_transactional() && rust__hton__is_xa()) {
       rusty_hton_wire_xa(hton);
     }
+    // Savepoints live inside a transaction, so they likewise require the
+    // transactional capability.
+    if (rust__hton__is_transactional() && rust__hton__is_savepoints()) {
+      rusty_hton_wire_savepoints(hton);
+    }
   }
   return 0;
 }

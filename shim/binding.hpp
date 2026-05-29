@@ -314,4 +314,8 @@ void rusty_hton_register_txn(THD *thd, handlerton *ht);
 // recover / recover_prepared_in_tc stay NULL.
 void rusty_hton_wire_xa(handlerton *hton);
 
+// Wires the savepoint callbacks and sets savepoint_offset. Called from
+// rusty_init_func only when the handlerton declares the SAVEPOINTS capability.
+void rusty_hton_wire_savepoints(handlerton *hton);
+
 #endif
