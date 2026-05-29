@@ -70,8 +70,10 @@ extern "C" int rusty_init_func(void *p) {
     if (rust__hton__is_transactional()) {
       rusty_hton_wire_transactions(hton);
     }
-    // XA recovery callbacks are a further opt-in; recover stays NULL regardless.
-    if (rust__hton__is_xa()) {
+    // XA recovery acts on prepared transactions, which require the engine to
+    // be transactional, so wire the by-xid callbacks only when both hold;
+    // recover stays NULL regardless.
+    if (rust__hton__is_transactional() && rust__hton__is_xa()) {
       rusty_hton_wire_xa(hton);
     }
   }
