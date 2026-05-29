@@ -37,6 +37,12 @@ bool rust__hton__is_registered();
 bool rust__hton__is_transactional();
 // Whether the handlerton declares XA; gates the XA recovery callbacks.
 bool rust__hton__is_xa();
+// Whether the handlerton declares SAVEPOINTS; gates the savepoint callbacks.
+bool rust__hton__is_savepoints();
+// Bytes of per-savepoint scratch the engine needs (used for both the
+// handlerton field and as the sv buffer length, since MySQL repurposes the
+// field to an offset after init).
+uint32_t rust__hton__savepoint_offset();
 }
 
 #endif

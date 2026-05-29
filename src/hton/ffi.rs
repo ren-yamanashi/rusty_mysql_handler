@@ -97,3 +97,33 @@ pub unsafe extern "C" fn rust__hton__is_xa() -> bool {
         None => false,
     })
 }
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::SAVEPOINTS`](crate::hton::HtonCapabilities::SAVEPOINTS).
+///
+/// `rusty_init_func` uses this to gate the savepoint callbacks and the
+/// `savepoint_offset` field.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_savepoints() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::SAVEPOINTS),
+        None => false,
+    })
+}
+
+/// The `handlerton` `savepoint_offset`: bytes of per-savepoint scratch the
+/// engine needs. `rusty_init_func` sets it only when the engine declares
+/// `SAVEPOINTS`; 0 otherwise.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__savepoint_offset() -> u32 {
+    FfiBoundary::run_default(0, || match runtime::handlerton() {
+        Some(h) => h.savepoint_offset(),
+        None => 0,
+    })
+}

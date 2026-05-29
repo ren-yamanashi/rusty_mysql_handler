@@ -32,10 +32,12 @@ use crate::store;
 /// The reference engine's per-connection transaction. It buffers each row write
 /// per table; a transaction commit (`all`) flushes the counts to the shared
 /// committed store, and a transaction rollback (`all`) discards them, so the
-/// effect of COMMIT vs ROLLBACK is visible to later statements.
+/// effect of COMMIT vs ROLLBACK is visible to later statements. A savepoint
+/// snapshots the staged counts; rolling back to it restores that snapshot.
 #[derive(Debug, Default)]
 pub struct TrivialTxn {
     staged: HashMap<String, u64>,
+    savepoints: Vec<HashMap<String, u64>>,
 }
 
 impl TxnSession for TrivialTxn {
@@ -58,6 +60,28 @@ impl TxnSession for TrivialTxn {
     fn rollback(&mut self, all: bool) -> EngineResult {
         if all {
             self.staged.clear();
+        }
+        Ok(())
+    }
+
+    fn savepoint_set(&mut self, sv: &mut [u8]) -> EngineResult {
+        let index = self.savepoints.len() as u64;
+        self.savepoints.push(self.staged.clone());
+        if sv.len() >= 8 {
+            sv[..8].copy_from_slice(&index.to_le_bytes());
+        }
+        Ok(())
+    }
+
+    fn savepoint_rollback(&mut self, sv: &[u8]) -> EngineResult {
+        if sv.len() < 8 {
+            return Ok(());
+        }
+        let mut idx = [0u8; 8];
+        idx.copy_from_slice(&sv[..8]);
+        let index = usize::try_from(u64::from_le_bytes(idx)).unwrap_or(usize::MAX);
+        if let Some(snapshot) = self.savepoints.get(index) {
+            self.staged = snapshot.clone();
         }
         Ok(())
     }

@@ -90,4 +90,48 @@ pub trait TxnSession: Send {
         let _ = all;
         Ok(())
     }
+
+    /// Establish a savepoint at the transaction's current point. `sv` is the
+    /// engine's per-savepoint scratch (`savepoint_offset` bytes, declared by
+    /// [`Handlerton::savepoint_offset`](crate::hton::Handlerton::savepoint_offset)):
+    /// write whatever the engine needs to identify this savepoint on rollback.
+    /// Defaults to no-op success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the savepoint
+    /// cannot be recorded.
+    fn savepoint_set(&mut self, sv: &mut [u8]) -> EngineResult {
+        let _ = sv;
+        Ok(())
+    }
+
+    /// Roll the transaction back to the savepoint whose scratch is `sv` (as
+    /// written by [`savepoint_set`](Self::savepoint_set)), discarding work done
+    /// since. Defaults to no-op success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the rollback
+    /// to savepoint fails.
+    fn savepoint_rollback(&mut self, sv: &[u8]) -> EngineResult {
+        let _ = sv;
+        Ok(())
+    }
+
+    /// Release (forget) the savepoint whose scratch is `sv`, keeping its work
+    /// part of the transaction. Defaults to no-op success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the release
+    /// fails.
+    fn savepoint_release(&mut self, sv: &[u8]) -> EngineResult {
+        let _ = sv;
+        Ok(())
+    }
+
+    /// Whether it is safe to release metadata locks acquired after a savepoint
+    /// when rolling back to it. Defaults to `true` (the engine holds no locks
+    /// that a savepoint rollback must preserve).
+    fn savepoint_rollback_can_release_mdl(&self) -> bool {
+        true
+    }
 }
