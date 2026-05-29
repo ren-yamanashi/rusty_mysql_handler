@@ -37,7 +37,10 @@ namespace {
 int rusty_hton_commit(handlerton *hton, THD *thd, bool all) {
   void *ctx = thd_get_ha_data(thd, hton);
   int rc = rust__hton__txn_commit(ctx, all);
-  if (all) {
+  // Free on the real transaction boundary (all), and on an autocommit
+  // statement, where no enclosing transaction will ever deliver all=true to
+  // free the context otherwise allocated for the whole connection.
+  if (all || !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
     rust__hton__txn_free(ctx);
     thd_set_ha_data(thd, hton, nullptr);
   }
@@ -47,7 +50,10 @@ int rusty_hton_commit(handlerton *hton, THD *thd, bool all) {
 int rusty_hton_rollback(handlerton *hton, THD *thd, bool all) {
   void *ctx = thd_get_ha_data(thd, hton);
   int rc = rust__hton__txn_rollback(ctx, all);
-  if (all) {
+  // Free on the real transaction boundary (all), and on an autocommit
+  // statement, where no enclosing transaction will ever deliver all=true to
+  // free the context otherwise allocated for the whole connection.
+  if (all || !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
     rust__hton__txn_free(ctx);
     thd_set_ha_data(thd, hton, nullptr);
   }

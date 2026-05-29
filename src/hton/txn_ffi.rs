@@ -28,8 +28,34 @@
 #![allow(unsafe_code)]
 
 use super::txn_context::TxnContext;
+use crate::engine::EngineResult;
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
+
+// Dispatch shared by the extern callbacks: a null context (the engine was
+// registered but produced no session) is a no-op success; otherwise drive the
+// session. Split out so the null / dispatch contract is unit-tested without the
+// raw-pointer unsafe of the extern boundary.
+fn commit_ctx(ctx: Option<&mut TxnContext>, all: bool) -> EngineResult {
+    match ctx {
+        Some(c) => c.session_mut().commit(all),
+        None => Ok(()),
+    }
+}
+
+fn rollback_ctx(ctx: Option<&mut TxnContext>, all: bool) -> EngineResult {
+    match ctx {
+        Some(c) => c.session_mut().rollback(all),
+        None => Ok(()),
+    }
+}
+
+fn prepare_ctx(ctx: Option<&mut TxnContext>, all: bool) -> EngineResult {
+    match ctx {
+        Some(c) => c.session_mut().prepare(all),
+        None => Ok(()),
+    }
+}
 
 /// Begin a transaction: allocate the per-connection [`TxnContext`] the shim
 /// stores in `ha_data`. Returns null when no handlerton is registered (the
@@ -55,13 +81,8 @@ pub unsafe extern "C" fn rust__hton__txn_begin() -> *mut TxnContext {
 /// exclusively borrowed for this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__txn_commit(ctx: *mut TxnContext, all: bool) -> i32 {
-    FfiBoundary::run(|| {
-        // SAFETY: ctx is null or a valid, exclusively-owned TxnContext.
-        match unsafe { ctx.as_mut() } {
-            Some(c) => c.session_mut().commit(all),
-            None => Ok(()),
-        }
-    })
+    // SAFETY: ctx is null or a valid, exclusively-owned TxnContext.
+    FfiBoundary::run(|| commit_ctx(unsafe { ctx.as_mut() }, all))
 }
 
 /// Roll back the transaction. `all` distinguishes a real rollback from
@@ -72,13 +93,8 @@ pub unsafe extern "C" fn rust__hton__txn_commit(ctx: *mut TxnContext, all: bool)
 /// exclusively borrowed for this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__txn_rollback(ctx: *mut TxnContext, all: bool) -> i32 {
-    FfiBoundary::run(|| {
-        // SAFETY: ctx is null or a valid, exclusively-owned TxnContext.
-        match unsafe { ctx.as_mut() } {
-            Some(c) => c.session_mut().rollback(all),
-            None => Ok(()),
-        }
-    })
+    // SAFETY: ctx is null or a valid, exclusively-owned TxnContext.
+    FfiBoundary::run(|| rollback_ctx(unsafe { ctx.as_mut() }, all))
 }
 
 /// Prepare phase of two-phase commit.
@@ -88,13 +104,8 @@ pub unsafe extern "C" fn rust__hton__txn_rollback(ctx: *mut TxnContext, all: boo
 /// exclusively borrowed for this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__txn_prepare(ctx: *mut TxnContext, all: bool) -> i32 {
-    FfiBoundary::run(|| {
-        // SAFETY: ctx is null or a valid, exclusively-owned TxnContext.
-        match unsafe { ctx.as_mut() } {
-            Some(c) => c.session_mut().prepare(all),
-            None => Ok(()),
-        }
-    })
+    // SAFETY: ctx is null or a valid, exclusively-owned TxnContext.
+    FfiBoundary::run(|| prepare_ctx(unsafe { ctx.as_mut() }, all))
 }
 
 /// Free a [`TxnContext`] returned by [`rust__hton__txn_begin`].
@@ -110,4 +121,43 @@ pub unsafe extern "C" fn rust__hton__txn_free(ctx: *mut TxnContext) {
             drop(unsafe { Box::from_raw(ctx) });
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hton::TxnSession;
+
+    struct RecordingTxn {
+        committed: bool,
+        rolled_back: bool,
+    }
+
+    impl TxnSession for RecordingTxn {
+        fn commit(&mut self, _all: bool) -> EngineResult {
+            self.committed = true;
+            Ok(())
+        }
+        fn rollback(&mut self, _all: bool) -> EngineResult {
+            self.rolled_back = true;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn null_ctx_is_a_noop_success() {
+        assert_eq!(commit_ctx(None, true), Ok(()));
+        assert_eq!(rollback_ctx(None, true), Ok(()));
+        assert_eq!(prepare_ctx(None, true), Ok(()));
+    }
+
+    #[test]
+    fn some_ctx_dispatches_to_the_session() {
+        let mut ctx = TxnContext::new(Box::new(RecordingTxn {
+            committed: false,
+            rolled_back: false,
+        }));
+        assert_eq!(commit_ctx(Some(&mut ctx), true), Ok(()));
+        assert_eq!(rollback_ctx(Some(&mut ctx), false), Ok(()));
+    }
 }
