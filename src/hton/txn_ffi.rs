@@ -31,6 +31,7 @@ use super::txn_context::TxnContext;
 use crate::engine::EngineResult;
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
+use crate::runtime::FfiPtr;
 
 // Dispatch shared by the extern callbacks: a null context (the engine was
 // registered but produced no session) is a no-op success; otherwise drive the
@@ -53,6 +54,13 @@ fn rollback_ctx(ctx: Option<&mut TxnContext>, all: bool) -> EngineResult {
 fn prepare_ctx(ctx: Option<&mut TxnContext>, all: bool) -> EngineResult {
     match ctx {
         Some(c) => c.session_mut().prepare(all),
+        None => Ok(()),
+    }
+}
+
+fn write_row_ctx(ctx: Option<&mut TxnContext>, table: &str, row: &[u8]) -> EngineResult {
+    match ctx {
+        Some(c) => c.session_mut().write_row(table, row),
         None => Ok(()),
     }
 }
@@ -108,6 +116,33 @@ pub unsafe extern "C" fn rust__hton__txn_prepare(ctx: *mut TxnContext, all: bool
     FfiBoundary::run(|| prepare_ctx(unsafe { ctx.as_mut() }, all))
 }
 
+/// Stage a row write into the transaction. `table` is the row's table name and
+/// `row` its MySQL row image; both are borrowed only for this call.
+///
+/// # Safety
+/// `ctx` is null or a [`TxnContext`] from [`rust__hton__txn_begin`]; `table`
+/// covers `table_len` readable bytes and `row` covers `row_len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__txn_write_row(
+    ctx: *mut TxnContext,
+    table: *const u8,
+    table_len: usize,
+    row: *const u8,
+    row_len: usize,
+) -> i32 {
+    FfiBoundary::run(|| {
+        // SAFETY: table is non-null and covers table_len readable bytes here.
+        let table = match unsafe { FfiPtr::bytes_to_str(table, table_len) } {
+            Ok(t) => t,
+            Err(e) => return Err(e),
+        };
+        // SAFETY: row is non-null and covers row_len readable bytes here.
+        let row = unsafe { FfiPtr::slice_const(row, row_len) };
+        // SAFETY: ctx is null or a valid, exclusively-owned TxnContext.
+        write_row_ctx(unsafe { ctx.as_mut() }, table, row)
+    })
+}
+
 /// Free a [`TxnContext`] returned by [`rust__hton__txn_begin`].
 ///
 /// # Safety
@@ -128,7 +163,9 @@ mod tests {
     use super::*;
     use crate::hton::TxnSession;
 
+    #[derive(Default)]
     struct RecordingTxn {
+        writes: u32,
         committed: bool,
         rolled_back: bool,
     }
@@ -142,6 +179,10 @@ mod tests {
             self.rolled_back = true;
             Ok(())
         }
+        fn write_row(&mut self, _table: &str, _row: &[u8]) -> EngineResult {
+            self.writes += 1;
+            Ok(())
+        }
     }
 
     #[test]
@@ -149,14 +190,14 @@ mod tests {
         assert_eq!(commit_ctx(None, true), Ok(()));
         assert_eq!(rollback_ctx(None, true), Ok(()));
         assert_eq!(prepare_ctx(None, true), Ok(()));
+        assert_eq!(write_row_ctx(None, "t", b"row"), Ok(()));
     }
 
     #[test]
     fn some_ctx_dispatches_to_the_session() {
-        let mut ctx = TxnContext::new(Box::new(RecordingTxn {
-            committed: false,
-            rolled_back: false,
-        }));
+        let mut ctx = TxnContext::new(Box::new(RecordingTxn::default()));
+        assert_eq!(write_row_ctx(Some(&mut ctx), "t", b"row"), Ok(()));
+        assert_eq!(write_row_ctx(Some(&mut ctx), "t", b"row"), Ok(()));
         assert_eq!(commit_ctx(Some(&mut ctx), true), Ok(()));
         assert_eq!(rollback_ctx(Some(&mut ctx), false), Ok(()));
     }

@@ -87,17 +87,23 @@ CREATE TABLE md1 (id INT) ENGINE=RUSTY;
 SHOW CREATE TABLE md1;
 DROP TABLE md1;
 
--- Transaction path: a transactional handlerton registers in external_lock when
--- a statement touches a RUSTY table, so COMMIT fires commit(all=true) and
--- ROLLBACK fires rollback(all=true). Exercises begin/commit/rollback/free.
+-- Transaction observability: a transactional handlerton registers in
+-- external_lock when a statement touches a RUSTY table, so COMMIT must make its
+-- insert durable to the next statement and ROLLBACK must discard its insert.
+-- Capture the count after COMMIT and again after ROLLBACK so each half is
+-- asserted independently (a COMMIT that drops its row and a ROLLBACK that keeps
+-- its row would both net to 1 and slip past a single net check). run.sh only
+-- inspects the last non-empty line, so the final sentinel is 3 only when
+-- after-commit == 1 (COMMIT persisted) AND after-rollback == 1 (ROLLBACK
+-- discarded).
 CREATE TABLE tx1 (id INT) ENGINE=RUSTY;
 BEGIN;
 INSERT INTO tx1 VALUES (1);
 COMMIT;
+SELECT @after_commit := COUNT(*) FROM tx1;
 BEGIN;
 INSERT INTO tx1 VALUES (2);
 ROLLBACK;
+SELECT @after_rollback := COUNT(*) FROM tx1;
+SELECT IF(@after_commit = 1 AND @after_rollback = 1, 3, 0) AS sentinel;
 DROP TABLE tx1;
-
--- sentinel: kept = 3 so run.sh's last-line check still asserts the DDL ran
-SELECT 3;

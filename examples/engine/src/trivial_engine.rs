@@ -31,28 +31,39 @@ use std::ffi::CStr;
 use mysql_handler::engine::{EngineError, EngineResult, RKeyFunction, RangeKey, StorageEngine};
 use mysql_handler::sys::{self, HA_BINLOG_ROW_CAPABLE, HA_BINLOG_STMT_CAPABLE};
 
-/// Trivial in-memory engine yielding a fixed number of empty rows
+use crate::store;
+
+/// The committed-row store keys by table name; `name` from create / open is a
+/// path-like `./db/table`, so reduce it to the bare table name that the write
+/// path (`table_name`) also uses.
+fn table_key(name: &str) -> String {
+    name.rsplit('/').next().unwrap_or(name).to_owned()
+}
+
+/// Reference engine that scans the rows committed to its table via the shared
+/// committed-row store, so a committed transaction becomes visible to the
+/// fresh handler a later statement opens
 #[derive(Debug)]
 pub struct TrivialEngine {
-    num_rows: u32,
-    current_row: u32,
+    table: String,
+    current_row: u64,
     next_auto_inc: u64,
 }
 
 impl TrivialEngine {
-    /// New engine that yields three empty rows
+    /// New engine not yet bound to a table
     pub const fn new() -> Self {
         Self {
-            num_rows: 3,
+            table: String::new(),
             current_row: 0,
             next_auto_inc: 1,
         }
     }
 
-    /// Yield the next empty row, or `EndOfFile` once `num_rows` are exhausted.
+    /// Yield the next committed row, or `EndOfFile` once they are exhausted.
     /// Shared by the random-scan and index-scan read paths.
     fn yield_next(&mut self) -> EngineResult {
-        if self.current_row >= self.num_rows {
+        if self.current_row >= store::committed_rows(&self.table) {
             return Err(EngineError::EndOfFile);
         }
         self.current_row += 1;
@@ -79,11 +90,13 @@ impl StorageEngine for TrivialEngine {
         0
     }
 
-    fn create(&mut self, _name: &str) -> EngineResult {
+    fn create(&mut self, name: &str) -> EngineResult {
+        self.table = table_key(name);
         Ok(())
     }
 
-    fn open(&mut self, _name: &str, _mode: i32) -> EngineResult {
+    fn open(&mut self, name: &str, _mode: i32) -> EngineResult {
+        self.table = table_key(name);
         Ok(())
     }
 
@@ -132,18 +145,13 @@ impl StorageEngine for TrivialEngine {
     fn drop_table(&mut self, _name: &str) {}
 
     fn truncate(&mut self, _table_def: Option<&sys::DdTable>) -> EngineResult {
-        self.num_rows = 0;
+        store::reset_table(&self.table);
         self.current_row = 0;
         Ok(())
     }
 
-    fn write_row(&mut self, _buf: &[u8]) -> EngineResult {
-        self.num_rows = self.num_rows.saturating_add(1);
-        Ok(())
-    }
-
     fn delete_all_rows(&mut self) -> EngineResult {
-        self.num_rows = 0;
+        store::reset_table(&self.table);
         self.current_row = 0;
         Ok(())
     }
@@ -223,15 +231,16 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn scan_time(&mut self) -> Option<f64> {
-        Some(f64::from(self.num_rows))
+        let rows = u32::try_from(store::committed_rows(&self.table)).unwrap_or(u32::MAX);
+        Some(f64::from(rows))
     }
 
     fn records(&mut self) -> Option<EngineResult<u64>> {
-        Some(Ok(u64::from(self.num_rows)))
+        Some(Ok(store::committed_rows(&self.table)))
     }
 
     fn estimate_rows_upper_bound(&mut self) -> Option<u64> {
-        Some(u64::from(self.num_rows))
+        Some(store::committed_rows(&self.table))
     }
 
     fn get_auto_increment(
