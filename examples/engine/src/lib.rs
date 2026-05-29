@@ -34,6 +34,7 @@ pub mod plugin_manifest;
 
 #[doc(hidden)]
 pub mod registration;
+pub mod store;
 pub mod trivial_engine;
 pub mod trivial_handlerton;
 pub mod trivial_txn;

@@ -22,21 +22,43 @@
 
 //! Per-connection transaction state for the reference engine.
 
+use std::collections::HashMap;
+
 use mysql_handler::engine::EngineResult;
 use mysql_handler::hton::TxnSession;
 
-/// The reference engine's per-connection transaction. It accepts both commit
-/// and rollback boundaries and succeeds; the reference engine does not persist
-/// rows, so there is nothing to flush or undo.
+use crate::store;
+
+/// The reference engine's per-connection transaction. It buffers each row write
+/// per table; a transaction commit (`all`) flushes the counts to the shared
+/// committed store, and a transaction rollback (`all`) discards them, so the
+/// effect of COMMIT vs ROLLBACK is visible to later statements.
 #[derive(Debug, Default)]
-pub struct TrivialTxn;
+pub struct TrivialTxn {
+    staged: HashMap<String, u64>,
+}
 
 impl TxnSession for TrivialTxn {
-    fn commit(&mut self, _all: bool) -> EngineResult {
+    fn write_row(&mut self, table: &str, _row: &[u8]) -> EngineResult {
+        *self.staged.entry(table.to_owned()).or_insert(0) += 1;
         Ok(())
     }
 
-    fn rollback(&mut self, _all: bool) -> EngineResult {
+    fn commit(&mut self, all: bool) -> EngineResult {
+        // Flush only on the whole-transaction boundary; a statement boundary
+        // (all=false) keeps the staged rows for the rest of the transaction.
+        if all {
+            for (table, n) in self.staged.drain() {
+                store::commit_rows(&table, n);
+            }
+        }
+        Ok(())
+    }
+
+    fn rollback(&mut self, all: bool) -> EngineResult {
+        if all {
+            self.staged.clear();
+        }
         Ok(())
     }
 }

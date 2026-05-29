@@ -38,6 +38,6 @@ impl Handlerton for TrivialHandlerton {
     }
 
     fn begin_transaction(&self) -> Box<dyn TxnSession> {
-        Box::new(TrivialTxn)
+        Box::new(TrivialTxn::default())
     }
 }

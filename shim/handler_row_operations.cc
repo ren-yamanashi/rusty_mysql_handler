@@ -24,12 +24,24 @@
 
 #include "binding.hpp"
 #include "my_dbug.h"
+#include "mysql/plugin.h"
 #include "rust_callbacks.hpp"
 #include "sql/table.h"
 
 int RustHandlerBase::write_row(uchar *buf) {
   DBUG_TRACE;
-  return rust__handler__write_row(rust_ctx_, buf, table->s->rec_buff_length);
+  void *txn =
+      rust__hton__is_transactional() ? thd_get_ha_data(ha_thd(), ht) : nullptr;
+  // Non-transactional, or no transaction context yet: the row goes straight to
+  // the per-table engine.
+  if (!txn) {
+    return rust__handler__write_row(rust_ctx_, buf, table->s->rec_buff_length);
+  }
+  // Transactional: the row joins the connection's transaction so commit /
+  // rollback decide its fate.
+  return rust__hton__txn_write_row(
+      txn, reinterpret_cast<const uint8_t *>(table->s->table_name.str),
+      table->s->table_name.length, buf, table->s->rec_buff_length);
 }
 
 int RustHandlerBase::update_row(const uchar *old_data, uchar *new_data) {

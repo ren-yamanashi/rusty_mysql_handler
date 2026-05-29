@@ -59,6 +59,22 @@ pub trait TxnSession: Send {
     /// rolled back.
     fn rollback(&mut self, all: bool) -> EngineResult;
 
+    /// Stage a row written into `table` as part of this transaction.
+    ///
+    /// A transactional engine receives each row write here (rather than on the
+    /// per-table handler) so the change is buffered until `commit` makes it
+    /// visible or `rollback` discards it. `row` is the MySQL row image
+    /// (`record[0]`). The default ignores the write; an engine that stores data
+    /// overrides this to buffer it.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the row cannot
+    /// be staged (e.g. out of memory).
+    fn write_row(&mut self, table: &str, row: &[u8]) -> EngineResult {
+        let _ = (table, row);
+        Ok(())
+    }
+
     /// Prepare phase: flush the transaction so a following `commit` is durable.
     ///
     /// MySQL drives this whenever the engine takes part in two-phase commit —
