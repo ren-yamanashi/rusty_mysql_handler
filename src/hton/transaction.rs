@@ -95,7 +95,8 @@ pub trait TxnSession: Send {
     /// engine's per-savepoint scratch (`savepoint_offset` bytes, declared by
     /// [`Handlerton::savepoint_offset`](crate::hton::Handlerton::savepoint_offset)):
     /// write whatever the engine needs to identify this savepoint on rollback.
-    /// Defaults to no-op success.
+    /// `sv` is only byte-aligned, so write it through `copy_from_slice` /
+    /// `to_le_bytes` rather than a typed pointer store. Defaults to no-op success.
     ///
     /// # Errors
     /// Returns an [`EngineError`](crate::engine::EngineError) if the savepoint
