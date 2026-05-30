@@ -155,7 +155,11 @@ pub unsafe extern "C" fn rust__hton__secondary_engine_modify_access_path_cost(
 /// `thd` null or valid for the call; not retained.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__external_engine_explain_check(thd: *const sys::THD) -> bool {
-    FfiBoundary::run_default(false, || {
+    // Fail closed on panic: `true = some table not loaded`, so reporting `true`
+    // on panic keeps MySQL from routing the explain through a secondary-engine
+    // path the engine can no longer vouch for. The non-panic default still
+    // returns `false` (all loaded) per the trait method's documented semantics.
+    FfiBoundary::run_default(true, || {
         // SAFETY: thd null or valid for read for this call.
         let thd_ref = unsafe { thd.as_ref() };
         match runtime::handlerton() {

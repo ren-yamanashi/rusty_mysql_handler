@@ -20,13 +20,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `rust__hton__*` secondary-engine offload failure-reason callbacks. Split
-//! out of `secondary_engine.rs` because the `std::string_view` round-trip
-//! introduces the `write_optional_str` helper that is only used by this
-//! family. `set_*` lives next to its readers here so the three callbacks stay
-//! together.
+//! `rust__hton__*` secondary-engine offload failure-reason callbacks.
 //!
-//! [`HtonCapabilities::SECONDARY_ENGINE`]: crate::hton::HtonCapabilities::SECONDARY_ENGINE
+//! `get_*` and `find_*` cannot safely round-trip an engine-owned buffer back
+//! to MySQL through this layer today — the shim wraps the returned bytes in a
+//! `std::string_view` that outlives the FFI call, so a trait method returning
+//! `Option<String>` would drop the buffer before MySQL inspects it
+//! (use-after-free + adjacent-heap-byte disclosure). The two read callbacks
+//! therefore unconditionally return an empty `string_view`; a future setter
+//! reverse-callback that hands engine-owned, statement-scoped bytes to MySQL
+//! can re-add the read path without that lifetime gap. `set_*` is unaffected:
+//! it borrows bytes from MySQL for the call duration and the trait copies if
+//! it wants to retain them.
 
 #![allow(unsafe_code)]
 
@@ -42,69 +47,50 @@ fn result_to_error(r: crate::engine::EngineResult) -> bool {
     }
 }
 
-/// Trait returns `Option<String>`; this helper writes the `(ptr, len)` pair
-/// back through caller-owned out-pointers, mapping `None` to `(NULL, 0)` so
-/// the shim sees an empty `std::string_view`.
-pub(crate) fn write_optional_str(
-    value: Option<&str>,
-    out_ptr: *mut *const u8,
-    out_len: *mut usize,
-) {
-    let (ptr, len) = match value {
-        Some(s) => (s.as_ptr(), s.len()),
-        None => (core::ptr::null(), 0_usize),
-    };
+/// Write `(NULL, 0)` into the two out-pointers. Lifted so the two read
+/// callbacks share one tiny helper that is trivial to unit-test.
+fn write_empty_string_view(out_ptr: *mut *const u8, out_len: *mut usize) {
     if !out_ptr.is_null() {
         // SAFETY: caller guarantees `out_ptr` is writable for one `*const u8`.
-        unsafe { out_ptr.write(ptr) };
+        unsafe { out_ptr.write(core::ptr::null()) };
     }
     if !out_len.is_null() {
         // SAFETY: caller guarantees `out_len` is writable for one `usize`.
-        unsafe { out_len.write(len) };
+        unsafe { out_len.write(0) };
     }
 }
 
-/// `get_secondary_engine_offload_or_exec_fail_reason`. The shim owns the
-/// destination buffer and copies the bytes the trait returns, so the
-/// `String` is dropped as soon as the copy finishes.
+/// `get_secondary_engine_offload_or_exec_fail_reason`. Returns an empty
+/// `std::string_view` (see module doc for the lifetime rationale).
 ///
 /// # Safety
-/// `thd` null or valid; `out_ptr` / `out_len` are non-null and writable for
-/// one element each.
+/// `thd` null or valid; `out_ptr` / `out_len` null or writable for one
+/// element each.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__get_secondary_engine_offload_or_exec_fail_reason(
-    thd: *const sys::THD,
+    _thd: *const sys::THD,
     out_ptr: *mut *const u8,
     out_len: *mut usize,
 ) -> bool {
     FfiBoundary::run_default(false, || {
-        // SAFETY: thd null or valid for read for this call.
-        let thd_ref = unsafe { thd.as_ref() };
-        let value = match runtime::handlerton() {
-            Some(h) => h.get_secondary_engine_offload_or_exec_fail_reason(thd_ref),
-            None => None,
-        };
-        write_optional_str(value.as_deref(), out_ptr, out_len);
+        write_empty_string_view(out_ptr, out_len);
         true
     })
 }
 
+/// `find_secondary_engine_offload_fail_reason`. Same empty-view treatment as
+/// [`rust__hton__get_secondary_engine_offload_or_exec_fail_reason`].
+///
 /// # Safety
 /// See [`rust__hton__get_secondary_engine_offload_or_exec_fail_reason`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__find_secondary_engine_offload_fail_reason(
-    thd: *const sys::THD,
+    _thd: *const sys::THD,
     out_ptr: *mut *const u8,
     out_len: *mut usize,
 ) -> bool {
     FfiBoundary::run_default(false, || {
-        // SAFETY: thd null or valid for read for this call.
-        let thd_ref = unsafe { thd.as_ref() };
-        let value = match runtime::handlerton() {
-            Some(h) => h.find_secondary_engine_offload_fail_reason(thd_ref),
-            None => None,
-        };
-        write_optional_str(value.as_deref(), out_ptr, out_len);
+        write_empty_string_view(out_ptr, out_len);
         true
     })
 }
@@ -143,27 +129,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn write_optional_str_some_writes_ptr_and_len() {
-        let s = "abc";
-        let mut p: *const u8 = core::ptr::null();
-        let mut l: usize = 999;
-        write_optional_str(Some(s), &raw mut p, &raw mut l);
-        assert_eq!(p, s.as_ptr());
-        assert_eq!(l, 3);
-    }
-
-    #[test]
-    fn write_optional_str_none_writes_null_and_zero() {
+    fn write_empty_string_view_writes_null_and_zero() {
         let mut p: *const u8 = 0x1 as *const u8;
         let mut l: usize = 7;
-        write_optional_str(None, &raw mut p, &raw mut l);
+        write_empty_string_view(&raw mut p, &raw mut l);
         assert!(p.is_null());
         assert_eq!(l, 0);
     }
 
     #[test]
-    fn write_optional_str_tolerates_null_outs() {
-        write_optional_str(Some("x"), core::ptr::null_mut(), core::ptr::null_mut());
-        write_optional_str(None, core::ptr::null_mut(), core::ptr::null_mut());
+    fn write_empty_string_view_tolerates_null_outs() {
+        write_empty_string_view(core::ptr::null_mut(), core::ptr::null_mut());
     }
 }

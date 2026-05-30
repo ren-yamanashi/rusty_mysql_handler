@@ -860,25 +860,13 @@ pub trait Handlerton: Send + Sync {
         false
     }
 
-    /// Look up a previously-stored offload / execution failure reason for the
-    /// query represented by `thd`. The shim returns an empty C
-    /// `std::string_view` to MySQL whenever the trait returns `None`; engines
-    /// that store reasons would need a future setter to round-trip an
-    /// engine-owned buffer back across the boundary, so the default trait
-    /// shape leaves this as "no reason".
-    fn get_secondary_engine_offload_or_exec_fail_reason(
-        &self,
-        _thd: Option<&sys::THD>,
-    ) -> Option<String> {
-        None
-    }
-
-    /// Fallback lookup used when
-    /// [`Self::get_secondary_engine_offload_or_exec_fail_reason`] returns an
-    /// empty reason. Defaults to `None`.
-    fn find_secondary_engine_offload_fail_reason(&self, _thd: Option<&sys::THD>) -> Option<String> {
-        None
-    }
+    // `get_secondary_engine_offload_or_exec_fail_reason` and
+    // `find_secondary_engine_offload_fail_reason` are wired at the FFI layer
+    // but intentionally not surfaced as trait methods today: returning
+    // engine-owned bytes by value would drop the buffer before MySQL wrapped
+    // it in `std::string_view`, exposing freed heap memory. The FFI returns an
+    // empty view until a future setter reverse-callback can hand
+    // statement-scoped bytes to MySQL safely. `set_*` below is unaffected.
 
     /// Persist `reason` as the offload failure reason for the query
     /// represented by `thd`. Defaults to success.

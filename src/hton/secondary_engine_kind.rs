@@ -54,26 +54,50 @@ impl SecondaryEngineGraphSimplificationRequest {
 /// [`Handlerton::secondary_engine_check_optimizer_request`].
 ///
 /// Mirrors `struct SecondaryEngineGraphSimplificationRequestParameters` in
-/// `mysql-server/sql/handler.h`.
+/// `mysql-server/sql/handler.h`. Fields are crate-private and the type is
+/// `#[non_exhaustive]` so a future MySQL field can land without a
+/// SemVer-breaking change; engine code constructs values via [`Self::new`] or
+/// [`Self::keep_going`] and reads them via [`Self::request`] /
+/// [`Self::subgraph_pair_limit`].
 ///
 /// [`Handlerton::secondary_engine_check_optimizer_request`]: crate::hton::Handlerton::secondary_engine_check_optimizer_request
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SecondaryEngineOptimizerRequest {
-    /// The transition the engine asks the optimizer to make.
-    pub request: SecondaryEngineGraphSimplificationRequest,
-    /// Subgraph-pair limit for the (possibly) restarted hypergraph.
-    pub subgraph_pair_limit: i32,
+    pub(crate) request: SecondaryEngineGraphSimplificationRequest,
+    pub(crate) subgraph_pair_limit: i32,
 }
 
 impl SecondaryEngineOptimizerRequest {
+    /// Construct a request from its two parts.
+    #[must_use]
+    pub const fn new(
+        request: SecondaryEngineGraphSimplificationRequest,
+        subgraph_pair_limit: i32,
+    ) -> Self {
+        Self {
+            request,
+            subgraph_pair_limit,
+        }
+    }
+
     /// "Keep going" default — what the trait returns when the engine has no
     /// opinion. Matches the upstream documented default (`kContinue`, 0).
     #[must_use]
     pub const fn keep_going() -> Self {
-        Self {
-            request: SecondaryEngineGraphSimplificationRequest::Continue,
-            subgraph_pair_limit: 0,
-        }
+        Self::new(SecondaryEngineGraphSimplificationRequest::Continue, 0)
+    }
+
+    /// The transition the engine asks the optimizer to make.
+    #[must_use]
+    pub const fn request(&self) -> SecondaryEngineGraphSimplificationRequest {
+        self.request
+    }
+
+    /// Subgraph-pair limit for the (possibly) restarted hypergraph.
+    #[must_use]
+    pub const fn subgraph_pair_limit(&self) -> i32 {
+        self.subgraph_pair_limit
     }
 }
 
