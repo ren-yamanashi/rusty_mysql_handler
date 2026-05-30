@@ -65,10 +65,15 @@ extern "C" int rusty_init_func(void *p) {
   // zero-config engine keeps these handlerton pointers NULL as before.
   if (rust__hton__is_registered()) {
     rusty_hton_wire_lifecycle(hton);
+    rusty_hton_wire_status(hton);
+    rusty_hton_wire_discovery(hton);
     // commit/rollback/prepare are capability-gated: a non-NULL commit is what
     // tells MySQL the engine is transactional, so only wire them when declared.
     if (rust__hton__is_transactional()) {
       rusty_hton_wire_transactions(hton);
+      // start_consistent_snapshot only makes sense on a transactional engine;
+      // a non-NULL pointer commits the engine to honouring snapshot reads.
+      rusty_hton_wire_consistent_snapshot(hton);
     }
     // XA recovery acts on prepared transactions, which require the engine to
     // be transactional, so wire the by-xid callbacks only when both hold;
@@ -80,6 +85,12 @@ extern "C" int rusty_init_func(void *p) {
     // transactional capability.
     if (rust__hton__is_transactional() && rust__hton__is_savepoints()) {
       rusty_hton_wire_savepoints(hton);
+    }
+    // partition_flags is the only signal MySQL uses to decide the engine
+    // implements handler::get_partition_handler, so leave it NULL unless the
+    // engine explicitly opts in via the PARTITIONING capability.
+    if (rust__hton__is_partitioning()) {
+      rusty_hton_wire_partitioning(hton);
     }
   }
   return 0;

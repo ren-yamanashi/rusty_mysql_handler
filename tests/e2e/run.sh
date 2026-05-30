@@ -73,10 +73,18 @@ mysql -e "INSTALL PLUGIN rusty SONAME 'ha_rusty.so';" || {
 }
 mysql -e "CREATE DATABASE e2e;"
 
-LAST="$(mysql --batch --skip-column-names e2e < tests/e2e/test.sql \
-  | awk 'NF{last=$0} END{print last}')"
+OUTPUT="$(mysql --batch --skip-column-names e2e < tests/e2e/test.sql)"
+LAST="$(printf '%s\n' "$OUTPUT" | awk 'NF{last=$0} END{print last}')"
 [[ "$LAST" == "3" ]] || {
   echo "e2e: expected last non-empty line = 3, got: $LAST" >&2
+  exit 1
+}
+# SHOW ENGINE RUSTY STATUS results cannot be captured into a user variable in
+# pure SQL (SHOW is not subqueryable / INTO-compatible), so the demo row that
+# TrivialHandlerton::show_status emits is asserted here instead. A regression
+# that silently drops the emission would still let the SQL sentinel pass.
+printf '%s\n' "$OUTPUT" | grep -qE $'^RUSTY\tstate\tok$' || {
+  echo "e2e: SHOW ENGINE RUSTY STATUS demo row missing (expected RUSTY|state|ok)" >&2
   exit 1
 }
 

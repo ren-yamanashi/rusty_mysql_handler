@@ -43,6 +43,10 @@ bool rust__hton__is_savepoints();
 // handlerton field and as the sv buffer length, since MySQL repurposes the
 // field to an offset after init).
 uint32_t rust__hton__savepoint_offset();
+// Whether the handlerton declares PARTITIONING; gates the partition_flags
+// accessor on the handlerton (a non-NULL pointer there is what tells MySQL the
+// engine implements handler::get_partition_handler).
+bool rust__hton__is_partitioning();
 }
 
 #endif

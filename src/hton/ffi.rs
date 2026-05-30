@@ -127,3 +127,21 @@ pub unsafe extern "C" fn rust__hton__savepoint_offset() -> u32 {
         None => 0,
     })
 }
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::PARTITIONING`](crate::hton::HtonCapabilities::PARTITIONING).
+///
+/// `rusty_init_func` uses this to gate the `partition_flags` accessor on the
+/// handlerton: a non-NULL pointer there is what tells MySQL the engine
+/// implements `handler::get_partition_handler`, so leave it NULL unless the
+/// engine actually does.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_partitioning() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::PARTITIONING),
+        None => false,
+    })
+}

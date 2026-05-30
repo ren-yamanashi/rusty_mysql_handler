@@ -32,12 +32,19 @@
 
 mod capabilities;
 #[doc(hidden)]
+pub mod discovery;
+#[doc(hidden)]
 pub mod ffi;
 mod flags;
 #[doc(hidden)]
 pub mod lifecycle;
+mod panic_function;
 #[doc(hidden)]
 pub mod savepoint_ffi;
+mod stat_print_sink;
+mod stat_type;
+#[doc(hidden)]
+pub mod status;
 mod transaction;
 #[doc(hidden)]
 pub mod txn_context;
@@ -48,6 +55,9 @@ pub mod xa;
 
 pub use capabilities::HtonCapabilities;
 pub use flags::HtonFlags;
+pub use panic_function::HaPanicFunction;
+pub use stat_print_sink::StatPrintSink;
+pub use stat_type::HaStatType;
 pub use transaction::TxnSession;
 
 use crate::engine::EngineResult;
@@ -186,6 +196,163 @@ pub trait Handlerton: Send + Sync {
     fn set_prepared_in_tc_by_xid(&self, xid: Option<&sys::XID>) -> EngineResult {
         let _ = xid;
         Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Shutdown notification: the server is invoking `ha_panic` to wind every
+    /// engine down. Defaults to success — the engine has nothing to flush on
+    /// process exit.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the engine
+    /// fails to shut down cleanly; MySQL logs it and continues stopping.
+    fn panic(&self, flag: HaPanicFunction) -> EngineResult {
+        let _ = flag;
+        Ok(())
+    }
+
+    /// Start a consistent-snapshot read for the connection, as requested by
+    /// `START TRANSACTION WITH CONSISTENT SNAPSHOT`. Wired only when the engine
+    /// declares [`HtonCapabilities::TRANSACTIONS`]; defaults to success (the
+    /// engine has no snapshot semantics to install).
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the snapshot
+    /// cannot be set up.
+    fn start_consistent_snapshot(&self, _thd: Option<&sys::THD>) -> EngineResult {
+        Ok(())
+    }
+
+    /// Flush durable state to disk. `binlog_group_flush` is true when the
+    /// invocation comes from the binary log group-commit flush stage, false
+    /// from `FLUSH LOGS` or shutdown. Defaults to success (nothing to flush).
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the flush
+    /// fails; MySQL reports the failure to the client.
+    fn flush_logs(&self, _binlog_group_flush: bool) -> EngineResult {
+        Ok(())
+    }
+
+    /// Populate `SHOW ENGINE <name> STATUS` / `LOGS` / `MUTEX` output by
+    /// emitting rows through `sink`. The trait default emits no rows, leaving
+    /// the engine status empty.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if collecting or
+    /// emitting status fails.
+    fn show_status(
+        &self,
+        _thd: Option<&sys::THD>,
+        _sink: &StatPrintSink<'_>,
+        _stat: HaStatType,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Per-partition capability bitfield (`HA_*_PARTITION_*` flags from
+    /// `sql_partition.h`). Consulted only when the engine declares
+    /// [`HtonCapabilities::PARTITIONING`]; defaults to 0 — no special
+    /// partitioning behaviour.
+    fn partition_flags(&self) -> u32 {
+        0
+    }
+
+    /// Fill engine-defined rows of an `INFORMATION_SCHEMA` table. The default
+    /// adds no rows, which is correct for an engine with no engine-only I_S
+    /// surface.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if collecting
+    /// rows fails.
+    fn fill_is_table(&self, _thd: Option<&sys::THD>) -> EngineResult {
+        Ok(())
+    }
+
+    /// Roll the engine's log files forward as part of an in-place server
+    /// upgrade. Defaults to success — the engine has no upgrade-specific log
+    /// work to do.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the upgrade
+    /// step fails; MySQL aborts the upgrade.
+    fn upgrade_logs(&self, _thd: Option<&sys::THD>) -> EngineResult {
+        Ok(())
+    }
+
+    /// Finalize upgrade-specific state, called regardless of whether the
+    /// upgrade succeeded. `failed_upgrade` is true when MySQL rolled back the
+    /// upgrade. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the cleanup
+    /// step fails.
+    fn finish_upgrade(&self, _thd: Option<&sys::THD>, _failed_upgrade: bool) -> EngineResult {
+        Ok(())
+    }
+
+    /// Whether the supplied database name is reserved by the engine and must
+    /// not be created at the SQL layer. Defaults to `false` — the engine
+    /// reserves no names.
+    fn is_reserved_db_name(&self, _name: &str) -> bool {
+        false
+    }
+
+    /// Recover a table whose dictionary entry is missing by reading the
+    /// engine-side description back into `db.name`. Defaults to "not found"
+    /// (the trait returns `Unsupported`, which the shim translates to
+    /// `HA_ERR_NO_SUCH_TABLE`).
+    ///
+    /// The shim does not yet marshal the engine's SDI blob back through the
+    /// `frmblob` / `frmlen` output parameters, so overriding this to return
+    /// `Ok(())` would claim "found" without supplying the table definition and
+    /// MySQL would fail downstream with `ER_NO_SUCH_TABLE` anyway. Keep the
+    /// default until that return path is wired.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default to report "no such table".
+    fn discover(&self, _thd: Option<&sys::THD>, _db: &str, _name: &str) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// List the tables (or directory entries) the engine knows about under
+    /// `db` / `path`. `wild` is an optional shell-style filter; `dir` is true
+    /// when MySQL is asking for sub-directories. Defaults to success with no
+    /// entries reported.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if enumeration
+    /// fails.
+    fn find_files(
+        &self,
+        _thd: Option<&sys::THD>,
+        _db: &str,
+        _path: &str,
+        _wild: Option<&str>,
+        _dir: bool,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Whether `db.name` exists in the engine. The handler.cc caller maps
+    /// `true` to `HA_ERR_TABLE_EXIST` and `false` to `HA_ERR_NO_SUCH_TABLE`,
+    /// so the default `false` matches "engine has no such table".
+    fn table_exists_in_engine(&self, _thd: Option<&sys::THD>, _db: &str, _name: &str) -> bool {
+        false
+    }
+
+    /// Whether `db.table_name` is a system table this engine supports.
+    /// `is_sql_layer_system_table` is `true` when the table is an SQL-layer
+    /// system table (such as `mysql.*`); the engine should answer `false`
+    /// unless it specifically supports those at the engine layer. Defaults to
+    /// `false` — the engine supports no system tables.
+    fn is_supported_system_table(
+        &self,
+        _db: &str,
+        _table_name: &str,
+        _is_sql_layer_system_table: bool,
+    ) -> bool {
+        false
     }
 }
 
