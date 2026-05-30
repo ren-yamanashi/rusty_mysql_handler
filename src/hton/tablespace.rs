@@ -56,7 +56,9 @@ pub unsafe extern "C" fn rust__hton__is_valid_tablespace_name(
     name: *const u8,
     name_len: usize,
 ) -> bool {
-    FfiBoundary::run_default(true, || {
+    // Fail closed on panic: this returns true = valid, so reporting "valid"
+    // on panic would let malformed names through into the DDL path.
+    FfiBoundary::run_default(false, || {
         // SAFETY: name is non-null and covers name_len readable bytes here.
         let decoded = unsafe { FfiPtr::bytes_to_str(name, name_len) };
         match (decoded, runtime::handlerton()) {
@@ -155,7 +157,8 @@ pub unsafe extern "C" fn rust__hton__upgrade_tablespace(thd: *const sys::THD) ->
 pub unsafe extern "C" fn rust__hton__upgrade_space_version(
     tablespace: *const sys::DdTablespace,
 ) -> bool {
-    FfiBoundary::run_default(false, || {
+    // Fail-on-panic, MySQL "true = error" convention.
+    FfiBoundary::run_default(true, || {
         // SAFETY: tablespace is null or valid for read for this call.
         let ts_ref = unsafe { tablespace.as_ref() };
         match runtime::handlerton() {

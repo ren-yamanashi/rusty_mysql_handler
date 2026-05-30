@@ -60,8 +60,8 @@ int rusty_hton_get_tablespace(THD *thd, LEX_CSTRING db_name,
   }
   return rust__hton__get_tablespace(
       static_cast<const void *>(thd),
-      reinterpret_cast<const uint8_t *>(db_name.str), db_name.length,
-      reinterpret_cast<const uint8_t *>(table_name.str), table_name.length);
+      nz(db_name.str), db_name.length,
+      nz(table_name.str), table_name.length);
 }
 
 int rusty_hton_alter_tablespace(handlerton *, THD *thd,

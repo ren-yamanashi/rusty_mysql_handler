@@ -55,7 +55,9 @@ fn report_u32(value: Option<u32>, out: *mut u32) -> bool {
 /// Takes no MySQL-owned pointer beyond the enum and version.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__dict_init(mode: u32, version: u32) -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
+    // Default to `true` on panic: MySQL treats the bool as "true = error", so
+    // a panic must surface as failure rather than silently report success.
+    FfiBoundary::run_default(true, || match runtime::handlerton() {
         Some(h) => match h.dict_init(DictInitMode::from_raw(mode), version) {
             Ok(()) => false,
             Err(_) => true,
@@ -70,7 +72,8 @@ pub unsafe extern "C" fn rust__hton__dict_init(mode: u32, version: u32) -> bool 
 /// Takes no MySQL-owned pointer beyond the enum and version.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__ddse_dict_init(mode: u32, version: u32) -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
+    // Fail-on-panic, same MySQL "true = error" convention as `dict_init`.
+    FfiBoundary::run_default(true, || match runtime::handlerton() {
         Some(h) => match h.ddse_dict_init(DictInitMode::from_raw(mode), version) {
             Ok(()) => false,
             Err(_) => true,
@@ -140,7 +143,8 @@ pub unsafe extern "C" fn rust__hton__dict_cache_reset_tables_and_tablespaces() {
 /// Takes no MySQL-owned pointer beyond the enum and version.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__dict_recover(mode: u32, version: u32) -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
+    // Fail-on-panic, same MySQL "true = error" convention as `dict_init`.
+    FfiBoundary::run_default(true, || match runtime::handlerton() {
         Some(h) => match h.dict_recover(DictRecoveryMode::from_raw(mode), version) {
             Ok(()) => false,
             Err(_) => true,
@@ -173,7 +177,8 @@ pub unsafe extern "C" fn rust__hton__dict_get_server_version(out: *mut u32) -> b
 /// Takes no MySQL-owned pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__dict_set_server_version() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
+    // Fail-on-panic, same MySQL "true = error" convention as `dict_init`.
+    FfiBoundary::run_default(true, || match runtime::handlerton() {
         Some(h) => match h.dict_set_server_version() {
             Ok(()) => false,
             Err(_) => true,

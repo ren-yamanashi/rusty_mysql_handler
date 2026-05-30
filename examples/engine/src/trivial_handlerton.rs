@@ -38,7 +38,13 @@ pub struct TrivialHandlerton;
 
 impl Handlerton for TrivialHandlerton {
     fn capabilities(&self) -> HtonCapabilities {
-        HtonCapabilities::TRANSACTIONS | HtonCapabilities::SAVEPOINTS
+        // TABLESPACES opts the trivial engine into the tablespace callbacks so
+        // CREATE / DROP TABLESPACE land on `alter_tablespace`; the trait
+        // defaults accept anything, so MySQL records the tablespace in DD and
+        // the callback wiring is exercised end to end.
+        HtonCapabilities::TRANSACTIONS
+            | HtonCapabilities::SAVEPOINTS
+            | HtonCapabilities::TABLESPACES
     }
 
     fn savepoint_offset(&self) -> u32 {
