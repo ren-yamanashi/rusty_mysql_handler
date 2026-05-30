@@ -140,6 +140,13 @@ DROP TABLE sp2;
 SHOW ENGINE RUSTY STATUS;
 FLUSH LOGS;
 
+-- drop_database hook fires once per schema dropped. A RUSTY table inside the
+-- schema ensures the handlerton sees the notification rather than another
+-- engine swallowing it.
+CREATE DATABASE rusty_drop_db_test;
+CREATE TABLE rusty_drop_db_test.t1 (id INT) ENGINE=RUSTY;
+DROP DATABASE rusty_drop_db_test;
+
 -- sentinel: 3 only when COMMIT persisted (1), ROLLBACK discarded (1),
 -- ROLLBACK TO SAVEPOINT undid only the post-savepoint insert (1), and
 -- RELEASE SAVEPOINT kept both inserts (2)

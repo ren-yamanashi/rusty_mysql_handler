@@ -35,6 +35,11 @@ pub mod binlog;
 mod binlog_kind;
 mod capabilities;
 #[doc(hidden)]
+pub mod database;
+#[doc(hidden)]
+pub mod dict;
+mod dict_kind;
+#[doc(hidden)]
 pub mod discovery;
 #[doc(hidden)]
 pub mod ffi;
@@ -51,6 +56,9 @@ mod stat_print_sink;
 mod stat_type;
 #[doc(hidden)]
 pub mod status;
+#[doc(hidden)]
+pub mod tablespace;
+mod tablespace_kind;
 mod transaction;
 #[doc(hidden)]
 pub mod txn_context;
@@ -61,11 +69,13 @@ pub mod xa;
 
 pub use binlog_kind::{BinlogCommand, BinlogFunc};
 pub use capabilities::HtonCapabilities;
+pub use dict_kind::{DictInitMode, DictRecoveryMode};
 pub use flags::HtonFlags;
 pub use notification_kind::{HaNotificationType, SelectExecutedIn};
 pub use panic_function::HaPanicFunction;
 pub use stat_print_sink::StatPrintSink;
 pub use stat_type::HaStatType;
+pub use tablespace_kind::{TablespaceType, TsCommandType};
 pub use transaction::TxnSession;
 
 use crate::engine::EngineResult;
@@ -469,6 +479,149 @@ pub trait Handlerton: Send + Sync {
     /// modification). The `Acl_change_notification` parameter is opaque to
     /// Rust today and is not surfaced. Defaults to no-op.
     fn acl_notify(&self, _thd: Option<&sys::THD>) {}
+
+    /// Notification of `DROP DATABASE`. `path` is the schema's storage path
+    /// (typically `./<dbname>`). Always wired on a registered handlerton.
+    /// Defaults to no-op.
+    fn drop_database(&self, _path: &str) {}
+
+    /// Whether `tablespace_name` is acceptable for the given DDL command. Wired
+    /// only under [`HtonCapabilities::TABLESPACES`]; defaults to `true` so the
+    /// engine does not reject names for an unrelated reason.
+    fn is_valid_tablespace_name(&self, _cmd: TsCommandType, _tablespace_name: &str) -> bool {
+        true
+    }
+
+    /// Look up the tablespace name that holds `db.table_name`. The current
+    /// binding does not yet round-trip the output back to MySQL — the shim
+    /// leaves the `LEX_CSTRING*` empty — so an override returning `Ok(())` is
+    /// equivalent to "no tablespace information available".
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on lookup
+    /// failure.
+    fn get_tablespace(
+        &self,
+        _thd: Option<&sys::THD>,
+        _db_name: &str,
+        _table_name: &str,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Apply a tablespace DDL (`CREATE TABLESPACE`, `ALTER TABLESPACE`, ...).
+    /// `ts_info` is opaque today. Wired only under
+    /// [`HtonCapabilities::TABLESPACES`]; defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the DDL fails.
+    fn alter_tablespace(
+        &self,
+        _thd: Option<&sys::THD>,
+        _ts_info: Option<&sys::StAlterTablespace>,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Default file-extension MySQL appends to tablespace data files. Wired
+    /// only under [`HtonCapabilities::TABLESPACES`]; default `None` produces a
+    /// NULL pointer at the C boundary (no extension).
+    fn tablespace_filename_ext(&self) -> Option<&'static core::ffi::CStr> {
+        None
+    }
+
+    /// Upgrade tablespace-level state from a previous server version.
+    /// Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the upgrade
+    /// step fails.
+    fn upgrade_tablespace(&self, _thd: Option<&sys::THD>) -> EngineResult {
+        Ok(())
+    }
+
+    /// Upgrade the on-disk version of `tablespace`. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the upgrade
+    /// step fails.
+    fn upgrade_space_version(&self, _tablespace: Option<&sys::DdTablespace>) -> EngineResult {
+        Ok(())
+    }
+
+    /// Classification of the given tablespace. Defaults to `None`, which the
+    /// shim reports back to MySQL as failure to determine the type (so MySQL
+    /// keeps whatever it already knows).
+    fn get_tablespace_type(
+        &self,
+        _tablespace: Option<&sys::DdTablespace>,
+    ) -> Option<TablespaceType> {
+        None
+    }
+
+    /// Classification of the tablespace identified by `tablespace_name`.
+    /// Defaults to `None` (see [`Self::get_tablespace_type`]).
+    fn get_tablespace_type_by_name(&self, _tablespace_name: &str) -> Option<TablespaceType> {
+        None
+    }
+
+    /// Initialise the engine as the data-dictionary backend. The DD-tables /
+    /// DD-tablespaces output lists are not surfaced today (they are produced
+    /// only by the DD backend). Wired only under
+    /// [`HtonCapabilities::DICT_BACKEND`]; defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on init failure.
+    fn dict_init(&self, _mode: DictInitMode, _version: u32) -> EngineResult {
+        Ok(())
+    }
+
+    /// DD-backend variant of [`Self::dict_init`] used by the DDSE-specific
+    /// startup path. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on init failure.
+    fn ddse_dict_init(&self, _mode: DictInitMode, _version: u32) -> EngineResult {
+        Ok(())
+    }
+
+    /// Register the hard-coded DD table-id range with the engine. `table_id`
+    /// is `dd::Object_id` (a 64-bit integer). Defaults to no-op.
+    fn dict_register_dd_table_id(&self, _table_id: u64) {}
+
+    /// Invalidate the engine's local cache entry for `schema.table`.
+    /// Defaults to no-op.
+    fn dict_cache_reset(&self, _schema_name: &str, _table_name: &str) {}
+
+    /// Invalidate every table and tablespace entry in the engine's local
+    /// dictionary cache. Defaults to no-op.
+    fn dict_cache_reset_tables_and_tablespaces(&self) {}
+
+    /// Perform engine-side recovery work as part of dictionary initialisation.
+    /// Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if recovery
+    /// fails.
+    fn dict_recover(&self, _mode: DictRecoveryMode, _version: u32) -> EngineResult {
+        Ok(())
+    }
+
+    /// Read back the server version stored in the dictionary tablespace
+    /// header. Defaults to `None`, which the shim reports back as failure.
+    fn dict_get_server_version(&self) -> Option<u32> {
+        None
+    }
+
+    /// Persist the current server version into the dictionary tablespace
+    /// header. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on write
+    /// failure.
+    fn dict_set_server_version(&self) -> EngineResult {
+        Ok(())
+    }
 }
 
 /// Inert default session returned by [`Handlerton::begin_transaction`] (see

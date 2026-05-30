@@ -151,6 +151,16 @@ pub struct HaCheckOpt([u8; 0]);
 #[derive(Debug)]
 pub struct MdlKey([u8; 0]);
 
+/// Opaque MySQL `dd::Tablespace` (data-dictionary tablespace object)
+#[repr(C)]
+#[derive(Debug)]
+pub struct DdTablespace([u8; 0]);
+
+/// Opaque MySQL `st_alter_tablespace` (legacy ALTER TABLESPACE descriptor)
+#[repr(C)]
+#[derive(Debug)]
+pub struct StAlterTablespace([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

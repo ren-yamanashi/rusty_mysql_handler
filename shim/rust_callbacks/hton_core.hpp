@@ -47,6 +47,10 @@ uint32_t rust__hton__savepoint_offset();
 // accessor on the handlerton (a non-NULL pointer there is what tells MySQL the
 // engine implements handler::get_partition_handler).
 bool rust__hton__is_partitioning();
+// Whether the handlerton declares TABLESPACES; gates the tablespace callbacks.
+bool rust__hton__is_tablespaces();
+// Whether the handlerton declares DICT_BACKEND; gates the dict_* callbacks.
+bool rust__hton__is_dict_backend();
 }
 
 #endif
