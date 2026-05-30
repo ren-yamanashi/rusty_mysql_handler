@@ -666,11 +666,17 @@ pub trait Handlerton: Send + Sync {
     /// written. The shim treats `buf` as a `&mut [u8]` whose length is the
     /// caller-provided capacity. Defaults to unsupported.
     ///
+    /// MySQL distinguishes the two error paths by inspecting `*len_out`:
+    /// - **Buffer too small** — return an error and set `*len_out` to the
+    ///   required payload size so the caller can retry with a larger buffer.
+    /// - **Genuine error** (key not found, I/O failure, ...) — return an
+    ///   error and set `*len_out = u64::MAX`. Without this sentinel MySQL
+    ///   re-enters the call expecting a retry and may loop indefinitely.
+    ///
     /// # Errors
     /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
-    /// by default. Engines that store SDI return an error when the payload
-    /// does not fit in `buf` and set `*len_out` to the required size so the
-    /// caller can retry with a larger buffer.
+    /// by default. Engines that store SDI follow the two-path convention
+    /// above.
     fn sdi_get(
         &self,
         _tablespace: Option<&sys::DdTablespace>,

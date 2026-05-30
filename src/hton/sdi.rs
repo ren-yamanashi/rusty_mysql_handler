@@ -95,9 +95,9 @@ pub unsafe extern "C" fn rust__hton__sdi_get_keys(
 /// safety.
 ///
 /// # Safety
-/// `tablespace` / `key` null or valid; `sdi` is non-null and writable for
-/// `sdi_capacity` bytes (the value the shim copies in from `*sdi_len`);
-/// `len_out` is non-null and writable for one `u64`.
+/// `tablespace` / `key` null or valid for the call; `sdi` is null or writable
+/// for `sdi_capacity` bytes (MySQL probes the required size with a null /
+/// zero-length buffer); `len_out` is null or writable for one `u64`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__sdi_get(
     tablespace: *const sys::DdTablespace,
@@ -107,9 +107,16 @@ pub unsafe extern "C" fn rust__hton__sdi_get(
     len_out: *mut u64,
 ) -> bool {
     FfiBoundary::run_default(true, || {
-        let cap = usize::try_from(sdi_capacity).unwrap_or(0);
-        // SAFETY: sdi is non-null and writable for sdi_capacity bytes here.
-        let buf = unsafe { FfiPtr::slice_mut(sdi, cap) };
+        let cap = match usize::try_from(sdi_capacity) {
+            Ok(v) => v,
+            Err(_) => return true,
+        };
+        let buf: &mut [u8] = if sdi.is_null() {
+            &mut []
+        } else {
+            // SAFETY: sdi is non-null here and writable for `cap` bytes.
+            unsafe { FfiPtr::slice_mut(sdi, cap) }
+        };
         let mut local = sdi_capacity;
         // SAFETY: tablespace null or valid for read for this call.
         let ts = unsafe { tablespace.as_ref() };
@@ -130,8 +137,9 @@ pub unsafe extern "C" fn rust__hton__sdi_get(
 /// `sdi_set`.
 ///
 /// # Safety
-/// `tablespace` / `table` / `key` null or valid; `payload` is non-null and
-/// covers `payload_len` readable bytes for the call.
+/// `tablespace` / `table` / `key` null or valid for the call; `payload` is
+/// null or readable for `payload_len` bytes (MySQL passes null for an empty
+/// payload).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__sdi_set(
     tablespace: *const sys::DdTablespace,
@@ -141,9 +149,16 @@ pub unsafe extern "C" fn rust__hton__sdi_set(
     payload_len: u64,
 ) -> bool {
     FfiBoundary::run_default(true, || {
-        let len = usize::try_from(payload_len).unwrap_or(0);
-        // SAFETY: payload is non-null and covers `len` readable bytes here.
-        let bytes = unsafe { FfiPtr::slice_const(payload, len) };
+        let len = match usize::try_from(payload_len) {
+            Ok(v) => v,
+            Err(_) => return true,
+        };
+        let bytes: &[u8] = if payload.is_null() {
+            &[]
+        } else {
+            // SAFETY: payload is non-null here and readable for `len` bytes.
+            unsafe { FfiPtr::slice_const(payload, len) }
+        };
         // SAFETY: tablespace null or valid for read for this call.
         let ts = unsafe { tablespace.as_ref() };
         // SAFETY: table null or valid for read for this call.
