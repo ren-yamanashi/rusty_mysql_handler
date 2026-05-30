@@ -30,6 +30,9 @@
 //! need nothing beyond table handling skip registration and keep the
 //! zero-config defaults.
 
+#[doc(hidden)]
+pub mod binlog;
+mod binlog_kind;
 mod capabilities;
 #[doc(hidden)]
 pub mod discovery;
@@ -38,6 +41,9 @@ pub mod ffi;
 mod flags;
 #[doc(hidden)]
 pub mod lifecycle;
+mod notification_kind;
+#[doc(hidden)]
+pub mod notifications;
 mod panic_function;
 #[doc(hidden)]
 pub mod savepoint_ffi;
@@ -53,8 +59,10 @@ pub mod txn_ffi;
 #[doc(hidden)]
 pub mod xa;
 
+pub use binlog_kind::{EnumBinlogCommand, EnumBinlogFunc};
 pub use capabilities::HtonCapabilities;
 pub use flags::HtonFlags;
+pub use notification_kind::{HaNotificationType, SelectExecutedIn};
 pub use panic_function::HaPanicFunction;
 pub use stat_print_sink::StatPrintSink;
 pub use stat_type::HaStatType;
@@ -354,6 +362,113 @@ pub trait Handlerton: Send + Sync {
     ) -> bool {
         false
     }
+
+    /// Notification fired after a `SELECT` completed, with the engine that
+    /// actually executed it. Defaults to no-op.
+    fn notify_after_select(&self, _thd: Option<&sys::THD>, _executed_in: SelectExecutedIn) {}
+
+    /// Notification fired when a table is created, with the bare `db` /
+    /// `table_name` strings. The `HA_CREATE_INFO` parameter is opaque to Rust
+    /// today and is not surfaced. Defaults to no-op.
+    fn notify_create_table(&self, _db: &str, _table_name: &str) {}
+
+    /// Notification fired when a table is dropped. The `Table_ref` parameter
+    /// is opaque to Rust and is not surfaced. Defaults to no-op.
+    fn notify_drop_table(&self) {}
+
+    /// Pre/post notification around an exclusive metadata lock acquisition.
+    /// Returning an error from the pre-event hook tells MySQL to abort
+    /// acquisition (the shim translates `Err` to `true`, matching MySQL's
+    /// "failure" convention). Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) to veto the
+    /// pre-event lock acquisition. Returning `Err` from a post-event
+    /// notification is logged by MySQL but does not undo the lock.
+    fn notify_exclusive_mdl(
+        &self,
+        _thd: Option<&sys::THD>,
+        _mdl_key: Option<&sys::MdlKey>,
+        _kind: HaNotificationType,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Pre/post notification around an `ALTER TABLE`. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) to veto a
+    /// pre-event alter.
+    fn notify_alter_table(
+        &self,
+        _thd: Option<&sys::THD>,
+        _mdl_key: Option<&sys::MdlKey>,
+        _kind: HaNotificationType,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Pre/post notification around a `RENAME TABLE`. The old / new
+    /// db.table names are passed as borrowed `&str`. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) to veto a
+    /// pre-event rename.
+    #[allow(clippy::too_many_arguments)]
+    fn notify_rename_table(
+        &self,
+        _thd: Option<&sys::THD>,
+        _mdl_key: Option<&sys::MdlKey>,
+        _kind: HaNotificationType,
+        _old_db: &str,
+        _old_name: &str,
+        _new_db: &str,
+        _new_name: &str,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Pre/post notification around a `TRUNCATE TABLE`. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) to veto a
+    /// pre-event truncate.
+    fn notify_truncate_table(
+        &self,
+        _thd: Option<&sys::THD>,
+        _mdl_key: Option<&sys::MdlKey>,
+        _kind: HaNotificationType,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Binlog-related operation MySQL is asking the engine to handle
+    /// (`BFN_*`). Defaults to success (engine is binlog-agnostic).
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the operation
+    /// fails.
+    fn binlog_func(&self, _thd: Option<&sys::THD>, _func: EnumBinlogFunc) -> EngineResult {
+        Ok(())
+    }
+
+    /// Notification of a DDL command being written to the binary log. The
+    /// `query` text is bounded; per the security rule the trait must not log
+    /// it. Defaults to no-op.
+    fn binlog_log_query(
+        &self,
+        _thd: Option<&sys::THD>,
+        _command: EnumBinlogCommand,
+        _query: &str,
+        _db: &str,
+        _table: &str,
+    ) {
+    }
+
+    /// Notification of an ACL change (`GRANT` / `REVOKE` / privilege table
+    /// modification). The `Acl_change_notification` parameter is opaque to
+    /// Rust today and is not surfaced. Defaults to no-op.
+    fn acl_notify(&self, _thd: Option<&sys::THD>) {}
 }
 
 /// Inert default session returned by [`Handlerton::begin_transaction`] (see

@@ -68,7 +68,8 @@ add_library(ha_rusty_shim STATIC binding.cc handler_bulk_load.cc
                                  handler_parallel_scan.cc handler_pushdown.cc
                                  handler_read_removal_autoinc.cc
                                  handler_records.cc handler_row_operations.cc
-                                 handler_sampling.cc hton_discovery.cc
-                                 hton_lifecycle.cc hton_savepoint.cc
+                                 handler_sampling.cc hton_binlog.cc
+                                 hton_discovery.cc hton_lifecycle.cc
+                                 hton_notifications.cc hton_savepoint.cc
                                  hton_status.cc hton_transactions.cc
                                  hton_xa.cc plugin.cc)

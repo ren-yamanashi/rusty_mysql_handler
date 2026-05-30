@@ -67,6 +67,8 @@ extern "C" int rusty_init_func(void *p) {
     rusty_hton_wire_lifecycle(hton);
     rusty_hton_wire_status(hton);
     rusty_hton_wire_discovery(hton);
+    rusty_hton_wire_notifications(hton);
+    rusty_hton_wire_binlog(hton);
     // commit/rollback/prepare are capability-gated: a non-NULL commit is what
     // tells MySQL the engine is transactional, so only wire them when declared.
     if (rust__hton__is_transactional()) {
