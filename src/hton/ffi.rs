@@ -20,13 +20,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `rust__hton__*` callbacks: the C++ shim queries the registered handlerton
-//! singleton through these to populate the `handlerton` struct in
-//! `rusty_init_func`.
+//! Core `rust__hton__*` accessors the shim queries from `rusty_init_func` to
+//! populate the `handlerton` struct: the engine's flag bitfield, whether a
+//! handlerton is registered, and the savepoint scratch size. The
+//! capability-bit `is_*` accessors live next door in
+//! [`super::capability_ffi`].
 
 #![allow(unsafe_code)]
 
-use crate::hton::{HtonCapabilities, HtonFlags};
+use crate::hton::HtonFlags;
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
 
@@ -63,57 +65,6 @@ pub unsafe extern "C" fn rust__hton__is_registered() -> bool {
     FfiBoundary::run_default(false, || runtime::handlerton().is_some())
 }
 
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::TRANSACTIONS`](crate::hton::HtonCapabilities::TRANSACTIONS).
-///
-/// `rusty_init_func` uses this to gate the transaction callbacks
-/// (`commit` / `rollback` / `prepare`), and the handler's `external_lock` uses
-/// it to decide whether to register the engine in the transaction. Non-NULL
-/// `commit` is what tells MySQL the engine is transactional, so this must be
-/// false unless the engine truly implements transactions.
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_transactional() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::TRANSACTIONS),
-        None => false,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::XA`](crate::hton::HtonCapabilities::XA).
-///
-/// `rusty_init_func` uses this to gate the XA recovery callbacks
-/// (`commit_by_xid` / `rollback_by_xid` / `set_prepared_in_tc[_by_xid]`).
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_xa() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::XA),
-        None => false,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::SAVEPOINTS`](crate::hton::HtonCapabilities::SAVEPOINTS).
-///
-/// `rusty_init_func` uses this to gate the savepoint callbacks and the
-/// `savepoint_offset` field.
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_savepoints() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::SAVEPOINTS),
-        None => false,
-    })
-}
-
 /// The `handlerton` `savepoint_offset`: bytes of per-savepoint scratch the
 /// engine needs. `rusty_init_func` sets it only when the engine declares
 /// `SAVEPOINTS`; 0 otherwise.
@@ -125,121 +76,5 @@ pub unsafe extern "C" fn rust__hton__savepoint_offset() -> u32 {
     FfiBoundary::run_default(0, || match runtime::handlerton() {
         Some(h) => h.savepoint_offset(),
         None => 0,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::PARTITIONING`](crate::hton::HtonCapabilities::PARTITIONING).
-///
-/// `rusty_init_func` uses this to gate the `partition_flags` accessor on the
-/// handlerton: a non-NULL pointer there is what tells MySQL the engine
-/// implements `handler::get_partition_handler`, so leave it NULL unless the
-/// engine actually does.
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_partitioning() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::PARTITIONING),
-        None => false,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::TABLESPACES`](crate::hton::HtonCapabilities::TABLESPACES).
-///
-/// Gates the tablespace callbacks. A non-tablespace engine must keep them
-/// unwired so MySQL does not try to route tablespace work here.
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_tablespaces() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::TABLESPACES),
-        None => false,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::DICT_BACKEND`](crate::hton::HtonCapabilities::DICT_BACKEND).
-///
-/// Gates the `dict_*` callbacks; only the storage engine acting as the data
-/// dictionary backend may declare this.
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_dict_backend() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::DICT_BACKEND),
-        None => false,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::SDI`](crate::hton::HtonCapabilities::SDI).
-///
-/// Gates the `sdi_*` callbacks; declared by engines that own their SDI
-/// (InnoDB-style).
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_sdi() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::SDI),
-        None => false,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::ENGINE_LOG`](crate::hton::HtonCapabilities::ENGINE_LOG).
-///
-/// Gates the `lock_hton_log` / `unlock_hton_log` / `collect_hton_log_info`
-/// callbacks used by `performance_schema.log_status`.
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_engine_log() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::ENGINE_LOG),
-        None => false,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::SECONDARY_ENGINE`](crate::hton::HtonCapabilities::SECONDARY_ENGINE).
-///
-/// Gates the ten secondary-engine callbacks (prepare / optimize / cost /
-/// explain / fail-reason / pre-prepare).
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_secondary_engine() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h
-            .capabilities()
-            .contains(HtonCapabilities::SECONDARY_ENGINE),
-        None => false,
-    })
-}
-
-/// Whether the registered handlerton declares
-/// [`HtonCapabilities::ENCRYPTION`](crate::hton::HtonCapabilities::ENCRYPTION).
-///
-/// Gates `rotate_encryption_master_key`; a non-encrypting engine keeps the
-/// pointer NULL so MySQL does not route key-rotation calls here.
-///
-/// # Safety
-/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__is_encryption() -> bool {
-    FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.capabilities().contains(HtonCapabilities::ENCRYPTION),
-        None => false,
     })
 }

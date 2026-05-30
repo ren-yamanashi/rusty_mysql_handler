@@ -62,6 +62,12 @@ bool rust__hton__is_secondary_engine();
 // Whether the handlerton declares ENCRYPTION; gates
 // rotate_encryption_master_key.
 bool rust__hton__is_encryption();
+// Whether the handlerton declares CLONE; gates the eight clone_interface
+// sub-callbacks.
+bool rust__hton__is_clone();
+// Whether the handlerton declares PAGE_TRACKING; gates the six page_track
+// sub-callbacks.
+bool rust__hton__is_page_tracking();
 }
 
 #endif
