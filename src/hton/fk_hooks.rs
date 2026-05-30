@@ -73,7 +73,7 @@ pub unsafe extern "C" fn rust__hton__se_before_commit(_arg: *mut c_void) {
     });
 }
 
-/// `se_after_commit`.
+/// `se_after_commit`
 ///
 /// # Safety
 /// See [`rust__hton__se_before_commit`].
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn rust__hton__se_after_commit(_arg: *mut c_void) {
     });
 }
 
-/// `se_before_rollback`.
+/// `se_before_rollback`
 ///
 /// # Safety
 /// See [`rust__hton__se_before_commit`].
