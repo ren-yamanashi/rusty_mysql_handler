@@ -77,9 +77,14 @@ impl HtonCapabilities {
     /// cannot honour it.
     pub const DICT_BACKEND: Self = Self(1 << 9);
     /// Engine-owned redo / transaction log: gates `lock_hton_log`,
-    /// `unlock_hton_log`, `collect_hton_log_info`. Declared by engines whose
-    /// log is collected by `performance_schema.log_status`.
+    /// `unlock_hton_log`, `collect_hton_log_info`, and `redo_log_set_state`.
+    /// Declared by engines whose log is collected by
+    /// `performance_schema.log_status`.
     pub const ENGINE_LOG: Self = Self(1 << 10);
+    /// Encryption support: gates `rotate_encryption_master_key`. Non-NULL
+    /// signals MySQL that the engine participates in master-key rotation, so
+    /// leave it off for a non-encrypting engine.
+    pub const ENCRYPTION: Self = Self(1 << 11);
 
     /// An empty capability set: a handler-only engine (the zero-config default)
     #[must_use]
@@ -148,6 +153,7 @@ mod tests {
             HtonCapabilities::TABLESPACES,
             HtonCapabilities::DICT_BACKEND,
             HtonCapabilities::ENGINE_LOG,
+            HtonCapabilities::ENCRYPTION,
         ];
         for (i, a) in all.iter().enumerate() {
             for b in &all[i + 1..] {

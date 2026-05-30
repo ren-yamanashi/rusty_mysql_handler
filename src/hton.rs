@@ -50,6 +50,10 @@ pub mod fk_hooks;
 mod flags;
 #[doc(hidden)]
 pub mod lifecycle;
+#[doc(hidden)]
+pub mod misc_optimizer;
+#[doc(hidden)]
+pub mod misc_stats;
 mod notification_kind;
 #[doc(hidden)]
 pub mod notifications;
@@ -906,6 +910,127 @@ pub trait Handlerton: Send + Sync {
     fn secondary_engine_pre_prepare_hook(&self, _thd: Option<&sys::THD>) -> bool {
         false
     }
+
+    /// Whether the engine's data dictionary is currently read-only. Always
+    /// wired on a registered handlerton; defaults to `false`.
+    fn is_dict_readonly(&self) -> bool {
+        false
+    }
+
+    /// Clean up engine-owned temporary tables. The `List<LEX_STRING>*` MySQL
+    /// passes in is opaque today and dropped. Always wired; defaults to
+    /// success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on cleanup
+    /// failure.
+    fn rm_tmp_tables(&self, _thd: Option<&sys::THD>) -> EngineResult {
+        Ok(())
+    }
+
+    /// Provide engine-specific optimizer cost constants. The C signature
+    /// returns an engine-allocated `SE_cost_constants*` that MySQL takes
+    /// ownership of; today the shim cannot allocate one safely through the
+    /// opaque pass-through, so this trait method is bound for completeness
+    /// but the FFI pointer stays NULL on the handlerton. Engines wanting
+    /// custom costs will need a follow-up that allocates through a setter
+    /// reverse-callback.
+    fn get_cost_constants(&self, _storage_category: u32) {}
+
+    /// Notification that MySQL is swapping the connection's native engine
+    /// transaction. The `void *` / `void **` arguments are opaque to Rust
+    /// (observer-style) and are dropped at the FFI boundary. Always wired;
+    /// defaults to no-op.
+    fn replace_native_transaction_in_thd(&self, _thd: Option<&sys::THD>) {}
+
+    /// Optimizer pushdown at the handlerton layer. The `AccessPath` / `JOIN`
+    /// pointers are opaque to Rust today and are dropped at the FFI
+    /// boundary; this trait method is bound for completeness but the FFI
+    /// pointer stays NULL on the handlerton (a non-NULL `push_to_engine`
+    /// signals MySQL that the engine handles pushdown).
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if pushdown
+    /// fails.
+    fn push_to_engine(&self, _thd: Option<&sys::THD>) -> EngineResult {
+        Ok(())
+    }
+
+    /// Rotate the encryption master key. Wired only under
+    /// [`HtonCapabilities::ENCRYPTION`]; defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on rotation
+    /// failure.
+    fn rotate_encryption_master_key(&self) -> EngineResult {
+        Ok(())
+    }
+
+    /// Enable or disable engine redo logging. Wired only under
+    /// [`HtonCapabilities::ENGINE_LOG`]; defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on toggle
+    /// failure.
+    fn redo_log_set_state(&self, _thd: Option<&sys::THD>, _enable: bool) -> EngineResult {
+        Ok(())
+    }
+
+    /// Retrieve table statistics into MySQL's `ha_statistics`. The output
+    /// struct is opaque to Rust today, so this trait method is bound for
+    /// completeness but the FFI pointer stays NULL on the handlerton —
+    /// engines wanting to publish stats will need a follow-up that wires a
+    /// setter reverse-callback.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on retrieval
+    /// failure.
+    fn get_table_statistics(
+        &self,
+        _db_name: &str,
+        _table_name: &str,
+        _se_private_id: u64,
+        _flags: u32,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Retrieve the cardinality of a single index column. Same opaque-output
+    /// situation as [`Self::get_table_statistics`]; the FFI pointer stays
+    /// NULL on the handlerton today.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on retrieval
+    /// failure.
+    fn get_index_column_cardinality(
+        &self,
+        _db_name: &str,
+        _table_name: &str,
+        _index_name: &str,
+        _index_ordinal_position: u32,
+        _column_ordinal_position: u32,
+        _se_private_id: u64,
+    ) -> EngineResult<Option<u64>> {
+        Ok(None)
+    }
+
+    /// Retrieve tablespace statistics into MySQL's `ha_tablespace_statistics`.
+    /// Same opaque-output situation as [`Self::get_table_statistics`].
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on retrieval
+    /// failure.
+    fn get_tablespace_statistics(&self, _tablespace_name: &str, _file_name: &str) -> EngineResult {
+        Ok(())
+    }
+
+    /// Notification fired after a DDL completes. Always wired on a registered
+    /// handlerton; defaults to no-op.
+    fn post_ddl(&self, _thd: Option<&sys::THD>) {}
+
+    /// Notification fired after server recovery completes. Always wired on a
+    /// registered handlerton; defaults to no-op.
+    fn post_recover(&self) {}
 }
 
 /// Inert default session returned by [`Handlerton::begin_transaction`] (see

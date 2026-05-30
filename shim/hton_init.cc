@@ -59,6 +59,7 @@ extern "C" int rusty_init_func(void *p) {
     rusty_hton_wire_binlog(hton);
     rusty_hton_wire_drop_database(hton);
     rusty_hton_wire_fk_hooks(hton);
+    rusty_hton_wire_misc(hton);
     // commit/rollback/prepare are capability-gated: a non-NULL commit is what
     // tells MySQL the engine is transactional, so only wire them when declared.
     if (rust__hton__is_transactional()) {
@@ -101,8 +102,16 @@ extern "C" int rusty_init_func(void *p) {
     }
     // ENGINE_LOG opt-in publishes the engine's redo / transaction log to
     // performance_schema.log_status; a non-log engine keeps these NULL.
+    // redo_log_set_state lives under the same capability since both signal
+    // the engine owns a redo log surface.
     if (rust__hton__is_engine_log()) {
       rusty_hton_wire_engine_log(hton);
+      rusty_hton_wire_redo_log_set_state(hton);
+    }
+    // ENCRYPTION opt-in puts the engine on MySQL's master-key rotation path;
+    // non-encrypting engines keep rotate_encryption_master_key NULL.
+    if (rust__hton__is_encryption()) {
+      rusty_hton_wire_encryption(hton);
     }
     // SECONDARY_ENGINE opt-in connects the engine to MySQL's offload /
     // hypergraph-optimizer interface (RAPID / HeatWave style); a primary
