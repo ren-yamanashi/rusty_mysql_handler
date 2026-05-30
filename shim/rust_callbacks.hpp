@@ -43,6 +43,7 @@
 #include "rust_callbacks/hton_engine_log.hpp"
 #include "rust_callbacks/hton_fk_hooks.hpp"
 #include "rust_callbacks/hton_lifecycle.hpp"
+#include "rust_callbacks/hton_misc.hpp"
 #include "rust_callbacks/hton_notifications.hpp"
 #include "rust_callbacks/hton_savepoint.hpp"
 #include "rust_callbacks/hton_sdi.hpp"

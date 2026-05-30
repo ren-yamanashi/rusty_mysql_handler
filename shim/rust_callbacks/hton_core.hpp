@@ -59,6 +59,9 @@ bool rust__hton__is_engine_log();
 // Whether the handlerton declares SECONDARY_ENGINE; gates the ten
 // secondary-engine callbacks.
 bool rust__hton__is_secondary_engine();
+// Whether the handlerton declares ENCRYPTION; gates
+// rotate_encryption_master_key.
+bool rust__hton__is_encryption();
 }
 
 #endif

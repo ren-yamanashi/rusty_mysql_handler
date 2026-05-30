@@ -227,3 +227,19 @@ pub unsafe extern "C" fn rust__hton__is_secondary_engine() -> bool {
         None => false,
     })
 }
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::ENCRYPTION`](crate::hton::HtonCapabilities::ENCRYPTION).
+///
+/// Gates `rotate_encryption_master_key`; a non-encrypting engine keeps the
+/// pointer NULL so MySQL does not route key-rotation calls here.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_encryption() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::ENCRYPTION),
+        None => false,
+    })
+}

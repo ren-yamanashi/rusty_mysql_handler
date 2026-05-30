@@ -380,4 +380,16 @@ void rusty_hton_wire_fk_hooks(handlerton *hton);
 // declares the SECONDARY_ENGINE capability.
 void rusty_hton_wire_secondary_engine(handlerton *hton);
 
+// Wires the always-on miscellaneous callbacks (is_dict_readonly,
+// rm_tmp_tables, replace_native_transaction_in_thd, post_ddl, post_recover).
+void rusty_hton_wire_misc(handlerton *hton);
+
+// Wires rotate_encryption_master_key. Wired only when the handlerton
+// declares the ENCRYPTION capability.
+void rusty_hton_wire_encryption(handlerton *hton);
+
+// Wires redo_log_set_state. Wired only when the handlerton declares the
+// ENGINE_LOG capability (alongside the lock/unlock/collect log callbacks).
+void rusty_hton_wire_redo_log_set_state(handlerton *hton);
+
 #endif
