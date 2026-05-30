@@ -69,10 +69,12 @@ add_library(ha_rusty_shim STATIC binding.cc handler_bulk_load.cc
                                  handler_read_removal_autoinc.cc
                                  handler_records.cc handler_row_operations.cc
                                  handler_sampling.cc hton_binlog.cc
-                                 hton_dict.cc hton_discovery.cc
-                                 hton_engine_log.cc hton_fk_hooks.cc
-                                 hton_init.cc hton_lifecycle.cc hton_misc.cc
-                                 hton_notifications.cc hton_savepoint.cc
-                                 hton_sdi.cc hton_secondary_engine.cc
-                                 hton_status.cc hton_tablespace.cc
-                                 hton_transactions.cc hton_xa.cc plugin.cc)
+                                 hton_clone.cc hton_dict.cc
+                                 hton_discovery.cc hton_engine_log.cc
+                                 hton_fk_hooks.cc hton_init.cc
+                                 hton_lifecycle.cc hton_misc.cc
+                                 hton_notifications.cc hton_page_track.cc
+                                 hton_savepoint.cc hton_sdi.cc
+                                 hton_secondary_engine.cc hton_status.cc
+                                 hton_tablespace.cc hton_transactions.cc
+                                 hton_xa.cc plugin.cc)

@@ -243,3 +243,33 @@ pub unsafe extern "C" fn rust__hton__is_encryption() -> bool {
         None => false,
     })
 }
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::CLONE`](crate::hton::HtonCapabilities::CLONE).
+///
+/// Gates the eight `hton->clone_interface` sub-callbacks.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_clone() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::CLONE),
+        None => false,
+    })
+}
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::PAGE_TRACKING`](crate::hton::HtonCapabilities::PAGE_TRACKING).
+///
+/// Gates the six `hton->page_track` sub-callbacks.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_page_tracking() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::PAGE_TRACKING),
+        None => false,
+    })
+}

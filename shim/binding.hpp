@@ -392,4 +392,12 @@ void rusty_hton_wire_encryption(handlerton *hton);
 // ENGINE_LOG capability (alongside the lock/unlock/collect log callbacks).
 void rusty_hton_wire_redo_log_set_state(handlerton *hton);
 
+// Wires the eight clone_interface sub-callbacks as a unit. Wired only when
+// the handlerton declares the CLONE capability.
+void rusty_hton_wire_clone(handlerton *hton);
+
+// Wires the six page_track sub-callbacks as a unit. Wired only when the
+// handlerton declares the PAGE_TRACKING capability.
+void rusty_hton_wire_page_track(handlerton *hton);
+
 #endif

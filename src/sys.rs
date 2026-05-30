@@ -201,6 +201,11 @@ pub struct JoinHypergraph([u8; 0]);
 #[derive(Debug)]
 pub struct AccessPath([u8; 0]);
 
+/// Opaque MySQL `Ha_clone_cbk` (data-transfer callback object used by clone)
+#[repr(C)]
+#[derive(Debug)]
+pub struct HaCloneCbk([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

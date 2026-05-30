@@ -119,6 +119,16 @@ extern "C" int rusty_init_func(void *p) {
     if (rust__hton__is_secondary_engine()) {
       rusty_hton_wire_secondary_engine(hton);
     }
+    // CLONE opt-in installs the clone_interface sub-struct as a unit; only
+    // clone-capable engines (InnoDB / clone plugin path) should declare it.
+    if (rust__hton__is_clone()) {
+      rusty_hton_wire_clone(hton);
+    }
+    // PAGE_TRACKING opt-in installs the page_track sub-struct as a unit;
+    // declared by engines that track changed pages for incremental backup.
+    if (rust__hton__is_page_tracking()) {
+      rusty_hton_wire_page_track(hton);
+    }
   }
   return 0;
 }

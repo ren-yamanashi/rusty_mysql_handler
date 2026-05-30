@@ -35,6 +35,9 @@ pub mod binlog;
 mod binlog_kind;
 mod capabilities;
 #[doc(hidden)]
+pub mod clone;
+mod clone_kind;
+#[doc(hidden)]
 pub mod database;
 #[doc(hidden)]
 pub mod dict;
@@ -57,6 +60,8 @@ pub mod misc_stats;
 mod notification_kind;
 #[doc(hidden)]
 pub mod notifications;
+#[doc(hidden)]
+pub mod page_track;
 mod panic_function;
 #[doc(hidden)]
 pub mod savepoint_ffi;
@@ -84,6 +89,7 @@ pub mod xa;
 
 pub use binlog_kind::{BinlogCommand, BinlogFunc};
 pub use capabilities::HtonCapabilities;
+pub use clone_kind::{HaCloneMode, HaCloneType};
 pub use dict_kind::{DictInitMode, DictRecoveryMode};
 pub use flags::HtonFlags;
 pub use notification_kind::{HaNotificationType, SelectExecutedIn};
@@ -1031,6 +1037,180 @@ pub trait Handlerton: Send + Sync {
     /// Notification fired after server recovery completes. Always wired on a
     /// registered handlerton; defaults to no-op.
     fn post_recover(&self) {}
+
+    /// Report the engine's clone capability bits. Wired only under
+    /// [`HtonCapabilities::CLONE`]; defaults to 0 (no clone features
+    /// supported). The trait surfaces the bits as a `u64` mirroring
+    /// `std::bitset<HA_CLONE_TYPE_MAX>` width on the C side.
+    fn clone_capability(&self) -> u64 {
+        0
+    }
+
+    /// Begin a clone copy on the source engine. The `Ha_clone_cbk` data-
+    /// transfer object and the in/out locator parameters are opaque to Rust
+    /// today; the trait sees only the high-level request. Defaults to
+    /// unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn clone_begin(
+        &self,
+        _thd: Option<&sys::THD>,
+        _clone_type: HaCloneType,
+        _mode: HaCloneMode,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Copy a chunk of clone data via the engine-owned callback. Defaults
+    /// to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn clone_copy(
+        &self,
+        _thd: Option<&sys::THD>,
+        _task_id: u32,
+        _cbk: Option<&sys::HaCloneCbk>,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Acknowledge clone data already transferred. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn clone_ack(
+        &self,
+        _thd: Option<&sys::THD>,
+        _task_id: u32,
+        _in_err: i32,
+        _cbk: Option<&sys::HaCloneCbk>,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// End a clone copy. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn clone_end(&self, _thd: Option<&sys::THD>, _task_id: u32, _in_err: i32) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Begin applying clone data on the destination engine. `data_dir` is
+    /// the target data directory. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn clone_apply_begin(
+        &self,
+        _thd: Option<&sys::THD>,
+        _mode: HaCloneMode,
+        _data_dir: &str,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Apply a chunk of clone data via the engine-owned callback. Defaults
+    /// to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn clone_apply(
+        &self,
+        _thd: Option<&sys::THD>,
+        _task_id: u32,
+        _in_err: i32,
+        _cbk: Option<&sys::HaCloneCbk>,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// End a clone apply. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn clone_apply_end(
+        &self,
+        _thd: Option<&sys::THD>,
+        _task_id: u32,
+        _in_err: i32,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Start page tracking. Returns the engine's start ID (LSN-like sequence
+    /// number). Wired only under [`HtonCapabilities::PAGE_TRACKING`];
+    /// defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn page_track_start(&self) -> EngineResult<u64> {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Stop page tracking. Returns the engine's stop ID. Defaults to
+    /// unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn page_track_stop(&self) -> EngineResult<u64> {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Purge page-tracking data up to `purge_id`. Returns the ID actually
+    /// purged through. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn page_track_purge(&self, _purge_id: u64) -> EngineResult<u64> {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Fetch tracked page IDs between `start_id` and `stop_id`. The MySQL
+    /// `Page_Track_Callback` and its context are opaque to the Rust trait
+    /// today (engines that fetch will need a reverse-callback surface).
+    /// Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn page_track_get_page_ids(
+        &self,
+        _start_id: u64,
+        _stop_id: u64,
+        _buffer: &mut [u8],
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Approximate the number of tracked pages between `start_id` and
+    /// `stop_id`. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn page_track_get_num_page_ids(&self, _start_id: u64, _stop_id: u64) -> EngineResult<u64> {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Fetch the page-tracking status. The C signature returns a
+    /// `std::vector<std::pair<uint64_t, bool>>` by value; that container
+    /// cannot be synthesised through the opaque pass-through today, so the
+    /// trait method is bound for completeness and the shim writes an empty
+    /// status. Defaults to no-op.
+    fn page_track_get_status(&self) {}
 }
 
 /// Inert default session returned by [`Handlerton::begin_transaction`] (see
