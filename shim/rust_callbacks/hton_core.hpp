@@ -56,6 +56,9 @@ bool rust__hton__is_sdi();
 // Whether the handlerton declares ENGINE_LOG; gates the lock/unlock/collect
 // engine-log callbacks consumed by performance_schema.log_status.
 bool rust__hton__is_engine_log();
+// Whether the handlerton declares SECONDARY_ENGINE; gates the ten
+// secondary-engine callbacks.
+bool rust__hton__is_secondary_engine();
 }
 
 #endif

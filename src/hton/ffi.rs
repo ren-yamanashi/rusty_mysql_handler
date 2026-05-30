@@ -209,3 +209,21 @@ pub unsafe extern "C" fn rust__hton__is_engine_log() -> bool {
         None => false,
     })
 }
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::SECONDARY_ENGINE`](crate::hton::HtonCapabilities::SECONDARY_ENGINE).
+///
+/// Gates the ten secondary-engine callbacks (prepare / optimize / cost /
+/// explain / fail-reason / pre-prepare).
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_secondary_engine() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h
+            .capabilities()
+            .contains(HtonCapabilities::SECONDARY_ENGINE),
+        None => false,
+    })
+}

@@ -376,4 +376,8 @@ void rusty_hton_wire_engine_log(handlerton *hton);
 // se_before_rollback). Always wired on a registered handlerton.
 void rusty_hton_wire_fk_hooks(handlerton *hton);
 
+// Wires the ten secondary-engine callbacks. Wired only when the handlerton
+// declares the SECONDARY_ENGINE capability.
+void rusty_hton_wire_secondary_engine(handlerton *hton);
+
 #endif
