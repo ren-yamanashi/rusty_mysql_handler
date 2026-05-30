@@ -346,4 +346,19 @@ void rusty_hton_wire_notifications(handlerton *hton);
 // acl_notify). Always wired on a registered handlerton.
 void rusty_hton_wire_binlog(handlerton *hton);
 
+// Wires drop_database — always wired on a registered handlerton.
+void rusty_hton_wire_drop_database(handlerton *hton);
+
+// Wires the tablespace callbacks (is_valid_tablespace_name, get_tablespace,
+// alter_tablespace, get_tablespace_filename_ext, upgrade_tablespace,
+// upgrade_space_version, get_tablespace_type{,_by_name}). Wired only when the
+// handlerton declares the TABLESPACES capability.
+void rusty_hton_wire_tablespaces(handlerton *hton);
+
+// Wires the data-dictionary backend callbacks (dict_init, ddse_dict_init,
+// dict_register_dd_table_id, dict_cache_reset{,_tables_and_tablespaces},
+// dict_recover, dict_{get,set}_server_version). Wired only when the
+// handlerton declares the DICT_BACKEND capability.
+void rusty_hton_wire_dict(handlerton *hton);
+
 #endif

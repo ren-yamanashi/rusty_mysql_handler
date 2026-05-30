@@ -145,3 +145,35 @@ pub unsafe extern "C" fn rust__hton__is_partitioning() -> bool {
         None => false,
     })
 }
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::TABLESPACES`](crate::hton::HtonCapabilities::TABLESPACES).
+///
+/// Gates the tablespace callbacks. A non-tablespace engine must keep them
+/// unwired so MySQL does not try to route tablespace work here.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_tablespaces() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::TABLESPACES),
+        None => false,
+    })
+}
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::DICT_BACKEND`](crate::hton::HtonCapabilities::DICT_BACKEND).
+///
+/// Gates the `dict_*` callbacks; only the storage engine acting as the data
+/// dictionary backend may declare this.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_dict_backend() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::DICT_BACKEND),
+        None => false,
+    })
+}

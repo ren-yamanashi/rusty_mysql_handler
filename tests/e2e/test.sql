@@ -140,6 +140,20 @@ DROP TABLE sp2;
 SHOW ENGINE RUSTY STATUS;
 FLUSH LOGS;
 
+-- drop_database hook fires once per schema dropped. A RUSTY table inside the
+-- schema ensures the handlerton sees the notification rather than another
+-- engine swallowing it.
+CREATE DATABASE rusty_drop_db_test;
+CREATE TABLE rusty_drop_db_test.t1 (id INT) ENGINE=RUSTY;
+DROP DATABASE rusty_drop_db_test;
+
+-- Tablespace path: is_valid_tablespace_name validates the name and
+-- alter_tablespace handles CREATE / DROP TABLESPACE. The trait defaults
+-- (true / Ok) accept any name and record the tablespace in DD; the engine
+-- declares TABLESPACES so the callbacks are wired.
+CREATE TABLESPACE rusty_ts1 ADD DATAFILE 'rusty_ts1.dat' ENGINE=RUSTY;
+DROP TABLESPACE rusty_ts1 ENGINE=RUSTY;
+
 -- sentinel: 3 only when COMMIT persisted (1), ROLLBACK discarded (1),
 -- ROLLBACK TO SAVEPOINT undid only the post-savepoint insert (1), and
 -- RELEASE SAVEPOINT kept both inserts (2)

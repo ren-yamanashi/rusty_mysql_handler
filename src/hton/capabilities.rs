@@ -66,6 +66,16 @@ impl HtonCapabilities {
     /// engine implements `handler::get_partition_handler`, so this must stay
     /// off for a non-partitioning engine.
     pub const PARTITIONING: Self = Self(1 << 7);
+    /// Tablespace ownership: gates the tablespace callbacks (`get_tablespace`,
+    /// `alter_tablespace`, `upgrade_tablespace`, ...). Non-NULL pointers tell
+    /// MySQL the engine owns tablespaces (InnoDB-style); leave off for a
+    /// tablespace-less engine to keep MySQL from routing tablespace work here.
+    pub const TABLESPACES: Self = Self(1 << 8);
+    /// Data-dictionary backend: gates the `dict_*` callbacks. A non-DD-backend
+    /// engine (anything other than the DD storage backend itself) must keep
+    /// these unwired, otherwise MySQL routes dictionary work to an engine that
+    /// cannot honour it.
+    pub const DICT_BACKEND: Self = Self(1 << 9);
 
     /// An empty capability set: a handler-only engine (the zero-config default)
     #[must_use]
@@ -131,6 +141,8 @@ mod tests {
             HtonCapabilities::CLONE,
             HtonCapabilities::PAGE_TRACKING,
             HtonCapabilities::PARTITIONING,
+            HtonCapabilities::TABLESPACES,
+            HtonCapabilities::DICT_BACKEND,
         ];
         for (i, a) in all.iter().enumerate() {
             for b in &all[i + 1..] {

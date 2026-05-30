@@ -69,6 +69,7 @@ extern "C" int rusty_init_func(void *p) {
     rusty_hton_wire_discovery(hton);
     rusty_hton_wire_notifications(hton);
     rusty_hton_wire_binlog(hton);
+    rusty_hton_wire_drop_database(hton);
     // commit/rollback/prepare are capability-gated: a non-NULL commit is what
     // tells MySQL the engine is transactional, so only wire them when declared.
     if (rust__hton__is_transactional()) {
@@ -93,6 +94,16 @@ extern "C" int rusty_init_func(void *p) {
     // engine explicitly opts in via the PARTITIONING capability.
     if (rust__hton__is_partitioning()) {
       rusty_hton_wire_partitioning(hton);
+    }
+    // Tablespace callbacks must stay NULL on a tablespace-less engine — a
+    // non-NULL get_tablespace makes MySQL route tablespace work here.
+    if (rust__hton__is_tablespaces()) {
+      rusty_hton_wire_tablespaces(hton);
+    }
+    // Only the storage engine acting as the data dictionary backend (today,
+    // just InnoDB) may declare DICT_BACKEND.
+    if (rust__hton__is_dict_backend()) {
+      rusty_hton_wire_dict(hton);
     }
   }
   return 0;
