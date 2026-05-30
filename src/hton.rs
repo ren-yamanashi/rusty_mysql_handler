@@ -35,6 +35,8 @@ pub mod binlog;
 mod binlog_kind;
 mod capabilities;
 #[doc(hidden)]
+pub mod capability_ffi;
+#[doc(hidden)]
 pub mod clone;
 mod clone_kind;
 #[doc(hidden)]

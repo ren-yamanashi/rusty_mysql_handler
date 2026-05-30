@@ -62,14 +62,18 @@ impl HaCloneMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum HaCloneType {
-    /// `HA_CLONE_BLOCKING`: serialised copy.
+    /// `HA_CLONE_BLOCKING`: serialised copy (write operations must block).
     Blocking,
-    /// `HA_CLONE_REDO`: copy + ship redo log.
+    /// `HA_CLONE_REDO`: archive redo log to support concurrent DML.
     Redo,
-    /// `HA_CLONE_HYBRID`: snapshot + incremental redo.
-    Hybrid,
     /// `HA_CLONE_PAGE`: page-tracked incremental.
     Page,
+    /// `HA_CLONE_HYBRID`: page tracking + redo (currently InnoDB).
+    Hybrid,
+    /// `HA_CLONE_MULTI_TASK`: multiple worker threads.
+    MultiTask,
+    /// `HA_CLONE_RESTART`: restart after network failure.
+    Restart,
     /// Forward-compatible fallback.
     Unknown,
 }
@@ -81,8 +85,10 @@ impl HaCloneType {
         match value {
             0 => Self::Blocking,
             1 => Self::Redo,
-            2 => Self::Hybrid,
-            3 => Self::Page,
+            2 => Self::Page,
+            3 => Self::Hybrid,
+            4 => Self::MultiTask,
+            5 => Self::Restart,
             _ => Self::Unknown,
         }
     }
@@ -106,8 +112,10 @@ mod tests {
     fn clone_type_known_values() {
         assert_eq!(HaCloneType::from_raw(0), HaCloneType::Blocking);
         assert_eq!(HaCloneType::from_raw(1), HaCloneType::Redo);
-        assert_eq!(HaCloneType::from_raw(2), HaCloneType::Hybrid);
-        assert_eq!(HaCloneType::from_raw(3), HaCloneType::Page);
+        assert_eq!(HaCloneType::from_raw(2), HaCloneType::Page);
+        assert_eq!(HaCloneType::from_raw(3), HaCloneType::Hybrid);
+        assert_eq!(HaCloneType::from_raw(4), HaCloneType::MultiTask);
+        assert_eq!(HaCloneType::from_raw(5), HaCloneType::Restart);
         assert_eq!(HaCloneType::from_raw(99), HaCloneType::Unknown);
     }
 }
