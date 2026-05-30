@@ -42,6 +42,8 @@ mod dict_kind;
 #[doc(hidden)]
 pub mod discovery;
 #[doc(hidden)]
+pub mod engine_log;
+#[doc(hidden)]
 pub mod ffi;
 mod flags;
 #[doc(hidden)]
@@ -52,6 +54,8 @@ pub mod notifications;
 mod panic_function;
 #[doc(hidden)]
 pub mod savepoint_ffi;
+#[doc(hidden)]
+pub mod sdi;
 mod stat_print_sink;
 mod stat_type;
 #[doc(hidden)]
@@ -620,6 +624,129 @@ pub trait Handlerton: Send + Sync {
     /// Returns an [`EngineError`](crate::engine::EngineError) on write
     /// failure.
     fn dict_set_server_version(&self) -> EngineResult {
+        Ok(())
+    }
+
+    /// Create the SDI store for `tablespace`. Wired only under
+    /// [`HtonCapabilities::SDI`]; defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn sdi_create(&self, _tablespace: Option<&sys::DdTablespace>) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Drop the SDI store from `tablespace`. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn sdi_drop(&self, _tablespace: Option<&sys::DdTablespace>) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Populate `vector` with the SDI keys present in `tablespace`. The
+    /// `sdi_vector_t` output cannot be filled through the opaque
+    /// pass-through today; defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn sdi_get_keys(
+        &self,
+        _tablespace: Option<&sys::DdTablespace>,
+        _vector: Option<&sys::SdiVector>,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Look up the SDI payload identified by `key` and write it into `buf`.
+    /// On success the engine must set `*len_out` to the bytes actually
+    /// written. The shim treats `buf` as a `&mut [u8]` whose length is the
+    /// caller-provided capacity. Defaults to unsupported.
+    ///
+    /// MySQL distinguishes the two error paths by inspecting `*len_out`:
+    /// - **Buffer too small** — return an error and set `*len_out` to the
+    ///   required payload size so the caller can retry with a larger buffer.
+    /// - **Genuine error** (key not found, I/O failure, ...) — return an
+    ///   error and set `*len_out = u64::MAX`. Without this sentinel MySQL
+    ///   re-enters the call expecting a retry and may loop indefinitely.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default. Engines that store SDI follow the two-path convention
+    /// above.
+    fn sdi_get(
+        &self,
+        _tablespace: Option<&sys::DdTablespace>,
+        _key: Option<&sys::SdiKey>,
+        _buf: &mut [u8],
+        _len_out: &mut u64,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Store `payload` as the SDI value for `key` against `table` /
+    /// `tablespace`. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn sdi_set(
+        &self,
+        _tablespace: Option<&sys::DdTablespace>,
+        _table: Option<&sys::DdTable>,
+        _key: Option<&sys::SdiKey>,
+        _payload: &[u8],
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Delete the SDI value identified by `key`. Defaults to unsupported.
+    ///
+    /// # Errors
+    /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// by default.
+    fn sdi_delete(
+        &self,
+        _tablespace: Option<&sys::DdTablespace>,
+        _table: Option<&sys::DdTable>,
+        _key: Option<&sys::SdiKey>,
+    ) -> EngineResult {
+        Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Acquire the engine-log mutex so a backup tool can snapshot a
+    /// consistent log state. Wired only under
+    /// [`HtonCapabilities::ENGINE_LOG`]; defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) when the lock
+    /// cannot be taken.
+    fn lock_hton_log(&self) -> EngineResult {
+        Ok(())
+    }
+
+    /// Release the mutex taken by [`Self::lock_hton_log`]. Defaults to
+    /// success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on release
+    /// failure.
+    fn unlock_hton_log(&self) -> EngineResult {
+        Ok(())
+    }
+
+    /// Append the engine's redo / transaction log status into the
+    /// `performance_schema.log_status` collector. The `Json_dom` parameter is
+    /// opaque today; an engine with log info will need a reverse callback to
+    /// populate the JSON tree. Defaults to no-op success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on collection
+    /// failure.
+    fn collect_hton_log_info(&self, _json: Option<&sys::JsonDom>) -> EngineResult {
         Ok(())
     }
 }

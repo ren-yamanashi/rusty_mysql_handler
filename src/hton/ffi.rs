@@ -177,3 +177,35 @@ pub unsafe extern "C" fn rust__hton__is_dict_backend() -> bool {
         None => false,
     })
 }
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::SDI`](crate::hton::HtonCapabilities::SDI).
+///
+/// Gates the `sdi_*` callbacks; declared by engines that own their SDI
+/// (InnoDB-style).
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_sdi() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::SDI),
+        None => false,
+    })
+}
+
+/// Whether the registered handlerton declares
+/// [`HtonCapabilities::ENGINE_LOG`](crate::hton::HtonCapabilities::ENGINE_LOG).
+///
+/// Gates the `lock_hton_log` / `unlock_hton_log` / `collect_hton_log_info`
+/// callbacks used by `performance_schema.log_status`.
+///
+/// # Safety
+/// Call after `rust__plugin_init`. Reads the process-wide handlerton singleton.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__is_engine_log() -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => h.capabilities().contains(HtonCapabilities::ENGINE_LOG),
+        None => false,
+    })
+}

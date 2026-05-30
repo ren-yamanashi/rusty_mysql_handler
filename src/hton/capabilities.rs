@@ -76,6 +76,10 @@ impl HtonCapabilities {
     /// these unwired, otherwise MySQL routes dictionary work to an engine that
     /// cannot honour it.
     pub const DICT_BACKEND: Self = Self(1 << 9);
+    /// Engine-owned redo / transaction log: gates `lock_hton_log`,
+    /// `unlock_hton_log`, `collect_hton_log_info`. Declared by engines whose
+    /// log is collected by `performance_schema.log_status`.
+    pub const ENGINE_LOG: Self = Self(1 << 10);
 
     /// An empty capability set: a handler-only engine (the zero-config default)
     #[must_use]
@@ -143,6 +147,7 @@ mod tests {
             HtonCapabilities::PARTITIONING,
             HtonCapabilities::TABLESPACES,
             HtonCapabilities::DICT_BACKEND,
+            HtonCapabilities::ENGINE_LOG,
         ];
         for (i, a) in all.iter().enumerate() {
             for b in &all[i + 1..] {

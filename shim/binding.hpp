@@ -361,4 +361,14 @@ void rusty_hton_wire_tablespaces(handlerton *hton);
 // handlerton declares the DICT_BACKEND capability.
 void rusty_hton_wire_dict(handlerton *hton);
 
+// Wires the SDI callbacks (sdi_create, sdi_drop, sdi_get_keys, sdi_get,
+// sdi_set, sdi_delete). Wired only when the handlerton declares the SDI
+// capability.
+void rusty_hton_wire_sdi(handlerton *hton);
+
+// Wires the engine-log callbacks (lock_hton_log, unlock_hton_log,
+// collect_hton_log_info) consumed by performance_schema.log_status. Wired
+// only when the handlerton declares the ENGINE_LOG capability.
+void rusty_hton_wire_engine_log(handlerton *hton);
+
 #endif
