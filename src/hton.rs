@@ -302,10 +302,15 @@ pub trait Handlerton: Send + Sync {
     /// (the trait returns `Unsupported`, which the shim translates to
     /// `HA_ERR_NO_SUCH_TABLE`).
     ///
+    /// The shim does not yet marshal the engine's SDI blob back through the
+    /// `frmblob` / `frmlen` output parameters, so overriding this to return
+    /// `Ok(())` would claim "found" without supplying the table definition and
+    /// MySQL would fail downstream with `ER_NO_SUCH_TABLE` anyway. Keep the
+    /// default until that return path is wired.
+    ///
     /// # Errors
     /// Returns [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
-    /// by default to report "no such table"; an engine with frm-blob discovery
-    /// overrides this.
+    /// by default to report "no such table".
     fn discover(&self, _thd: Option<&sys::THD>, _db: &str, _name: &str) -> EngineResult {
         Err(crate::engine::EngineError::Unsupported)
     }

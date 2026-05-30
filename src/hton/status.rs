@@ -77,7 +77,10 @@ pub unsafe extern "C" fn rust__hton__start_consistent_snapshot(thd: *const sys::
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__flush_logs(binlog_group_flush: bool) -> bool {
     FfiBoundary::run_default(false, || match runtime::handlerton() {
-        Some(h) => h.flush_logs(binlog_group_flush).is_err(),
+        Some(h) => match h.flush_logs(binlog_group_flush) {
+            Ok(()) => false,
+            Err(_) => true,
+        },
         None => false,
     })
 }
@@ -101,9 +104,10 @@ pub unsafe extern "C" fn rust__hton__show_status(
         let thd_ref = unsafe { thd.as_ref() };
         let sink = StatPrintSink::new(thd_ref, print_fn);
         match runtime::handlerton() {
-            Some(h) => h
-                .show_status(thd_ref, &sink, HaStatType::from_raw(stat))
-                .is_err(),
+            Some(h) => match h.show_status(thd_ref, &sink, HaStatType::from_raw(stat)) {
+                Ok(()) => false,
+                Err(_) => true,
+            },
             None => false,
         }
     })

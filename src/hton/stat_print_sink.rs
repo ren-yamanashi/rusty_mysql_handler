@@ -60,9 +60,11 @@ pub struct StatPrintSink<'a> {
 impl<'a> StatPrintSink<'a> {
     /// Bind a sink to the connection and `stat_print_fn` MySQL handed in.
     /// `print_fn` is opaque to Rust; the reverse callback re-casts it before
-    /// invoking it on the C++ side.
+    /// invoking it on the C++ side. Crate-private: external `Handlerton`
+    /// implementors receive a sink as a parameter and call [`Self::emit`];
+    /// they never construct one.
     #[must_use]
-    pub fn new(thd: Option<&'a sys::THD>, print_fn: *const c_void) -> Self {
+    pub(crate) fn new(thd: Option<&'a sys::THD>, print_fn: *const c_void) -> Self {
         Self { thd, print_fn }
     }
 
