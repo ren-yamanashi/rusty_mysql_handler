@@ -157,10 +157,13 @@ pub unsafe extern "C" fn rust__hton__get_index_column_cardinality(
         };
         match result {
             Ok(Some(card)) => {
-                if !out_cardinality.is_null() {
-                    // SAFETY: caller guarantees out_cardinality is writable for one u64.
-                    unsafe { out_cardinality.write(card) };
+                if out_cardinality.is_null() {
+                    // Fail closed: reporting success without writing leaves
+                    // MySQL with whatever the slot held before the call.
+                    return true;
                 }
+                // SAFETY: caller guarantees out_cardinality is writable for one u64.
+                unsafe { out_cardinality.write(card) };
                 false
             }
             Ok(None) | Err(_) => true,

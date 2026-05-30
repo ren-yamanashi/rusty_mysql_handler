@@ -65,8 +65,12 @@ void rusty_hton_post_recover() { rust__hton__post_recover(); }
 void rusty_hton_wire_misc(handlerton *hton) {
   hton->is_dict_readonly = rusty_hton_is_dict_readonly;
   hton->rm_tmp_tables = rusty_hton_rm_tmp_tables;
-  hton->replace_native_transaction_in_thd =
-      rusty_hton_replace_native_transaction_in_thd;
+  // replace_native_transaction_in_thd intentionally stays NULL: the upstream
+  // XA slave-applier detach / reattach (sql/xa.cc) swaps the native txn
+  // pointer through `ptr_trx_arg`, but the trait method drops both that
+  // out-param and `new_trx_arg` today. A non-NULL wire would let MySQL call
+  // a stub that ignores the swap and corrupts XA state, while NULL makes
+  // MySQL's null-checked path skip the swap entirely.
   hton->post_ddl = rusty_hton_post_ddl;
   hton->post_recover = rusty_hton_post_recover;
 }
