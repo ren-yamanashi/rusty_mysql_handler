@@ -46,6 +46,7 @@
 #include "rust_callbacks/hton_notifications.hpp"
 #include "rust_callbacks/hton_savepoint.hpp"
 #include "rust_callbacks/hton_sdi.hpp"
+#include "rust_callbacks/hton_secondary_engine.hpp"
 #include "rust_callbacks/hton_status.hpp"
 #include "rust_callbacks/hton_tablespace.hpp"
 #include "rust_callbacks/hton_transactions.hpp"

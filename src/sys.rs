@@ -181,6 +181,26 @@ pub struct JsonDom([u8; 0]);
 #[derive(Debug)]
 pub struct HaFkColumnType([u8; 0]);
 
+/// Opaque MySQL `LEX` (parsed-statement descriptor used by the optimizer)
+#[repr(C)]
+#[derive(Debug)]
+pub struct Lex([u8; 0]);
+
+/// Opaque MySQL `JOIN` (join-plan descriptor handed to cost-comparison hooks)
+#[repr(C)]
+#[derive(Debug)]
+pub struct Join([u8; 0]);
+
+/// Opaque MySQL `JoinHypergraph` (hypergraph used by the new join optimizer)
+#[repr(C)]
+#[derive(Debug)]
+pub struct JoinHypergraph([u8; 0]);
+
+/// Opaque MySQL `AccessPath` (an execution-plan node from the join optimizer)
+#[repr(C)]
+#[derive(Debug)]
+pub struct AccessPath([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

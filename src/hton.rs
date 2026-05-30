@@ -58,6 +58,11 @@ mod panic_function;
 pub mod savepoint_ffi;
 #[doc(hidden)]
 pub mod sdi;
+#[doc(hidden)]
+pub mod secondary_engine;
+#[doc(hidden)]
+pub mod secondary_engine_fail_reason;
+mod secondary_engine_kind;
 mod stat_print_sink;
 mod stat_type;
 #[doc(hidden)]
@@ -79,6 +84,9 @@ pub use dict_kind::{DictInitMode, DictRecoveryMode};
 pub use flags::HtonFlags;
 pub use notification_kind::{HaNotificationType, SelectExecutedIn};
 pub use panic_function::HaPanicFunction;
+pub use secondary_engine_kind::{
+    SecondaryEngineGraphSimplificationRequest, SecondaryEngineOptimizerRequest,
+};
 pub use stat_print_sink::StatPrintSink;
 pub use stat_type::HaStatType;
 pub use tablespace_kind::{TablespaceType, TsCommandType};
@@ -782,6 +790,122 @@ pub trait Handlerton: Send + Sync {
     /// [`Self::se_before_commit`] for the observer-arg discussion. Defaults
     /// to no-op.
     fn se_before_rollback(&self) {}
+
+    /// Prepare the secondary engine for executing a statement. `lex` is
+    /// opaque today. Wired only under
+    /// [`HtonCapabilities::SECONDARY_ENGINE`]; defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if preparation
+    /// fails; MySQL falls back to the primary engine.
+    fn prepare_secondary_engine(
+        &self,
+        _thd: Option<&sys::THD>,
+        _lex: Option<&sys::Lex>,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Optimize a statement for execution on the secondary engine. `lex` is
+    /// opaque today. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the
+    /// optimization fails; MySQL reprepares for the primary engine.
+    fn optimize_secondary_engine(
+        &self,
+        _thd: Option<&sys::THD>,
+        _lex: Option<&sys::Lex>,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Compare the cost of `join` against the best plan seen so far. The
+    /// trait returns `(use_best_so_far, cheaper, secondary_engine_cost)`;
+    /// `None` defaults the triple to `(false, false, optimizer_cost)`, which
+    /// the shim writes back to the C `bool*` / `double*` outputs.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) on error; the
+    /// optimizer drops the candidate plan.
+    fn compare_secondary_engine_cost(
+        &self,
+        _thd: Option<&sys::THD>,
+        _join: Option<&sys::Join>,
+        _optimizer_cost: f64,
+    ) -> EngineResult<Option<(bool, bool, f64)>> {
+        Ok(None)
+    }
+
+    /// Evaluate (and potentially modify) the cost estimates on `access_path`
+    /// from the hypergraph optimizer. `access_path` is opaque to Rust today,
+    /// so the default cannot modify costs; returning `Ok(())` accepts the
+    /// path unchanged.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) to reject the
+    /// access path entirely.
+    fn secondary_engine_modify_access_path_cost(
+        &self,
+        _thd: Option<&sys::THD>,
+        _hypergraph: Option<&sys::JoinHypergraph>,
+        _access_path: Option<&sys::AccessPath>,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Whether `EXPLAIN` references tables not loaded into the secondary
+    /// engine. Defaults to `false` (all referenced tables are loaded).
+    fn external_engine_explain_check(&self, _thd: Option<&sys::THD>) -> bool {
+        false
+    }
+
+    // `get_secondary_engine_offload_or_exec_fail_reason` and
+    // `find_secondary_engine_offload_fail_reason` are wired at the FFI layer
+    // but intentionally not surfaced as trait methods today: returning
+    // engine-owned bytes by value would drop the buffer before MySQL wrapped
+    // it in `std::string_view`, exposing freed heap memory. The FFI returns an
+    // empty view until a future setter reverse-callback can hand
+    // statement-scoped bytes to MySQL safely. `set_*` below is unaffected.
+
+    /// Persist `reason` as the offload failure reason for the query
+    /// represented by `thd`. Defaults to success.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the engine
+    /// could not record the reason.
+    fn set_secondary_engine_offload_fail_reason(
+        &self,
+        _thd: Option<&sys::THD>,
+        _reason: &str,
+    ) -> EngineResult {
+        Ok(())
+    }
+
+    /// Hook the hypergraph optimizer calls after
+    /// [`Self::secondary_engine_modify_access_path_cost`] to decide whether
+    /// to keep optimizing, restart with a different subgraph budget, etc.
+    /// Defaults to [`SecondaryEngineOptimizerRequest::keep_going`]. The
+    /// `JoinHypergraph` / `AccessPath` / `trace` parameters are opaque.
+    fn secondary_engine_check_optimizer_request(
+        &self,
+        _thd: Option<&sys::THD>,
+        _hypergraph: Option<&sys::JoinHypergraph>,
+        _access_path: Option<&sys::AccessPath>,
+        _current_subgraph_pairs: i32,
+        _current_subgraph_pairs_limit: i32,
+        _is_root_access_path: bool,
+    ) -> SecondaryEngineOptimizerRequest {
+        SecondaryEngineOptimizerRequest::keep_going()
+    }
+
+    /// Pre-prepare hook called early in optimization to decide whether the
+    /// secondary engine's full prepare path should run. Defaults to `false`
+    /// (skip the prepare path), matching the upstream "no further prepare"
+    /// signal.
+    fn secondary_engine_pre_prepare_hook(&self, _thd: Option<&sys::THD>) -> bool {
+        false
+    }
 }
 
 /// Inert default session returned by [`Handlerton::begin_transaction`] (see
