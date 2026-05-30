@@ -176,6 +176,11 @@ pub struct SdiVector([u8; 0]);
 #[derive(Debug)]
 pub struct JsonDom([u8; 0]);
 
+/// Opaque MySQL `Ha_fk_column_type` (foreign-key column type descriptor)
+#[repr(C)]
+#[derive(Debug)]
+pub struct HaFkColumnType([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

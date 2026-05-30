@@ -45,6 +45,8 @@ pub mod discovery;
 pub mod engine_log;
 #[doc(hidden)]
 pub mod ffi;
+#[doc(hidden)]
+pub mod fk_hooks;
 mod flags;
 #[doc(hidden)]
 pub mod lifecycle;
@@ -749,6 +751,37 @@ pub trait Handlerton: Send + Sync {
     fn collect_hton_log_info(&self, _json: Option<&sys::JsonDom>) -> EngineResult {
         Ok(())
     }
+
+    /// Whether the engine considers the two foreign-key column type
+    /// descriptors compatible (used when MySQL validates an `ADD FOREIGN KEY`
+    /// referencing this engine's tables). `Ha_fk_column_type` is opaque
+    /// today; the trait default returns `true` (accept any), which matches the
+    /// permissive base-engine behaviour. Override to enforce stricter typing.
+    fn check_fk_column_compat(
+        &self,
+        _child: Option<&sys::HaFkColumnType>,
+        _parent: Option<&sys::HaFkColumnType>,
+        _check_charsets: bool,
+    ) -> bool {
+        true
+    }
+
+    /// Plugin-observer hook fired before a transaction commits. The shim
+    /// discards the observer's `void*` argument because it belongs to the
+    /// observer plugin that registered the hook, not to the storage engine;
+    /// engines that need observer data must coordinate with the observer
+    /// through a separate channel. Defaults to no-op.
+    fn se_before_commit(&self) {}
+
+    /// Plugin-observer hook fired after a transaction commits. See
+    /// [`Self::se_before_commit`] for the observer-arg discussion. Defaults
+    /// to no-op.
+    fn se_after_commit(&self) {}
+
+    /// Plugin-observer hook fired before a transaction rolls back. See
+    /// [`Self::se_before_commit`] for the observer-arg discussion. Defaults
+    /// to no-op.
+    fn se_before_rollback(&self) {}
 }
 
 /// Inert default session returned by [`Handlerton::begin_transaction`] (see

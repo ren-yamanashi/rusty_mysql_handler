@@ -371,4 +371,9 @@ void rusty_hton_wire_sdi(handlerton *hton);
 // only when the handlerton declares the ENGINE_LOG capability.
 void rusty_hton_wire_engine_log(handlerton *hton);
 
+// Wires the FK compatibility + plugin-observer transaction hooks
+// (check_fk_column_compat, se_before_commit, se_after_commit,
+// se_before_rollback). Always wired on a registered handlerton.
+void rusty_hton_wire_fk_hooks(handlerton *hton);
+
 #endif
