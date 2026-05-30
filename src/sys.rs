@@ -161,6 +161,21 @@ pub struct DdTablespace([u8; 0]);
 #[derive(Debug)]
 pub struct StAlterTablespace([u8; 0]);
 
+/// Opaque MySQL `sdi_key_t` (SDI key identifying a dictionary object)
+#[repr(C)]
+#[derive(Debug)]
+pub struct SdiKey([u8; 0]);
+
+/// Opaque MySQL `sdi_vector_t` (collection of SDI keys filled by `sdi_get_keys`)
+#[repr(C)]
+#[derive(Debug)]
+pub struct SdiVector([u8; 0]);
+
+/// Opaque MySQL `Json_dom` (JSON DOM node for log-info collection)
+#[repr(C)]
+#[derive(Debug)]
+pub struct JsonDom([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

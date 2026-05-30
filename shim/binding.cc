@@ -105,6 +105,16 @@ extern "C" int rusty_init_func(void *p) {
     if (rust__hton__is_dict_backend()) {
       rusty_hton_wire_dict(hton);
     }
+    // SDI callbacks are only meaningful for engines that own their SDI
+    // store (InnoDB-style).
+    if (rust__hton__is_sdi()) {
+      rusty_hton_wire_sdi(hton);
+    }
+    // ENGINE_LOG opt-in publishes the engine's redo / transaction log to
+    // performance_schema.log_status; a non-log engine keeps these NULL.
+    if (rust__hton__is_engine_log()) {
+      rusty_hton_wire_engine_log(hton);
+    }
   }
   return 0;
 }

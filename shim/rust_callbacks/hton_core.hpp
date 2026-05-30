@@ -51,6 +51,11 @@ bool rust__hton__is_partitioning();
 bool rust__hton__is_tablespaces();
 // Whether the handlerton declares DICT_BACKEND; gates the dict_* callbacks.
 bool rust__hton__is_dict_backend();
+// Whether the handlerton declares SDI; gates the sdi_* callbacks.
+bool rust__hton__is_sdi();
+// Whether the handlerton declares ENGINE_LOG; gates the lock/unlock/collect
+// engine-log callbacks consumed by performance_schema.log_status.
+bool rust__hton__is_engine_log();
 }
 
 #endif
