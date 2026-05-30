@@ -133,6 +133,13 @@ COMMIT;
 SELECT @after_release := COUNT(*) FROM sp2;
 DROP TABLE sp2;
 
+-- Engine-level status hooks: SHOW ENGINE RUSTY STATUS drives show_status (the
+-- TrivialHandlerton emits one demo row), FLUSH LOGS drives flush_logs and must
+-- return success. Discovery hooks fire passively during DDL above; the load
+-- itself verifies the always-wire stubs do not break the plugin.
+SHOW ENGINE RUSTY STATUS;
+FLUSH LOGS;
+
 -- sentinel: 3 only when COMMIT persisted (1), ROLLBACK discarded (1),
 -- ROLLBACK TO SAVEPOINT undid only the post-savepoint insert (1), and
 -- RELEASE SAVEPOINT kept both inserts (2)

@@ -318,4 +318,22 @@ void rusty_hton_wire_xa(handlerton *hton);
 // rusty_init_func only when the handlerton declares the SAVEPOINTS capability.
 void rusty_hton_wire_savepoints(handlerton *hton);
 
+// Wires the always-on status / lifecycle hooks (panic, flush_logs, show_status,
+// fill_is_table, upgrade_logs, finish_upgrade, is_reserved_db_name). Called
+// from rusty_init_func only when a Rust Handlerton is registered.
+void rusty_hton_wire_status(handlerton *hton);
+
+// Wires start_consistent_snapshot. Called from rusty_init_func only when the
+// handlerton declares the TRANSACTIONS capability.
+void rusty_hton_wire_consistent_snapshot(handlerton *hton);
+
+// Wires partition_flags. Called from rusty_init_func only when the handlerton
+// declares the PARTITIONING capability.
+void rusty_hton_wire_partitioning(handlerton *hton);
+
+// Wires table-discovery callbacks (discover, find_files, table_exists_in_engine,
+// is_supported_system_table). Called from rusty_init_func only when a Rust
+// Handlerton is registered.
+void rusty_hton_wire_discovery(handlerton *hton);
+
 #endif

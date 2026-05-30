@@ -61,6 +61,11 @@ impl HtonCapabilities {
     pub const CLONE: Self = Self(1 << 5);
     /// Page-tracking sub-callbacks
     pub const PAGE_TRACKING: Self = Self(1 << 6);
+    /// Partitioning support: gates the `partition_flags` accessor on the
+    /// handlerton. A non-NULL `partition_flags` pointer signals MySQL that the
+    /// engine implements `handler::get_partition_handler`, so this must stay
+    /// off for a non-partitioning engine.
+    pub const PARTITIONING: Self = Self(1 << 7);
 
     /// An empty capability set: a handler-only engine (the zero-config default)
     #[must_use]
@@ -125,6 +130,7 @@ mod tests {
             HtonCapabilities::SECONDARY_ENGINE,
             HtonCapabilities::CLONE,
             HtonCapabilities::PAGE_TRACKING,
+            HtonCapabilities::PARTITIONING,
         ];
         for (i, a) in all.iter().enumerate() {
             for b in &all[i + 1..] {

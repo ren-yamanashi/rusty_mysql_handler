@@ -22,13 +22,17 @@
 
 //! Minimal engine-level handlerton for the reference engine.
 
-use mysql_handler::hton::{Handlerton, HtonCapabilities, TxnSession};
+use mysql_handler::engine::EngineResult;
+use mysql_handler::hton::{HaStatType, Handlerton, HtonCapabilities, StatPrintSink, TxnSession};
+use mysql_handler::sys;
 
 use crate::TrivialTxn;
 
 /// The reference engine's handlerton. Declares the `TRANSACTIONS` capability and
 /// hands out a [`TrivialTxn`] per connection so the commit / rollback callbacks
-/// are wired and exercised; everything else keeps the zero-config defaults.
+/// are wired and exercised; everything else keeps the zero-config defaults
+/// except `show_status`, which emits a single demo row so the binding is
+/// exercised by `SHOW ENGINE RUSTY STATUS`.
 #[derive(Debug, Default)]
 pub struct TrivialHandlerton;
 
@@ -44,5 +48,17 @@ impl Handlerton for TrivialHandlerton {
 
     fn begin_transaction(&self) -> Box<dyn TxnSession> {
         Box::new(TrivialTxn::default())
+    }
+
+    fn show_status(
+        &self,
+        _thd: Option<&sys::THD>,
+        sink: &StatPrintSink<'_>,
+        stat: HaStatType,
+    ) -> EngineResult {
+        if matches!(stat, HaStatType::Status) {
+            let _ = sink.emit("RUSTY", "state", "ok");
+        }
+        Ok(())
     }
 }
