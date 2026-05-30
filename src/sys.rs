@@ -146,6 +146,11 @@ pub struct AlterInplaceInfo([u8; 0]);
 #[derive(Debug)]
 pub struct HaCheckOpt([u8; 0]);
 
+/// Opaque MySQL `MDL_key` (metadata-lock key identifying a database object)
+#[repr(C)]
+#[derive(Debug)]
+pub struct MdlKey([u8; 0]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

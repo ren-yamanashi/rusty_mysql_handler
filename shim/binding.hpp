@@ -336,4 +336,14 @@ void rusty_hton_wire_partitioning(handlerton *hton);
 // Handlerton is registered.
 void rusty_hton_wire_discovery(handlerton *hton);
 
+// Wires the DDL / select event-notification callbacks (notify_after_select,
+// notify_create_table, notify_drop_table, notify_exclusive_mdl,
+// notify_alter_table, notify_rename_table, notify_truncate_table). Always
+// wired on a registered handlerton.
+void rusty_hton_wire_notifications(handlerton *hton);
+
+// Wires binlog / ACL notification callbacks (binlog_func, binlog_log_query,
+// acl_notify). Always wired on a registered handlerton.
+void rusty_hton_wire_binlog(handlerton *hton);
+
 #endif
