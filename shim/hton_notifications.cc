@@ -33,7 +33,15 @@
 #include "sql/handler.h"
 
 namespace {
-size_t safe_len(const char *s) { return s ? std::strlen(s) : 0; }
+// FfiPtr::bytes_to_str requires a non-null pointer even at length 0
+// (slice::from_raw_parts rejects null), so map an optional C string to a
+// non-null empty-string sentinel before forwarding. Currently latent here
+// (MySQL passes real names for rename / create), but keeps the contract with
+// the Rust side aligned across callbacks.
+const uint8_t *nz(const char *s) {
+  return reinterpret_cast<const uint8_t *>(s ? s : "");
+}
+size_t safe_len(const char *s) { return s ? std::strlen(s) : 0u; }
 
 void rusty_hton_notify_after_select(THD *thd, SelectExecutedIn executed_in) {
   rust__hton__notify_after_select(static_cast<const void *>(thd),
@@ -76,10 +84,10 @@ bool rusty_hton_notify_rename_table(THD *thd, const MDL_key *mdl_key,
   return rust__hton__notify_rename_table(
       static_cast<const void *>(thd), static_cast<const void *>(mdl_key),
       static_cast<int32_t>(kind),
-      reinterpret_cast<const uint8_t *>(old_db), safe_len(old_db),
-      reinterpret_cast<const uint8_t *>(old_name), safe_len(old_name),
-      reinterpret_cast<const uint8_t *>(new_db), safe_len(new_db),
-      reinterpret_cast<const uint8_t *>(new_name), safe_len(new_name));
+      nz(old_db), safe_len(old_db),
+      nz(old_name), safe_len(old_name),
+      nz(new_db), safe_len(new_db),
+      nz(new_name), safe_len(new_name));
 }
 
 bool rusty_hton_notify_truncate_table(THD *thd, const MDL_key *mdl_key,

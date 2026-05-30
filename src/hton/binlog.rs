@@ -27,7 +27,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::hton::{EnumBinlogCommand, EnumBinlogFunc};
+use crate::hton::{BinlogCommand, BinlogFunc};
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
 use crate::runtime::FfiPtr;
@@ -43,7 +43,7 @@ pub unsafe extern "C" fn rust__hton__binlog_func(thd: *const sys::THD, func: u32
         // SAFETY: thd is null or valid for read for this call.
         let thd_ref = unsafe { thd.as_ref() };
         match runtime::handlerton() {
-            Some(h) => h.binlog_func(thd_ref, EnumBinlogFunc::from_raw(func)),
+            Some(h) => h.binlog_func(thd_ref, BinlogFunc::from_raw(func)),
             None => Ok(()),
         }
     })
@@ -53,7 +53,9 @@ pub unsafe extern "C" fn rust__hton__binlog_func(thd: *const sys::THD, func: u32
 /// not log the query text per the project's security rule.
 ///
 /// # Safety
-/// Each byte pointer covers its stated length readable for the call;
+/// Each byte pointer is non-null (the shim substitutes a non-null empty
+/// sentinel when MySQL hands in NULL, matching [`FfiPtr::bytes_to_str`]'s
+/// non-null contract) and covers its stated length readable for the call.
 /// `thd` is null or valid for the call.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
@@ -88,7 +90,7 @@ pub unsafe extern "C" fn rust__hton__binlog_log_query(
         if let Some(h) = runtime::handlerton() {
             h.binlog_log_query(
                 thd_ref,
-                EnumBinlogCommand::from_raw(command),
+                BinlogCommand::from_raw(command),
                 query_str,
                 db_str,
                 table_str,

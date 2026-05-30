@@ -60,7 +60,8 @@ pub unsafe extern "C" fn rust__hton__notify_after_select(thd: *const sys::THD, e
 /// `notify_create_table`. `HA_CREATE_INFO*` omitted (opaque).
 ///
 /// # Safety
-/// `db` / `table` cover their stated lengths readable for the call.
+/// `db` / `table` are non-null and cover their stated lengths readable for the
+/// call (the shim drops the call when either is NULL).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__notify_create_table(
     db: *const u8,
@@ -153,7 +154,9 @@ pub unsafe extern "C" fn rust__hton__notify_alter_table(
 /// `notify_rename_table`. Old / new db.table names are bounded strings.
 ///
 /// # Safety
-/// Each byte pointer covers its stated length readable for the call;
+/// Each byte pointer is non-null (the shim substitutes a non-null empty
+/// sentinel for a NULL input, matching [`FfiPtr::bytes_to_str`]'s non-null
+/// contract) and covers its stated length readable for the call.
 /// `thd` / `mdl_key` null or valid for the call.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]

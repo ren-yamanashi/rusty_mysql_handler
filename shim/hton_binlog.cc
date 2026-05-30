@@ -32,7 +32,15 @@
 #include "sql/handler.h"
 
 namespace {
-size_t safe_len(const char *s) { return s ? std::strlen(s) : 0; }
+// FfiPtr::bytes_to_str's SAFETY contract requires a non-null pointer even when
+// length == 0 (slice::from_raw_parts rejects null), so substitute a non-null
+// empty-string sentinel whenever MySQL hands us NULL. binlog_log_query is the
+// reachable case — LOGCOM_CREATE_DB-style events legitimately pass NULL for
+// db/table/query — but the same conversion is applied wherever the shim sees
+// an optional C string.
+const uint8_t *nz(const char *s) {
+  return reinterpret_cast<const uint8_t *>(s ? s : "");
+}
 
 int rusty_hton_binlog_func(handlerton *, THD *thd, enum_binlog_func func,
                            void *) {
@@ -46,9 +54,9 @@ void rusty_hton_binlog_log_query(handlerton *, THD *thd,
                                  const char *table) {
   rust__hton__binlog_log_query(
       static_cast<const void *>(thd), static_cast<uint32_t>(command),
-      reinterpret_cast<const uint8_t *>(query), query_length,
-      reinterpret_cast<const uint8_t *>(db), safe_len(db),
-      reinterpret_cast<const uint8_t *>(table), safe_len(table));
+      nz(query), query ? query_length : 0u,
+      nz(db), db ? std::strlen(db) : 0u,
+      nz(table), table ? std::strlen(table) : 0u);
 }
 
 void rusty_hton_acl_notify(THD *thd, const Acl_change_notification *) {

@@ -27,7 +27,7 @@
 /// Mirrors `enum enum_binlog_func` in `mysql-server/sql/handler.h`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum EnumBinlogFunc {
+pub enum BinlogFunc {
     /// `BFN_RESET_LOGS = 1`
     ResetLogs,
     /// `BFN_RESET_SLAVE = 2`
@@ -44,9 +44,9 @@ pub enum EnumBinlogFunc {
     Unknown,
 }
 
-impl EnumBinlogFunc {
+impl BinlogFunc {
     /// Decode the C `enum enum_binlog_func` value. Unknown values map to
-    /// [`EnumBinlogFunc::Unknown`].
+    /// [`BinlogFunc::Unknown`].
     #[must_use]
     pub const fn from_raw(value: u32) -> Self {
         match value {
@@ -66,7 +66,7 @@ impl EnumBinlogFunc {
 /// Mirrors `enum enum_binlog_command` in `mysql-server/sql/handler.h`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum EnumBinlogCommand {
+pub enum BinlogCommand {
     /// `LOGCOM_CREATE_TABLE`
     CreateTable,
     /// `LOGCOM_ALTER_TABLE`
@@ -85,9 +85,9 @@ pub enum EnumBinlogCommand {
     Unknown,
 }
 
-impl EnumBinlogCommand {
+impl BinlogCommand {
     /// Decode the C `enum enum_binlog_command` value. Unknown values map to
-    /// [`EnumBinlogCommand::Unknown`].
+    /// [`BinlogCommand::Unknown`].
     #[must_use]
     pub const fn from_raw(value: u32) -> Self {
         match value {
@@ -109,27 +109,24 @@ mod tests {
 
     #[test]
     fn binlog_func_known_values() {
-        assert_eq!(EnumBinlogFunc::from_raw(1), EnumBinlogFunc::ResetLogs);
-        assert_eq!(EnumBinlogFunc::from_raw(6), EnumBinlogFunc::BinlogPurgeWait);
+        assert_eq!(BinlogFunc::from_raw(1), BinlogFunc::ResetLogs);
+        assert_eq!(BinlogFunc::from_raw(6), BinlogFunc::BinlogPurgeWait);
     }
 
     #[test]
     fn binlog_func_unknown_falls_back() {
-        assert_eq!(EnumBinlogFunc::from_raw(0), EnumBinlogFunc::Unknown);
-        assert_eq!(EnumBinlogFunc::from_raw(99), EnumBinlogFunc::Unknown);
+        assert_eq!(BinlogFunc::from_raw(0), BinlogFunc::Unknown);
+        assert_eq!(BinlogFunc::from_raw(99), BinlogFunc::Unknown);
     }
 
     #[test]
     fn binlog_command_known_values() {
-        assert_eq!(
-            EnumBinlogCommand::from_raw(0),
-            EnumBinlogCommand::CreateTable
-        );
-        assert_eq!(EnumBinlogCommand::from_raw(6), EnumBinlogCommand::DropDb);
+        assert_eq!(BinlogCommand::from_raw(0), BinlogCommand::CreateTable);
+        assert_eq!(BinlogCommand::from_raw(6), BinlogCommand::DropDb);
     }
 
     #[test]
     fn binlog_command_unknown_falls_back() {
-        assert_eq!(EnumBinlogCommand::from_raw(99), EnumBinlogCommand::Unknown);
+        assert_eq!(BinlogCommand::from_raw(99), BinlogCommand::Unknown);
     }
 }

@@ -59,7 +59,7 @@ pub mod txn_ffi;
 #[doc(hidden)]
 pub mod xa;
 
-pub use binlog_kind::{EnumBinlogCommand, EnumBinlogFunc};
+pub use binlog_kind::{BinlogCommand, BinlogFunc};
 pub use capabilities::HtonCapabilities;
 pub use flags::HtonFlags;
 pub use notification_kind::{HaNotificationType, SelectExecutedIn};
@@ -448,7 +448,7 @@ pub trait Handlerton: Send + Sync {
     /// # Errors
     /// Returns an [`EngineError`](crate::engine::EngineError) if the operation
     /// fails.
-    fn binlog_func(&self, _thd: Option<&sys::THD>, _func: EnumBinlogFunc) -> EngineResult {
+    fn binlog_func(&self, _thd: Option<&sys::THD>, _func: BinlogFunc) -> EngineResult {
         Ok(())
     }
 
@@ -458,7 +458,7 @@ pub trait Handlerton: Send + Sync {
     fn binlog_log_query(
         &self,
         _thd: Option<&sys::THD>,
-        _command: EnumBinlogCommand,
+        _command: BinlogCommand,
         _query: &str,
         _db: &str,
         _table: &str,
