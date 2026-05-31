@@ -22,8 +22,9 @@
 
 //! `TrivialEngine`: the reference `StorageEngine` implementation.
 //!
-//! Index scan is a linear pass with first-column key match at
-//! [`ROW_KEY_OFFSET`]; no sorted iteration. `update_row` / `delete_row`
+//! Index scan is a linear pass with a first-column key match whose byte
+//! offset comes from [`store::TableMeta`] (populated from `dd::Table` in
+//! `open` / `create`). No sorted iteration. `update_row` / `delete_row`
 //! mutate the committed store directly, so `BEGIN..ROLLBACK` does **not**
 //! undo them — the transactional path stays limited to `INSERT` via
 //! [`TxnSession`](crate::trivial_txn::TrivialTxn).
@@ -48,6 +49,9 @@ fn table_key(name: &str) -> String {
 #[derive(Debug)]
 pub struct TrivialEngine {
     table: String,
+    /// Schema snapshot taken from `dd::Table` in `open` / `create`; drives the
+    /// key-column offset used by `index_read_map`'s linear key match.
+    meta: Option<store::TableMeta>,
     /// Per-statement snapshot; populated by `rnd_init` / `index_init`.
     snapshot: Vec<Vec<u8>>,
     /// Cursor into `snapshot`. `position()` writes `scan_pos - 1`.
@@ -57,19 +61,35 @@ pub struct TrivialEngine {
     next_auto_inc: u64,
 }
 
-/// First-column offset in `record[0]`: one NULL-bits byte for the
-/// single-nullable-column fixtures the demo uses.
-const ROW_KEY_OFFSET: usize = 1;
+/// Fallback first-column offset used when no [`store::TableMeta`] is
+/// available: one NULL-bits byte for the single-nullable-column fixtures
+/// the demo uses. Real schemas always populate `meta`, but `delete_table`
+/// and other code paths called before `open` see `None`.
+const DEFAULT_KEY_OFFSET: usize = 1;
 
 impl TrivialEngine {
     /// New engine not yet bound to a table
     pub const fn new() -> Self {
         Self {
             table: String::new(),
+            meta: None,
             snapshot: Vec::new(),
             scan_pos: 0,
             last_index_key: Vec::new(),
             next_auto_inc: 1,
+        }
+    }
+
+    /// Byte offset of the primary-key column in `record[0]`, resolved from
+    /// `meta` when present; otherwise [`DEFAULT_KEY_OFFSET`].
+    fn key_offset(&self) -> usize {
+        let meta = match self.meta.as_ref() {
+            Some(m) => m,
+            None => return DEFAULT_KEY_OFFSET,
+        };
+        match meta.primary_key_offset() {
+            Some(o) => o,
+            None => DEFAULT_KEY_OFFSET,
         }
     }
 
@@ -91,15 +111,15 @@ impl TrivialEngine {
         Ok(())
     }
 
-    /// Byte-compare `row`'s key column against `key` at [`ROW_KEY_OFFSET`].
-    /// MySQL's `type=ref` trusts this filter. Empty `key` returns `false`.
-    fn row_matches_key(row: &[u8], key: &[u8]) -> bool {
+    /// Byte-compare `row`'s key column against `key` at the byte offset the
+    /// caller resolved from `TableMeta`. MySQL's `type=ref` trusts this
+    /// filter. Empty `key` returns `false`.
+    fn row_matches_key(row: &[u8], key: &[u8], offset: usize) -> bool {
         if key.is_empty() {
             return false;
         }
-        let end = ROW_KEY_OFFSET.saturating_add(key.len());
-        row.get(ROW_KEY_OFFSET..end)
-            .is_some_and(|slice| slice == key)
+        let end = offset.saturating_add(key.len());
+        row.get(offset..end).is_some_and(|slice| slice == key)
     }
 
     /// Yield the next `snapshot[*pos]` matching `key`. `EndOfFile` at end.
@@ -108,10 +128,11 @@ impl TrivialEngine {
         pos: &mut usize,
         buf: &mut [u8],
         key: &[u8],
+        offset: usize,
     ) -> EngineResult {
         while let Some(row) = snapshot.get(*pos) {
             *pos += 1;
-            if Self::row_matches_key(row, key) {
+            if Self::row_matches_key(row, key, offset) {
                 Self::copy_row_into(buf, row);
                 return Ok(());
             }
@@ -139,13 +160,15 @@ impl StorageEngine for TrivialEngine {
         0
     }
 
-    fn create(&mut self, name: &str) -> EngineResult {
+    fn create(&mut self, name: &str, table_def: Option<&sys::DdTable>) -> EngineResult {
         self.table = table_key(name);
+        self.meta = table_def.map(store::TableMeta::from_dd_table);
         Ok(())
     }
 
-    fn open(&mut self, name: &str, _mode: i32) -> EngineResult {
+    fn open(&mut self, name: &str, _mode: i32, table_def: Option<&sys::DdTable>) -> EngineResult {
         self.table = table_key(name);
+        self.meta = table_def.map(store::TableMeta::from_dd_table);
         Ok(())
     }
 
@@ -269,7 +292,8 @@ impl StorageEngine for TrivialEngine {
     ) -> EngineResult {
         self.scan_pos = 0;
         self.last_index_key = key.to_vec();
-        Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, key)
+        let offset = self.key_offset();
+        Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, key, offset)
     }
 
     fn index_next(&mut self, buf: &mut [u8]) -> EngineResult {
@@ -278,7 +302,8 @@ impl StorageEngine for TrivialEngine {
             Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
         } else {
             let key = self.last_index_key.clone();
-            Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, &key)
+            let offset = self.key_offset();
+            Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, &key, offset)
         }
     }
 
@@ -302,7 +327,8 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn index_next_same(&mut self, buf: &mut [u8], key: &[u8]) -> EngineResult {
-        Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, key)
+        let offset = self.key_offset();
+        Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, key, offset)
     }
 
     fn records_in_range(
@@ -405,18 +431,26 @@ mod tests {
     }
 
     #[test]
-    fn row_matches_key_compares_at_fixed_offset() {
+    fn row_matches_key_compares_at_given_offset() {
         // row layout: [null-bits, id (4 bytes LE), ...]
         let row_20 = [0xFE, 20, 0, 0, 0, 1, b'b', 0];
-        assert!(TrivialEngine::row_matches_key(&row_20, &[20, 0, 0, 0]));
-        assert!(!TrivialEngine::row_matches_key(&row_20, &[21, 0, 0, 0]));
+        assert!(TrivialEngine::row_matches_key(&row_20, &[20, 0, 0, 0], 1));
+        assert!(!TrivialEngine::row_matches_key(&row_20, &[21, 0, 0, 0], 1));
+    }
+
+    #[test]
+    fn row_matches_key_honours_a_non_default_offset() {
+        // id at offset 2 (e.g. table with 9-16 nullable columns -> 2 null bytes).
+        let row = [0xFE, 0xFE, 7, 0, 0, 0];
+        assert!(TrivialEngine::row_matches_key(&row, &[7, 0, 0, 0], 2));
+        assert!(!TrivialEngine::row_matches_key(&row, &[7, 0, 0, 0], 1));
     }
 
     #[test]
     fn row_matches_key_rejects_short_rows() {
         // A row shorter than the offset + key cannot match.
         let row = [0xFE, 1];
-        assert!(!TrivialEngine::row_matches_key(&row, &[1, 0, 0, 0]));
+        assert!(!TrivialEngine::row_matches_key(&row, &[1, 0, 0, 0], 1));
     }
 
     #[test]
@@ -428,13 +462,19 @@ mod tests {
         ];
         let mut pos = 0usize;
         let mut buf = [0u8; 8];
-        let r = TrivialEngine::yield_next_matching(&rows, &mut pos, &mut buf, &[20, 0, 0, 0]);
+        let r = TrivialEngine::yield_next_matching(&rows, &mut pos, &mut buf, &[20, 0, 0, 0], 1);
         assert!(r.is_ok());
         assert_eq!(buf, [0xFE, 20, 0, 0, 0, 1, b'b', 0]);
         assert_eq!(pos, 2);
         // No further match → EndOfFile, pos advances past the end.
-        let r2 = TrivialEngine::yield_next_matching(&rows, &mut pos, &mut buf, &[20, 0, 0, 0]);
+        let r2 = TrivialEngine::yield_next_matching(&rows, &mut pos, &mut buf, &[20, 0, 0, 0], 1);
         assert!(matches!(r2, Err(EngineError::EndOfFile)));
         assert_eq!(pos, 3);
+    }
+
+    #[test]
+    fn key_offset_falls_back_to_default_when_meta_is_none() {
+        let eng = TrivialEngine::new();
+        assert_eq!(eng.key_offset(), DEFAULT_KEY_OFFSET);
     }
 }

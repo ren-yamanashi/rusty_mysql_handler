@@ -33,6 +33,7 @@
 #include "rust_callbacks/caps.hpp"
 #include "rust_callbacks/core.hpp"
 #include "rust_callbacks/cost.hpp"
+#include "rust_callbacks/dd_table.hpp"
 #include "rust_callbacks/error_handling.hpp"
 #include "rust_callbacks/fulltext.hpp"
 #include "rust_callbacks/hints.hpp"

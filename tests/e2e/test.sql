@@ -114,6 +114,21 @@ SELECT @crud_sum := SUM(id), @crud_count := COUNT(*) FROM crud;
 SELECT @crud_label_20 := label FROM crud WHERE id = 20;
 DROP TABLE crud;
 
+-- Non-default key offset: `pad` (INT NOT NULL, 4 bytes) sits in front of
+-- `id`, so the indexed column starts at byte 5 in record[0] (1 null bits
+-- byte + 4 bytes of pad). A regression that silently falls back to
+-- DEFAULT_KEY_OFFSET = 1 would compare the WHERE-clause key against pad's
+-- bytes and never match any row, so WHERE id = ? would return an empty
+-- set and UPDATE / DELETE would be no-ops. Verify all three locate id
+-- correctly.
+CREATE TABLE crud_off (pad INT NOT NULL, id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO crud_off VALUES (0, 10, 'a'), (0, 20, 'b'), (0, 30, 'c');
+UPDATE crud_off SET label = 'Y' WHERE id = 20;
+DELETE FROM crud_off WHERE id = 10;
+SELECT @crud_off_sum := SUM(id), @crud_off_count := COUNT(*) FROM crud_off;
+SELECT @crud_off_label_20 := label FROM crud_off WHERE id = 20;
+DROP TABLE crud_off;
+
 -- BEGIN..UPDATE..ROLLBACK does NOT undo the change for the reference
 -- engine — UPDATE mutates the committed store directly. The assertion
 -- below pins this documented limitation: the post-rollback label is the
@@ -191,14 +206,18 @@ DROP DATABASE rusty_drop_db_test;
 -- RELEASE SAVEPOINT kept both inserts (2), INSERT made real row values
 -- visible to SELECT (sum 60, count 3), UPDATE / DELETE found and
 -- modified the right rows (UPDATE id=20 to 'X', DELETE id=10 → remaining
--- sum 50, count 2, label of id=20 is 'X'), zero-match UPDATE / DELETE
--- left the row set unchanged, and BEGIN..UPDATE..ROLLBACK around UPDATE
--- did not undo the change (the engine's documented non-transactional
--- UPDATE limitation — the label after ROLLBACK is 'after', not 'before').
+-- sum 50, count 2, label of id=20 is 'X'), the same UPDATE / DELETE /
+-- SELECT path located id correctly even when it lives at a non-default
+-- offset (sum 50, count 2, label of id=20 is 'Y'), zero-match UPDATE /
+-- DELETE left the row set unchanged, and BEGIN..UPDATE..ROLLBACK around
+-- UPDATE did not undo the change (the engine's documented
+-- non-transactional UPDATE limitation — the label after ROLLBACK is
+-- 'after', not 'before').
 SELECT IF(
   @after_commit = 1 AND @after_rollback = 1 AND @after_savepoint = 1 AND @after_release = 2
   AND @rv_sum = 60 AND @rv_count = 3
   AND @crud_sum = 50 AND @crud_count = 2 AND @crud_label_20 = 'X'
+  AND @crud_off_sum = 50 AND @crud_off_count = 2 AND @crud_off_label_20 = 'Y'
   AND @crud_tx_label = 'after',
   3, 0
 ) AS sentinel;

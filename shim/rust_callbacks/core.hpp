@@ -33,9 +33,10 @@ void rust__plugin_init();
 void *rust__create_engine();
 void rust__destroy_engine(void *ctx);
 
-int32_t rust__handler__create(void *ctx, const uint8_t *name, size_t name_len);
+int32_t rust__handler__create(void *ctx, const uint8_t *name, size_t name_len,
+                              const void *table_def);
 int32_t rust__handler__open(void *ctx, const uint8_t *name, size_t name_len,
-                            int32_t mode);
+                            int32_t mode, const void *table_def);
 int32_t rust__handler__close(void *ctx);
 
 int32_t rust__handler__rnd_init(void *ctx, bool scan);

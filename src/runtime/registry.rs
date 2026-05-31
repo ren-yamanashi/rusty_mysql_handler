@@ -89,10 +89,19 @@ mod tests {
         fn index_flags(&self, _idx: u32, _part: u32, _all_parts: bool) -> u32 {
             0
         }
-        fn create(&mut self, _name: &str) -> EngineResult {
+        fn create(
+            &mut self,
+            _name: &str,
+            _table_def: Option<&crate::sys::DdTable>,
+        ) -> EngineResult {
             Ok(())
         }
-        fn open(&mut self, _name: &str, _mode: i32) -> EngineResult {
+        fn open(
+            &mut self,
+            _name: &str,
+            _mode: i32,
+            _table_def: Option<&crate::sys::DdTable>,
+        ) -> EngineResult {
             Ok(())
         }
         fn close(&mut self) -> EngineResult {

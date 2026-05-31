@@ -28,31 +28,37 @@
 
 use crate::panic_guard::FfiBoundary;
 use crate::runtime::{EngineContext, FfiPtr};
+use crate::sys;
 
 /// Create a new table
 ///
 /// # Safety
-/// `ctx` must be non-null; `name` must cover `name_len` readable bytes.
+/// `ctx` must be non-null; `name` must cover `name_len` readable bytes;
+/// `table_def` is null or valid for read for the call's duration.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__create(
     ctx: *mut EngineContext,
     name: *const u8,
     name_len: usize,
+    table_def: *const sys::DdTable,
 ) -> i32 {
     FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees name covers name_len readable bytes.
         let name = unsafe { FfiPtr::bytes_to_str(name, name_len) }?;
-        engine.create(name)
+        // SAFETY: table_def is null or valid for read for the call's duration.
+        let table_def = unsafe { table_def.as_ref() };
+        engine.create(name, table_def)
     })
 }
 
 /// Open an existing table
 ///
 /// # Safety
-/// `ctx` must be non-null; `name` must cover `name_len` readable bytes.
+/// `ctx` must be non-null; `name` must cover `name_len` readable bytes;
+/// `table_def` is null or valid for read for the call's duration.
 #[doc(hidden)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__handler__open(
@@ -60,13 +66,16 @@ pub unsafe extern "C" fn rust__handler__open(
     name: *const u8,
     name_len: usize,
     mode: i32,
+    table_def: *const sys::DdTable,
 ) -> i32 {
     FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees name covers name_len readable bytes.
         let name = unsafe { FfiPtr::bytes_to_str(name, name_len) }?;
-        engine.open(name, mode)
+        // SAFETY: table_def is null or valid for read for the call's duration.
+        let table_def = unsafe { table_def.as_ref() };
+        engine.open(name, mode, table_def)
     })
 }
 
