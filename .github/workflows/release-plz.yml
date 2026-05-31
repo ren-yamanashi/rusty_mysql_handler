@@ -14,15 +14,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-# Two-job split (recommended by release-plz docs):
-#   - `release-plz-pr` keeps the rolling release PR up to date on every main
-#     push. Each merge into main updates the same PR with the new commit,
-#     the recomputed version, and the regenerated CHANGELOG entry.
-#   - `release-plz-release` runs only after the release PR is merged (the
-#     action detects that Cargo.toml's version exceeds the latest tag) and
-#     does the tag + cargo publish + GitHub Release. The `crates-io`
-#     environment forces a maintainer approval before the publish step.
-
 jobs:
   release-plz-pr:
     name: Release PR
@@ -64,10 +55,8 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
         with:
           shared-key: release-plz
-      # OIDC trusted publishing is the default. Token fallback lives under
-      # the `crates-io` environment secret `CARGO_REGISTRY_TOKEN`, used only
-      # for the very first publish (before trusted publishing is configured
-      # on crates.io) and disaster recovery.
+      # OIDC trusted publishing; token fallback via `CARGO_REGISTRY_TOKEN`
+      # in the `crates-io` environment for the first publish.
       - uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
         id: auth
       - name: release-plz release

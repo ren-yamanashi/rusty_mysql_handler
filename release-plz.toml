@@ -1,12 +1,6 @@
-# release-plz configuration. The defaults already do what we need: bump
-# version from Conventional Commits since the previous tag, then open or
-# update a single rolling "Release" PR. Per-crate overrides go under
-# `[[package]]` blocks if any crate needs to diverge. The reference engine
-# in `examples/engine` is skipped via its own `publish = false` flag.
+# release-plz configuration. Defaults bump version from Conventional
+# Commits and maintain a rolling release PR.
 
 [workspace]
-# Do not commit CHANGELOG.md back to the repo. The generated changelog
-# still appears in the release PR body and in the GitHub Release body,
-# so users browse it through GitHub Releases rather than the working
-# tree.
+# Skip CHANGELOG.md; the GitHub Release body carries the changelog.
 changelog_update = false

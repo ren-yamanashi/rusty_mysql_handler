@@ -21,18 +21,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-# Validate that a PR title follows the project's Conventional Commits
-# convention. Reads the title from $PR_TITLE if set, otherwise from the
-# GitHub event payload at $GITHUB_EVENT_PATH (pull_request.title).
-# Exits non-zero with a `::error::` line readable by GitHub Actions on
-# mismatch.
+# Validate that a PR title follows Conventional Commits. Reads $PR_TITLE
+# or falls back to the GitHub event payload at $GITHUB_EVENT_PATH.
 
 set -euo pipefail
 
 readonly ALLOWED='feat|fix|chore|docs|test|ci|refactor|style|perf|build|revert'
-# `^(prefix)(\(scope\))?(!)?: <subject>` mirrors the rule in
-# .claude/rules/coding-style.md. The optional `!` marks a breaking
-# change in Conventional Commits.
 readonly PATTERN="^(${ALLOWED})(\\([^)]+\\))?!?: .+"
 
 title="${PR_TITLE:-}"

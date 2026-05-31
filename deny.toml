@@ -1,30 +1,17 @@
-# cargo-deny configuration. The crate is loaded as a plugin into the MySQL
-# server process and inherits its full privileges (see coding-style.md's
-# Security section), so dependency hygiene is contractual rather than
-# decorative. Audit with `cargo deny check`; CI gates `audit.yml`.
+# cargo-deny configuration. Run via `cargo deny check`; CI gates `audit.yml`.
 
 [graph]
-# Match the toolchain pin in `rust-toolchain.toml` so the resolver evaluates
-# the same target set CI does.
 all-features = false
 no-default-features = false
 
 [advisories]
 version = 2
-# Block any merge when a RustSec advisory matches a transitive dep. Update
-# the ignore list (with rationale) only when a specific advisory cannot be
-# resolved without breaking the build.
 yanked = "deny"
 ignore = []
 
 [licenses]
 version = 2
-# The crate itself is GPL-2.0-only (MySQL handler binding). Every dependency
-# must be license-compatible with that — practically: MIT, Apache-2.0,
-# BSD variants, ISC, ZLib, or another GPL-2.0-compatible permissive
-# license. CC0 / Unlicense are accepted as effectively public-domain.
-# GPL / LGPL / AGPL transitives need a case-by-case decision and are not
-# auto-allowed because they propagate copyleft into the linked artifact.
+# GPL-2.0-compatible only (the crate itself is GPL-2.0-only).
 allow = [
   "GPL-2.0-only",
   "MIT",
@@ -42,8 +29,6 @@ confidence-threshold = 0.93
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
-# Block crates known to introduce supply-chain risk or to be unmaintained
-# substitutes for std equivalents. Extend as patterns emerge.
 deny = []
 skip = []
 skip-tree = []

@@ -13,15 +13,8 @@ keywords = ["mysql", "ffi", "plugin", "storage-engine", "handler"]
 categories = ["api-bindings", "database", "external-ffi-bindings"]
 rust-version = "1.85"
 links = "ha_rusty_shim"
-# Whitelist what ships to crates.io. Notable deliberate omissions:
-# - `mysql-server/` (the MySQL submodule, ~48k files / 1 GiB; users supply
-#   their own headers via `MYSQL_HANDLER_FROM_SOURCE` / a release asset).
-# - `examples/` (separate workspace member, published as its own demo).
-# - `tests/`, `docs/`, `.github/`, `Makefile`, `rust-toolchain.toml`
-#   (developer infra; pinning toolchain or repo workflow into downstream
-#   crates would surprise them).
-# Re-evaluate this list before adding a new top-level file that downstream
-# users genuinely need at build time.
+# Whitelist what ships to crates.io; excludes mysql-server submodule,
+# examples, tests, docs, and dev infra.
 include = [
   "src/**/*.rs",
   "shim/**/*.cc",
@@ -35,10 +28,7 @@ include = [
 ]
 
 [package.metadata.docs.rs]
-# The build script's default path (no env var) skips bindgen and the cmake
-# shim build and re-uses the vendored `src/sys_bindings.rs`, so docs.rs can
-# build the rlib without MySQL headers or a C++ toolchain. `--cfg docsrs`
-# is wired so future doc-only items can gate on it.
+# `--cfg docsrs` lets future doc-only items gate on it.
 rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace]
