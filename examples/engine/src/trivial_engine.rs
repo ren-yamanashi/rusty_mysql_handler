@@ -20,11 +20,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `TrivialEngine`: the reference `StorageEngine` implementation. The single
-//! `impl StorageEngine for TrivialEngine` block cannot be split across files
-//! (one trait impl per type), so — like the `StorageEngine` trait in
-//! `mysql-handler` — this file is exempt from the 250-line limit and grows as
-//! more handler methods gain meaningful example overrides.
+//! `TrivialEngine`: the reference `StorageEngine` implementation.
 
 use std::ffi::CStr;
 

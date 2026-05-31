@@ -30,17 +30,11 @@
 
 #![allow(unsafe_code)]
 
+use crate::hton::result::result_to_error;
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
 use crate::runtime::FfiPtr;
 use crate::sys;
-
-fn result_to_error(r: crate::engine::EngineResult) -> bool {
-    match r {
-        Ok(()) => false,
-        Err(_) => true,
-    }
-}
 
 /// # Safety
 /// `tablespace` is null or valid for the call; not retained.
@@ -194,21 +188,4 @@ pub unsafe extern "C" fn rust__hton__sdi_delete(
             None => true,
         }
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::engine::EngineError;
-
-    #[test]
-    fn ok_maps_to_no_error() {
-        assert!(!result_to_error(Ok(())));
-    }
-
-    #[test]
-    fn err_maps_to_error() {
-        assert!(result_to_error(Err(EngineError::Unsupported)));
-        assert!(result_to_error(Err(EngineError::Internal)));
-    }
 }
