@@ -8,7 +8,7 @@
 
 ## Setup
 
-Fork the repo on GitHub, clone your fork, then:
+Fork and clone the repo, then:
 
 ```bash
 make setup
