@@ -8,9 +8,9 @@
 
 ## Setup
 
+Fork and clone the repo, then:
+
 ```bash
-git clone https://github.com/ren-yamanashi/rusty_mysql_handler.git
-cd rusty_mysql_handler
 make setup
 ```
 
