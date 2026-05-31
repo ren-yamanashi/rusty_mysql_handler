@@ -1,7 +1,9 @@
 # Categories for `gh release create --generate-notes`. PRs are bucketed by
 # label; the labels used here mirror the Conventional Commits prefixes the
-# project uses on PR titles, so a single source of truth (the PR title)
-# drives both the changelog entry and its category.
+# project uses on PR titles. Labels are currently applied manually before
+# tagging a release — a future labeler workflow could parse PR titles and
+# apply the matching label automatically, but until then the maintainer
+# needs to set the right label on each merged PR.
 
 changelog:
   categories:

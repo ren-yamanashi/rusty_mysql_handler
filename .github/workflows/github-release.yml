@@ -26,7 +26,11 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v') && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'workflow_dispatch' && inputs.confirm == 'github-release') }}
+    # workflow_run only fires when Publish Rust succeeded on a tag (head_branch
+    # is the tag name for tag pushes). The startsWith + contains check is
+    # defense-in-depth on top of the regex below and the tag filter in
+    # Publish Rust, so a branch like `vfoo` cannot slip through.
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v') && contains(github.event.workflow_run.head_branch, '.') && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'workflow_dispatch' && inputs.confirm == 'github-release') }}
     name: Create GitHub Release
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -35,7 +39,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.tag }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || format('refs/tags/{0}', inputs.tag) }}
 
       - name: Resolve release tag
         id: tag
