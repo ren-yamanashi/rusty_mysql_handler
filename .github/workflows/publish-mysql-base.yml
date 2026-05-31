@@ -1,7 +1,7 @@
 name: Publish mysql build base
 
-# Publishes the e2e mysql build base. Manual only — see "Updating the E2E build
-# base" in CONTRIBUTING.md.
+# Publishes the e2e mysql build base — manual only.
+# See "Updating the E2E build base" in CONTRIBUTING.md.
 on:
   workflow_dispatch:
 
@@ -14,11 +14,19 @@ env:
 
 jobs:
   publish-base:
-    name: Publish base
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    name: Publish base (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -30,4 +38,5 @@ jobs:
       - name: Build and publish the base asset
         env:
           GH_TOKEN: ${{ github.token }}
+          ARCH: ${{ matrix.arch }}
         run: bash tests/e2e/publish-base.sh

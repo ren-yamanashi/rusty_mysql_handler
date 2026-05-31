@@ -15,29 +15,83 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# cargo check / test are deterministic for this codebase (no
+# cfg(target_*), no platform-specific deps), so 1 platform is enough.
+# Multi-platform coverage lives in e2e.yml, which exercises the parts
+# that genuinely differ across OS (.so / .dylib / .dll plugin loaders).
+
 jobs:
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - run: make check
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+        with:
+          shared-key: lint
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: make lint
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
+  check-test:
+    name: Check & Test
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - run: make test
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+        with:
+          shared-key: check-test
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo check --workspace --all-targets
+      - run: cargo test --workspace
+
+  msrv:
+    name: MSRV (1.85)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Strip rust-toolchain.toml so the MSRV pin is honoured
+        run: rm rust-toolchain.toml
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.85.0"
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+        with:
+          shared-key: msrv
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo check --workspace --all-targets
+
+  quality:
+    name: Quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [lint, check-test, msrv]
+    if: ${{ always() }}
+    steps:
+      - name: Verify required jobs
+        env:
+          LINT: ${{ needs.lint.result }}
+          CHECK_TEST: ${{ needs.check-test.result }}
+          MSRV: ${{ needs.msrv.result }}
+        run: |
+          set -euo pipefail
+          fail=0
+          for entry in "lint=$LINT" "check-test=$CHECK_TEST" "msrv=$MSRV"; do
+            name="${entry%%=*}"
+            result="${entry#*=}"
+            echo "$name: $result"
+            if [[ "$result" != "success" ]]; then fail=1; fi
+          done
+          exit "$fail"

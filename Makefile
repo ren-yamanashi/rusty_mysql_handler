@@ -50,17 +50,16 @@ mysql-configure: $(MYSQL_BUILD_DIR)/include/my_config.h ## Generate MySQL build 
 rust-build: ## Build all Rust crates (release)
 	@cargo build --release
 
-lint: ## Run clippy
+lint: ## Run fmt-check + clippy + license check (deterministic, one platform)
+	@cargo fmt --all --check
 	@cargo clippy --workspace -- -D warnings
+	@bash scripts/check-license.sh
 
 fmt: ## Format Rust code
 	@cargo fmt --all
 
-check: ## Run check + clippy + fmt check + license check
+check: lint ## Run lint + cargo check (full local pre-PR sweep)
 	@cargo check --workspace
-	@cargo clippy --workspace -- -D warnings
-	@cargo fmt --all --check
-	@bash scripts/check-license.sh
 
 test: ## Run tests
 	@cargo test --workspace
