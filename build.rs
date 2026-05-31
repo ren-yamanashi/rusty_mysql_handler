@@ -143,15 +143,11 @@ impl BuildScript {
     }
 
     fn build_shim_from_source(&self) {
-        for src in [
-            "shim/binding.cc",
-            "shim/binding.hpp",
-            "shim/plugin.cc",
-            "shim/CMakeLists.txt",
-            "shim/rust_callbacks.hpp",
-        ] {
-            println!("cargo:rerun-if-changed={}/{src}", self.manifest_dir);
-        }
+        // Watch every shim source: the category split (handler_*.cc / hton_*.cc
+        // and the corresponding rust_callbacks/*.hpp) means a fixed list rots
+        // silently — a modified `hton_transactions.cc` would otherwise not
+        // trigger a rebuild and ship a stale staticlib.
+        Self::declare_rerun_for_tree(&format!("{}/shim", self.manifest_dir));
 
         let dst = cmake::Config::new(format!("{}/shim", self.manifest_dir))
             .define("MYSQL_SOURCE_DIR", &self.mysql_src)
@@ -189,5 +185,25 @@ impl BuildScript {
     // `rustc-link-arg-cdylib` that survive the hop to a dependent cdylib.
     fn publish_staticlib_dir(dir: &str) {
         println!("cargo:staticlib-dir={dir}");
+    }
+
+    fn declare_rerun_for_tree(dir: &str) {
+        println!("cargo:rerun-if-changed={dir}");
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_dir = match entry.file_type() {
+                Ok(t) => t.is_dir(),
+                Err(_) => false,
+            };
+            if is_dir {
+                Self::declare_rerun_for_tree(&path.display().to_string());
+            } else {
+                println!("cargo:rerun-if-changed={}", path.display());
+            }
+        }
     }
 }
