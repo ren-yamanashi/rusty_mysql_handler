@@ -38,7 +38,7 @@
 //! `update_row` and `delete_row` mutate the committed store directly
 //! rather than the per-connection transaction, so a `BEGIN..ROLLBACK`
 //! around an `UPDATE` or `DELETE` does **not** undo them. The
-//! transactional story stays limited to `INSERT`, which uses the
+//! transactional path stays limited to `INSERT`, which uses the
 //! [`TxnSession`](crate::trivial_txn::TrivialTxn) staging path. A
 //! downstream engine would route `UPDATE` / `DELETE` through the
 //! transaction as well.
@@ -238,7 +238,7 @@ impl StorageEngine for TrivialEngine {
     fn update_row(&mut self, old: &[u8], new: &[u8]) -> EngineResult {
         // The demo updates the committed store directly. Inside an explicit
         // BEGIN..ROLLBACK the change will not be undone; the transactional
-        // story is intentionally limited to INSERT for the reference engine.
+        // path is intentionally limited to INSERT for the reference engine.
         if store::replace_row(&self.table, old, new) {
             Ok(())
         } else {
