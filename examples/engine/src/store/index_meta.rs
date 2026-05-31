@@ -30,7 +30,7 @@ use crate::store::KeyPartMeta;
 /// Per-index snapshot taken from `dd::Index`. Only the fields the
 /// reference engine consumes today are stored; `dd::Index::name`,
 /// `engine_attribute`, and friends are intentionally left off until a
-/// later stage needs them.
+/// downstream consumer needs them.
 #[derive(Debug, Clone)]
 pub struct IndexMeta {
     /// Index kind.

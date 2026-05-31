@@ -28,7 +28,7 @@ use mysql_handler::sys::DdColumn;
 /// Per-column metadata snapshot taken from `dd::Column`. Only the fields
 /// the reference engine consumes today are stored; other `dd::Column`
 /// attributes (column name, unsigned flag, ...) are intentionally left
-/// off until a later stage needs them.
+/// off until a downstream consumer needs them.
 #[derive(Debug, Clone)]
 pub struct ColumnMeta {
     /// MySQL data-dictionary type.

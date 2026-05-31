@@ -26,8 +26,8 @@ use mysql_handler::sys::DdIndexElement;
 
 /// Per-key-part snapshot taken from `dd::Index_element`. Only the field
 /// the reference engine consumes today is stored; prefix length and
-/// declared sort order are intentionally left off until a later stage
-/// needs them.
+/// declared sort order are intentionally left off until a downstream
+/// consumer needs them.
 #[derive(Debug, Clone)]
 pub struct KeyPartMeta {
     /// 1-based ordinal position of the underlying column in the table.
