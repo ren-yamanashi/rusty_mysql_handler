@@ -7,8 +7,29 @@ authors = ["ren-yamanashi"]
 license = "GPL-2.0-only"
 edition = "2024"
 repository = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+homepage = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+documentation = "https://docs.rs/mysql-handler"
+keywords = ["mysql", "ffi", "plugin", "storage-engine", "handler"]
+categories = ["api-bindings", "database", "external-ffi-bindings"]
 rust-version = "1.85"
 links = "ha_rusty_shim"
+# Whitelist what ships to crates.io; excludes mysql-server submodule,
+# examples, tests, docs, and dev infra.
+include = [
+  "src/**/*.rs",
+  "shim/**/*.cc",
+  "shim/**/*.hpp",
+  "shim/**/*.h",
+  "shim/CMakeLists.txt",
+  "build.rs",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE",
+]
+
+[package.metadata.docs.rs]
+# `--cfg docsrs` lets future doc-only items gate on it.
+rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace]
 members = ["examples/engine"]

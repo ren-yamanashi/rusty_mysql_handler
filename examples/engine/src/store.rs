@@ -22,20 +22,9 @@
 
 //! Process-wide committed-row store for the reference engine.
 //!
-//! A handler instance lives only for one statement, so committed rows cannot
-//! live in the engine: they go here, keyed by table name, where the next
-//! statement's fresh handler (and the per-connection transaction's commit) can
-//! reach them. Each committed row is the raw `record[0]` byte image MySQL
-//! handed `write_row`, kept verbatim so a later `rnd_next` can copy it back
-//! into the caller-owned buffer. Keys by bare table name, so this store does
-//! not distinguish same-named tables in different databases — fine for a
-//! single-schema demo.
-//!
-//! No bound on the map. Any client with `INSERT` on a RUSTY table can grow it
-//! without limit (committed rows are only ever released by `TRUNCATE TABLE` /
-//! `DELETE` without `WHERE`). This is intentional for a single-process
-//! reference demo; a downstream storage engine must cap, evict, or persist
-//! committed rows to be safe under real workloads.
+//! Rows are the raw `record[0]` byte images, keyed by bare table name so
+//! the next statement's fresh handler reads them back. Unbounded; a real
+//! engine would cap, evict, or persist them.
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
@@ -85,9 +74,7 @@ pub fn reset_table(table: &str) {
     committed().remove(table);
 }
 
-/// Mutable reference to `table`'s row vector, or `None` if the table has
-/// no committed rows yet. Used by `replace_row` / `remove_row` to share one
-/// lookup / early-return path.
+/// Mutable row vector for `table`, or `None` if the table is empty.
 fn rows_mut<'a>(
     guard: &'a mut MutexGuard<'static, HashMap<String, Vec<Vec<u8>>>>,
     table: &str,
@@ -96,15 +83,8 @@ fn rows_mut<'a>(
 }
 
 /// Replace the first row in `table` whose bytes equal `old` with `new`.
-/// Returns `true` if a row was replaced, `false` if no match was found.
-///
-/// Linear scan with first-match-wins. If two committed rows happen to have
-/// identical bytes (possible without a `UNIQUE` constraint), this replaces
-/// one of them and leaves the other; the choice is stable for any given
-/// `Vec` iteration order but not semantically meaningful. The reference
-/// demo never produces colliding rows, so this is fine; a downstream
-/// engine would key updates on a real row position rather than byte
-/// equality.
+/// Returns `false` if no match was found. First-match-wins on byte
+/// equality; the demo never produces colliding rows.
 #[must_use]
 pub fn replace_row(table: &str, old: &[u8], new: &[u8]) -> bool {
     let mut guard = committed();
@@ -122,9 +102,7 @@ pub fn replace_row(table: &str, old: &[u8], new: &[u8]) -> bool {
 }
 
 /// Remove the first row in `table` whose bytes equal `target`. Returns
-/// `true` if a row was removed, `false` if no match was found.
-///
-/// Same first-match-wins caveat as [`replace_row`].
+/// `false` if no match. Same first-match-wins caveat as [`replace_row`].
 #[must_use]
 pub fn remove_row(table: &str, target: &[u8]) -> bool {
     let mut guard = committed();

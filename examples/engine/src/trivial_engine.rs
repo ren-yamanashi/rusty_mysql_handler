@@ -22,26 +22,11 @@
 
 //! `TrivialEngine`: the reference `StorageEngine` implementation.
 //!
-//! ## Index scan
-//!
-//! The index path is a linear pass over a per-statement snapshot of the
-//! committed rows. `index_read_map` records the key MySQL provided and
-//! filters rows whose first column matches it at a fixed
-//! [`ROW_KEY_OFFSET`]; the index_next continuations honour the same key so
-//! MySQL's `type=ref` plan does not see leaked non-matches. Sorted
-//! iteration (`index_first` / `index_last` / `index_prev` in key order) is
-//! intentionally not implemented — MySQL falls back to its own filter for
-//! `ORDER BY` and range queries where this matters.
-//!
-//! ## UPDATE / DELETE
-//!
-//! `update_row` and `delete_row` mutate the committed store directly
-//! rather than the per-connection transaction, so a `BEGIN..ROLLBACK`
-//! around an `UPDATE` or `DELETE` does **not** undo them. The
-//! transactional story stays limited to `INSERT`, which uses the
-//! [`TxnSession`](crate::trivial_txn::TrivialTxn) staging path. A
-//! downstream engine would route `UPDATE` / `DELETE` through the
-//! transaction as well.
+//! Index scan is a linear pass with first-column key match at
+//! [`ROW_KEY_OFFSET`]; no sorted iteration. `update_row` / `delete_row`
+//! mutate the committed store directly, so `BEGIN..ROLLBACK` does **not**
+//! undo them — the transactional path stays limited to `INSERT` via
+//! [`TxnSession`](crate::trivial_txn::TrivialTxn).
 
 use std::ffi::CStr;
 
@@ -63,27 +48,17 @@ fn table_key(name: &str) -> String {
 #[derive(Debug)]
 pub struct TrivialEngine {
     table: String,
-    /// Per-statement snapshot of the committed rows. Populated by both
-    /// `rnd_init` and `index_init`; MySQL only runs one scan at a time
-    /// per handler, so a single field covers either mode.
+    /// Per-statement snapshot; populated by `rnd_init` / `index_init`.
     snapshot: Vec<Vec<u8>>,
-    /// Cursor into `snapshot`. `position()` writes `scan_pos - 1` as the
-    /// row ref so a later `rnd_pos()` re-reads the same row regardless
-    /// of which scan mode produced it.
+    /// Cursor into `snapshot`. `position()` writes `scan_pos - 1`.
     scan_pos: usize,
-    /// Key remembered from the last `index_read_map` so `index_next` /
-    /// `index_next_same` keep filtering against it. Cleared by
-    /// `index_first` / `index_last` / `index_prev` (sequential walks).
+    /// Key from the last `index_read_map`; cleared on sequential walks.
     last_index_key: Vec<u8>,
     next_auto_inc: u64,
 }
 
-/// Offset where the first column's bytes start in MySQL's `record[0]`.
-/// One NULL-bits byte precedes the first column for any table with at least
-/// one nullable column, which is the common demo case (the `CREATE TABLE`
-/// fixtures here all have one nullable column). A schema with zero nullable
-/// columns or with the indexed column not first would need a less naive
-/// layout decoder; that is out of scope for the reference engine.
+/// First-column offset in `record[0]`: one NULL-bits byte for the
+/// single-nullable-column fixtures the demo uses.
 const ROW_KEY_OFFSET: usize = 1;
 
 impl TrivialEngine {
@@ -98,20 +73,14 @@ impl TrivialEngine {
         }
     }
 
-    /// Copy `row` into `buf`, truncating to the shorter length so a
-    /// mis-sized demo buffer does not panic. A length mismatch indicates
-    /// a `rec_buff_length` / schema bug; the demo silently truncates and
-    /// the dropped tail is invisible — a production engine would treat
-    /// the mismatch as an error.
+    /// Copy `row` into `buf`, truncating to the shorter length.
+    /// A length mismatch is a schema bug silently dropped for the demo.
     fn copy_row_into(buf: &mut [u8], row: &[u8]) {
         let n = buf.len().min(row.len());
         buf[..n].copy_from_slice(&row[..n]);
     }
 
-    /// Yield the row at `*pos` in `snapshot`, advance `*pos`, return
-    /// `EndOfFile` once exhausted. Shared by the index-scan helpers below
-    /// (all of them are essentially a sequential walk after the initial
-    /// positioning).
+    /// Yield `snapshot[*pos]`, advance `*pos`. `EndOfFile` once exhausted.
     fn yield_from(snapshot: &[Vec<u8>], pos: &mut usize, buf: &mut [u8]) -> EngineResult {
         let row = match snapshot.get(*pos) {
             Some(r) => r,
@@ -122,13 +91,8 @@ impl TrivialEngine {
         Ok(())
     }
 
-    /// True when `row`'s key column matches `key` byte-for-byte at the
-    /// demo's fixed [`ROW_KEY_OFFSET`]. Treated as "the engine confirms
-    /// this row satisfies the index lookup" by MySQL's `type=ref` path,
-    /// which trusts the engine to filter and does not re-apply the
-    /// `WHERE` predicate. An empty `key` returns `false` (matches
-    /// nothing) — a zero-byte index lookup is not a meaningful query
-    /// and a naive byte compare would otherwise let every row through.
+    /// Byte-compare `row`'s key column against `key` at [`ROW_KEY_OFFSET`].
+    /// MySQL's `type=ref` trusts this filter. Empty `key` returns `false`.
     fn row_matches_key(row: &[u8], key: &[u8]) -> bool {
         if key.is_empty() {
             return false;
@@ -138,9 +102,7 @@ impl TrivialEngine {
             .is_some_and(|slice| slice == key)
     }
 
-    /// Advance `*pos` past `snapshot` looking for the next row whose key
-    /// column matches `key`, yield its bytes, and return. `EndOfFile`
-    /// when no further row matches.
+    /// Yield the next `snapshot[*pos]` matching `key`. `EndOfFile` at end.
     fn yield_next_matching(
         snapshot: &[Vec<u8>],
         pos: &mut usize,
@@ -226,9 +188,7 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn position(&mut self, _record: &[u8], ref_out: &mut [u8]) {
-        // The row just yielded by rnd_next / index_* sits at scan_pos-1 in
-        // the unified snapshot. MySQL hands the 8-byte ref back to rnd_pos
-        // on a later re-read, so encode a u64 row index.
+        // Encode the just-yielded row's snapshot index as u64 LE for rnd_pos.
         let idx = self.scan_pos.saturating_sub(1) as u64;
         if ref_out.len() >= 8 {
             ref_out[..8].copy_from_slice(&idx.to_le_bytes());
@@ -236,9 +196,6 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn update_row(&mut self, old: &[u8], new: &[u8]) -> EngineResult {
-        // The demo updates the committed store directly. Inside an explicit
-        // BEGIN..ROLLBACK the change will not be undone; the transactional
-        // story is intentionally limited to INSERT for the reference engine.
         if store::replace_row(&self.table, old, new) {
             Ok(())
         } else {
@@ -316,10 +273,7 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn index_next(&mut self, buf: &mut [u8]) -> EngineResult {
-        // Honour the remembered key from `index_read_map` so MySQL's
-        // type=ref plan does not see non-matching rows. After
-        // `index_first` / `index_last` / `index_prev` the key is empty
-        // and this falls back to a sequential walk.
+        // Honour the index_read_map key; empty means sequential walk.
         if self.last_index_key.is_empty() {
             Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
         } else {
@@ -329,10 +283,7 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn index_prev(&mut self, buf: &mut [u8]) -> EngineResult {
-        // Symmetric with `index_first` / `index_last`: clear the index
-        // key so the walk does not silently keep filtering against the
-        // last `index_read_map` key (which would leak through here
-        // otherwise).
+        // Clear key like index_first / index_last to avoid leaked filtering.
         self.last_index_key.clear();
         Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
     }

@@ -1,0 +1,6 @@
+# release-plz configuration. Defaults bump version from Conventional
+# Commits and maintain a rolling release PR.
+
+[workspace]
+# Skip CHANGELOG.md; the GitHub Release body carries the changelog.
+changelog_update = false

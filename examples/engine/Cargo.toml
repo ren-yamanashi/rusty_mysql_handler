@@ -6,6 +6,7 @@ authors = ["ren-yamanashi"]
 license = "GPL-2.0-only"
 edition = "2024"
 rust-version = "1.85"
+publish = false
 
 [lib]
 crate-type = ["cdylib"]
@@ -14,4 +15,4 @@ crate-type = ["cdylib"]
 workspace = true
 
 [dependencies]
-mysql-handler = { path = "../.." }
+mysql-handler = { path = "../..", version = "0.1.0" }

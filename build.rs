@@ -143,10 +143,7 @@ impl BuildScript {
     }
 
     fn build_shim_from_source(&self) {
-        // Watch every shim source: the category split (handler_*.cc / hton_*.cc
-        // and the corresponding rust_callbacks/*.hpp) means a fixed list rots
-        // silently — a modified `hton_transactions.cc` would otherwise not
-        // trigger a rebuild and ship a stale staticlib.
+        // Recurse so per-category .cc edits actually trigger a rebuild.
         Self::declare_rerun_for_tree(&format!("{}/shim", self.manifest_dir));
 
         let dst = cmake::Config::new(format!("{}/shim", self.manifest_dir))
@@ -200,9 +197,7 @@ impl BuildScript {
             let path = entry.path();
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            // Skip dotfiles and conventional build-output dirs so a future
-            // `shim/build/` or `shim/.cache/` does not enrol every generated
-            // artefact into Cargo's rerun set and trigger rebuild loops.
+            // Skip dotfiles and build-output dirs to avoid rebuild loops.
             if name_str.starts_with('.')
                 || matches!(name_str.as_ref(), "build" | "target" | "CMakeFiles")
             {
@@ -215,9 +210,7 @@ impl BuildScript {
             if is_dir {
                 Self::declare_rerun_for_tree(&path.to_string_lossy());
             } else {
-                // Watch only sources that affect the cmake build of the shim;
-                // README / .md / generated artefacts in shim/ would otherwise
-                // pad the rerun set without changing the staticlib.
+                // Watch only sources that affect the cmake build.
                 let watch = matches!(
                     path.extension().and_then(|s| s.to_str()),
                     Some("cc" | "cpp" | "hpp" | "h")
