@@ -14,4 +14,4 @@ crate-type = ["cdylib"]
 workspace = true
 
 [dependencies]
-mysql-handler = { path = "../.." }
+mysql-handler = { path = "../..", version = "0.1.0" }
