@@ -68,33 +68,33 @@ hand. The E2E build is fail-closed — it refuses to build when
 
 ## Releasing
 
-A `vX.Y.Z` tag push triggers `publish-rust.yml` (cargo publish) followed by
-`github-release.yml` (auto-generated changelog). The publish job runs in the
-`crates-io` GitHub environment — for that environment to be a real security
-boundary rather than decoration, configure it under
-**Settings → Environments → crates-io** with:
+Releases are driven by [`release-plz`](https://release-plz.dev/). On
+every main push the `Release-plz` workflow updates a single rolling
+"Release" PR with the version bump (computed from Conventional Commits
+since the previous tag — `feat:` → minor, `fix:` → patch, `breaking:` /
+`!:` → major) and the regenerated `CHANGELOG.md` entries. Merging that
+PR triggers the same workflow to tag the new version, `cargo publish`
+to crates.io, and create the matching GitHub Release.
+
+`crates-io` GitHub environment — required setup under
+**Settings → Environments → crates-io**:
 
 1. **Required reviewers** — at least one maintainer must approve each
    deployment before `cargo publish` runs.
-2. **Deployment branch and tag restriction** — limit deployments to tags
-   matching `v[0-9]+.[0-9]+.[0-9]+*` so a workflow_dispatch from a
-   feature branch cannot publish.
+2. **Deployment branch restriction** — limit to `main` so a
+   feature-branch run cannot publish.
 3. **Authentication** — either:
-   - **Trusted publishing (recommended)**: configure `mysql-handler` on
-     crates.io to trust this repository's `publish-rust.yml`. The default
-     tag-push path uses OIDC and needs no secret.
+   - **Trusted publishing (recommended)**: configure `mysql-handler`
+     on crates.io to trust this repository's `release-plz.yml`. The
+     default path uses OIDC via `rust-lang/crates-io-auth-action` and
+     needs no long-lived secret.
    - **Token fallback**: store `CARGO_REGISTRY_TOKEN` as an environment
-     secret. Used by the `workflow_dispatch` path with
-     `auth_mode = token`, kept for the first publish (before trusted
-     publishing can be configured) and disaster recovery.
+     secret. Used for the very first publish (before trusted publishing
+     can be configured) and disaster recovery.
 
-`release-dry-run.yml` runs the same gates on every main push so a
-release-blocking issue (license, lint, test, dry-run publish) is caught
-before tagging.
-
-Release notes are produced by `gh release create --generate-notes` with
-GitHub's default formatter — a flat list of PRs merged since the
-previous tag. No PR-label categorisation step is required.
+PR titles are enforced by `pr-title-lint.yml` (Conventional Commits via
+`scripts/check-pr-title.sh`), so release-plz can rely on them when
+classifying the SemVer bump and changelog entry.
 
 ## Coding Conventions
 

@@ -1,0 +1,10 @@
+# release-plz configuration. The defaults already do what we need: bump
+# version + regenerate CHANGELOG.md from Conventional Commits since the
+# previous tag, then open or update a single rolling "Release" PR.
+# Per-crate overrides go under `[[package]]` blocks if any crate needs to
+# diverge. The reference engine in `examples/engine` is skipped via its
+# own `publish = false` flag rather than via release-plz config.
+
+[workspace]
+# Keep the changelog file the action commits alongside the release PR.
+changelog_update = true
