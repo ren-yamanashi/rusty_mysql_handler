@@ -25,23 +25,28 @@
 use mysql_handler::dd::ColumnType;
 use mysql_handler::sys::DdColumn;
 
-/// Per-column metadata snapshot taken from `dd::Column`.
+/// Per-column metadata snapshot taken from `dd::Column`. Only the fields
+/// the reference engine consumes today are stored; other `dd::Column`
+/// attributes (column name, unsigned flag, ...) are intentionally left
+/// off until a later stage needs them.
 #[derive(Debug, Clone)]
 pub struct ColumnMeta {
-    /// Column name (UTF-8).
-    pub name: String,
     /// MySQL data-dictionary type.
-    pub column_type: ColumnType,
+    pub(crate) column_type: ColumnType,
     /// `NULL`-allowed?
-    pub is_nullable: bool,
-    /// Unsigned integer?
-    pub is_unsigned: bool,
-    /// Declared character length for string types; `0` for non-string types
-    /// where it is not meaningful.
-    pub char_length: u32,
-    /// `true` for non-`HT_VISIBLE` columns (SE-hidden, SQL-hidden,
-    /// user-hidden). Excluded from the row image and from key offsets.
-    pub is_hidden: bool,
+    pub(crate) is_nullable: bool,
+    /// Declared character length for string types; `0` for non-string
+    /// types where it is not meaningful. For multi-byte charsets the
+    /// in-row storage is `prefix + char_length * mbmaxlen` — see
+    /// [`Self::data_width`].
+    pub(crate) char_length: u32,
+    /// `true` for any non-`HT_VISIBLE` column. The snapshot does not
+    /// distinguish `HT_HIDDEN_SE` (absent from `record[0]`),
+    /// `HT_HIDDEN_SQL` (functional-index expression — present),
+    /// and `HT_HIDDEN_USER` (`INVISIBLE` — present), so
+    /// [`crate::store::TableMeta::data_offset`] bails when one of these
+    /// sits in the prefix.
+    pub(crate) is_hidden: bool,
 }
 
 impl ColumnMeta {
@@ -49,10 +54,8 @@ impl ColumnMeta {
     #[must_use]
     pub fn from_dd_column(column: &DdColumn) -> Self {
         Self {
-            name: column.name(),
             column_type: column.column_type(),
             is_nullable: column.is_nullable(),
-            is_unsigned: column.is_unsigned(),
             char_length: column.char_length(),
             is_hidden: column.is_hidden(),
         }
@@ -60,6 +63,14 @@ impl ColumnMeta {
 
     /// Width in bytes the column occupies inside `record[0]`. `None` for
     /// types the reference engine does not have to address by offset.
+    ///
+    /// VARCHAR / CHAR widths assume a single-byte character set (e.g.
+    /// `ascii`, `latin1`). For multi-byte charsets the actual storage is
+    /// `prefix + char_length * mbmaxlen`, and the length prefix itself may
+    /// flip from 1 to 2 bytes once the byte length exceeds 255 even when
+    /// `char_length <= 255`. The reference demo only uses ASCII, but
+    /// downstream callers building on this snapshot must account for
+    /// `mbmaxlen` themselves.
     #[must_use]
     pub const fn data_width(&self) -> Option<usize> {
         let len = self.char_length as usize;
@@ -87,10 +98,8 @@ mod tests {
 
     fn col(ty: ColumnType, char_len: u32) -> ColumnMeta {
         ColumnMeta {
-            name: String::new(),
             column_type: ty,
             is_nullable: false,
-            is_unsigned: false,
             char_length: char_len,
             is_hidden: false,
         }

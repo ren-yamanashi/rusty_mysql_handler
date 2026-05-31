@@ -27,15 +27,16 @@ use mysql_handler::sys::DdIndex;
 
 use crate::store::KeyPartMeta;
 
-/// Per-index snapshot taken from `dd::Index`.
+/// Per-index snapshot taken from `dd::Index`. Only the fields the
+/// reference engine consumes today are stored; `dd::Index::name`,
+/// `engine_attribute`, and friends are intentionally left off until a
+/// later stage needs them.
 #[derive(Debug, Clone)]
 pub struct IndexMeta {
-    /// Index name (`PRIMARY` for the primary key).
-    pub name: String,
     /// Index kind.
-    pub index_type: IndexType,
+    pub(crate) index_type: IndexType,
     /// Key parts in declared order.
-    pub parts: Vec<KeyPartMeta>,
+    pub(crate) parts: Vec<KeyPartMeta>,
 }
 
 impl IndexMeta {
@@ -50,7 +51,6 @@ impl IndexMeta {
             }
         }
         Self {
-            name: index.name(),
             index_type: index.index_type(),
             parts,
         }

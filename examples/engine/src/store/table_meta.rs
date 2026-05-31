@@ -83,9 +83,13 @@ impl TableMeta {
         n.div_ceil(8)
     }
 
-    /// Byte offset of the visible column at `column_index` inside
-    /// `record[0]`. Returns `None` past the end or when a preceding
-    /// visible column has unknown width.
+    /// Byte offset of the column at `column_index` inside `record[0]`.
+    /// Returns `None` past the end, when a preceding column has unknown
+    /// width, or when a hidden column sits in the prefix. The hidden-column
+    /// case is conservative: `HT_HIDDEN_SE` columns are absent from
+    /// `record[0]` but `HT_HIDDEN_SQL` (functional-index expression) and
+    /// `HT_HIDDEN_USER` (INVISIBLE) columns are not, and the snapshot does
+    /// not distinguish the three, so refuse rather than mis-compute.
     #[must_use]
     pub fn data_offset(&self, column_index: usize) -> Option<usize> {
         if column_index >= self.columns.len() {
@@ -94,7 +98,7 @@ impl TableMeta {
         let mut offset = self.null_bits_bytes();
         for col in &self.columns[..column_index] {
             if col.is_hidden {
-                continue;
+                return None;
             }
             offset = offset.checked_add(col.data_width()?)?;
         }
@@ -122,14 +126,12 @@ impl TableMeta {
 mod tests {
     use super::*;
     use crate::store::KeyPartMeta;
-    use mysql_handler::dd::{ColumnType, IndexElementOrder};
+    use mysql_handler::dd::ColumnType;
 
-    fn col(name: &str, ty: ColumnType, nullable: bool, char_len: u32) -> ColumnMeta {
+    fn col(_name: &str, ty: ColumnType, nullable: bool, char_len: u32) -> ColumnMeta {
         ColumnMeta {
-            name: name.to_owned(),
             column_type: ty,
             is_nullable: nullable,
-            is_unsigned: false,
             char_length: char_len,
             is_hidden: false,
         }
@@ -137,13 +139,8 @@ mod tests {
 
     fn primary_on(column_ordinal: u32) -> IndexMeta {
         IndexMeta {
-            name: "PRIMARY".to_owned(),
             index_type: IndexType::Primary,
-            parts: vec![KeyPartMeta {
-                column_ordinal,
-                length: 0,
-                order: IndexElementOrder::Ascending,
-            }],
+            parts: vec![KeyPartMeta { column_ordinal }],
         }
     }
 
@@ -204,6 +201,24 @@ mod tests {
     }
 
     #[test]
+    fn data_offset_none_when_hidden_column_sits_in_prefix() {
+        // Hidden column packing depends on hidden-kind (SE / SQL / USER),
+        // which the snapshot does not retain. Bail rather than mis-count.
+        let hidden = ColumnMeta {
+            column_type: ColumnType::Long,
+            is_nullable: false,
+            char_length: 0,
+            is_hidden: true,
+        };
+        let m = TableMeta {
+            columns: vec![hidden, col("id", ColumnType::Long, false, 0)],
+            indexes: vec![],
+        };
+        assert_eq!(m.data_offset(0), Some(0));
+        assert_eq!(m.data_offset(1), None);
+    }
+
+    #[test]
     fn primary_key_offset_locates_first_key_column() {
         // CREATE TABLE t (id INT NOT NULL, name VARCHAR(50), PRIMARY KEY (id))
         let m = TableMeta {
@@ -226,13 +241,8 @@ mod tests {
                 col("name", ColumnType::VarChar, true, 50),
             ],
             indexes: vec![IndexMeta {
-                name: "idx_id".to_owned(),
                 index_type: IndexType::Multiple,
-                parts: vec![KeyPartMeta {
-                    column_ordinal: 1,
-                    length: 0,
-                    order: IndexElementOrder::Ascending,
-                }],
+                parts: vec![KeyPartMeta { column_ordinal: 1 }],
             }],
         };
         assert_eq!(m.primary_key_offset(), Some(1));

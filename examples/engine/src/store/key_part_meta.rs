@@ -22,18 +22,16 @@
 
 //! Per-key-part snapshot taken from `dd::Index_element`.
 
-use mysql_handler::dd::IndexElementOrder;
 use mysql_handler::sys::DdIndexElement;
 
-/// Per-key-part snapshot taken from `dd::Index_element`.
+/// Per-key-part snapshot taken from `dd::Index_element`. Only the field
+/// the reference engine consumes today is stored; prefix length and
+/// declared sort order are intentionally left off until a later stage
+/// needs them.
 #[derive(Debug, Clone)]
 pub struct KeyPartMeta {
     /// 1-based ordinal position of the underlying column in the table.
-    pub column_ordinal: u32,
-    /// Prefix length, or `0` for the whole column.
-    pub length: u32,
-    /// Declared sort order.
-    pub order: IndexElementOrder,
+    pub(crate) column_ordinal: u32,
 }
 
 impl KeyPartMeta {
@@ -42,8 +40,6 @@ impl KeyPartMeta {
     pub fn from_dd_index_element(elt: &DdIndexElement) -> Self {
         Self {
             column_ordinal: elt.column_ordinal(),
-            length: elt.length(),
-            order: elt.order(),
         }
     }
 }

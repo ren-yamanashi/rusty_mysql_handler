@@ -83,10 +83,14 @@ impl TrivialEngine {
     /// Byte offset of the primary-key column in `record[0]`, resolved from
     /// `meta` when present; otherwise [`DEFAULT_KEY_OFFSET`].
     fn key_offset(&self) -> usize {
-        self.meta
-            .as_ref()
-            .and_then(store::TableMeta::primary_key_offset)
-            .unwrap_or(DEFAULT_KEY_OFFSET)
+        let meta = match self.meta.as_ref() {
+            Some(m) => m,
+            None => return DEFAULT_KEY_OFFSET,
+        };
+        match meta.primary_key_offset() {
+            Some(o) => o,
+            None => DEFAULT_KEY_OFFSET,
+        }
     }
 
     /// Copy `row` into `buf`, truncating to the shorter length.
