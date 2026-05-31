@@ -35,6 +35,34 @@ fn sv_index(sv: &[u8]) -> Option<usize> {
     usize::try_from(u64::from_le_bytes(bytes)).ok()
 }
 
+/// Push `rows` into `table`'s committed store, picking the keyed path
+/// when *every* row in the batch yields a primary-key value, and the
+/// sequence-key path otherwise. The all-or-nothing choice avoids mixing
+/// real PK keys with synthetic `KeyValue::Unsigned(seq)` counters in the
+/// same BTreeMap — sequence numbers start at zero and would otherwise
+/// silently overwrite small unsigned PKs via `BTreeMap::insert`'s
+/// last-write-wins semantics.
+fn flush_table(table: &str, rows: Vec<Vec<u8>>) {
+    let meta = match store::lookup_meta(table) {
+        Some(m) => m,
+        None => {
+            store::commit_seq(table, rows);
+            return;
+        }
+    };
+    let mut keyed = Vec::with_capacity(rows.len());
+    for row in &rows {
+        match store::extract_key_from_row(row, &meta) {
+            Some(k) => keyed.push((k, row.clone())),
+            None => {
+                store::commit_seq(table, rows);
+                return;
+            }
+        }
+    }
+    store::commit_keyed(table, keyed);
+}
+
 /// Per-connection transaction. Stages row writes per table; commit
 /// (`all=true`) flushes to the committed store, rollback discards.
 /// Savepoints snapshot the staged state.
@@ -58,7 +86,7 @@ impl TxnSession for TrivialTxn {
         // autocommit statement commits to all=true so they flush too.
         if all {
             for (table, rows) in self.staged.drain() {
-                store::commit_rows(&table, rows);
+                flush_table(&table, rows);
             }
         }
         Ok(())

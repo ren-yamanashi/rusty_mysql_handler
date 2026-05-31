@@ -76,11 +76,17 @@ impl TableMeta {
     }
 
     /// Number of bytes of NULL bits at the start of `record[0]`.
-    /// `ceil(nullable_columns / 8)`, `0` when none are nullable.
+    ///
+    /// MySQL reserves one leading bit for the row's delete-mark / presence
+    /// flag (`null_bit_pos = 1` in `sql/table.cc`) unless the table is
+    /// created with `HA_OPTION_PACK_RECORD`. The reference engine does
+    /// not opt into packed records, so the leading bit is always present
+    /// and the count becomes `ceil((nullable_columns + 1) / 8)` — `1`
+    /// byte even when no column is nullable.
     #[must_use]
     pub fn null_bits_bytes(&self) -> usize {
         let n = self.columns.iter().filter(|c| c.is_nullable).count();
-        n.div_ceil(8)
+        (n + 1).div_ceil(8)
     }
 
     /// Byte offset of the column at `column_index` inside `record[0]`.
@@ -111,6 +117,16 @@ impl TableMeta {
     /// no indexes.
     #[must_use]
     pub fn primary_key_offset(&self) -> Option<usize> {
+        let (offset, _) = self.primary_key_column()?;
+        Some(offset)
+    }
+
+    /// `(offset, column)` for the first column of the primary (or, when
+    /// no primary key exists, the first declared) index. `None` when the
+    /// table has no indexes, when the underlying column is hidden, or
+    /// when the byte offset cannot be computed.
+    #[must_use]
+    pub fn primary_key_column(&self) -> Option<(usize, &ColumnMeta)> {
         let idx = self
             .indexes
             .iter()
@@ -118,7 +134,9 @@ impl TableMeta {
             .or_else(|| self.indexes.first())?;
         let first_part = idx.parts.first()?;
         let column_index = (first_part.column_ordinal as usize).checked_sub(1)?;
-        self.data_offset(column_index)
+        let offset = self.data_offset(column_index)?;
+        let column = self.columns.get(column_index)?;
+        Some((offset, column))
     }
 }
 
@@ -132,6 +150,7 @@ mod tests {
         ColumnMeta {
             column_type: ty,
             is_nullable: nullable,
+            is_unsigned: false,
             char_length: char_len,
             is_hidden: false,
         }
@@ -145,49 +164,26 @@ mod tests {
     }
 
     #[test]
-    fn null_bits_bytes_zero_when_no_nullable_columns() {
-        let m = TableMeta {
+    fn null_bits_bytes_accounts_for_the_delete_mark_bit() {
+        // Always at least 1 byte (1 delete-mark bit + nullables). Rolls
+        // to 2 bytes once total bits exceed 8.
+        let no_null = TableMeta {
             columns: vec![col("id", ColumnType::Long, false, 0)],
             indexes: vec![],
         };
-        assert_eq!(m.null_bits_bytes(), 0);
-    }
-
-    #[test]
-    fn null_bits_bytes_rounds_up_to_one_for_one_to_eight_columns() {
-        let m = TableMeta {
-            columns: vec![
-                col("id", ColumnType::Long, true, 0),
-                col("name", ColumnType::VarChar, true, 50),
-            ],
-            indexes: vec![],
-        };
-        assert_eq!(m.null_bits_bytes(), 1);
-    }
-
-    #[test]
-    fn null_bits_bytes_rounds_up_for_more_than_eight_columns() {
-        let columns: Vec<ColumnMeta> = (0..9)
+        assert_eq!(no_null.null_bits_bytes(), 1);
+        let eight_null: Vec<ColumnMeta> = (0..8)
             .map(|i| col(&format!("c{i}"), ColumnType::Long, true, 0))
             .collect();
         let m = TableMeta {
-            columns,
+            columns: eight_null,
             indexes: vec![],
         };
         assert_eq!(m.null_bits_bytes(), 2);
     }
 
     #[test]
-    fn data_offset_skips_null_bits_for_first_column() {
-        let m = TableMeta {
-            columns: vec![col("id", ColumnType::Long, true, 0)],
-            indexes: vec![],
-        };
-        assert_eq!(m.data_offset(0), Some(1));
-    }
-
-    #[test]
-    fn data_offset_accumulates_column_widths() {
+    fn data_offset_accumulates_column_widths_after_null_prefix() {
         // id INT (4 bytes) at offset 1, then name VARCHAR(50) at offset 5.
         let m = TableMeta {
             columns: vec![
@@ -207,6 +203,7 @@ mod tests {
         let hidden = ColumnMeta {
             column_type: ColumnType::Long,
             is_nullable: false,
+            is_unsigned: false,
             char_length: 0,
             is_hidden: true,
         };
@@ -214,7 +211,8 @@ mod tests {
             columns: vec![hidden, col("id", ColumnType::Long, false, 0)],
             indexes: vec![],
         };
-        assert_eq!(m.data_offset(0), Some(0));
+        // First column starts after the 1-byte null/delete-mark prefix.
+        assert_eq!(m.data_offset(0), Some(1));
         assert_eq!(m.data_offset(1), None);
     }
 

@@ -49,6 +49,22 @@ pub const HA_BINLOG_STMT_CAPABLE: u64 = 1 << 35;
 /// [`HtonFlags::CAN_RECREATE`]: crate::hton::HtonFlags::CAN_RECREATE
 pub const HTON_CAN_RECREATE: u32 = 1 << 2;
 
+/// `HA_READ_NEXT` from `sql/handler.h`: index supports forward
+/// `index_next`.
+pub const HA_READ_NEXT: u32 = 1;
+
+/// `HA_READ_PREV` from `sql/handler.h`: index supports backward
+/// `index_prev`.
+pub const HA_READ_PREV: u32 = 2;
+
+/// `HA_READ_ORDER` from `sql/handler.h`: index reads return rows in key
+/// order (the optimizer skips a server-side sort).
+pub const HA_READ_ORDER: u32 = 4;
+
+/// `HA_READ_RANGE` from `sql/handler.h`: index supports `read_range_first`
+/// / `read_range_next`.
+pub const HA_READ_RANGE: u32 = 8;
+
 /// Opaque C++ `RustHandlerBase` from `shim/binding.hpp`
 #[repr(C)]
 #[derive(Debug)]

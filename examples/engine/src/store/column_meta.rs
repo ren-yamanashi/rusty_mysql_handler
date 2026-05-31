@@ -27,14 +27,18 @@ use mysql_handler::sys::DdColumn;
 
 /// Per-column metadata snapshot taken from `dd::Column`. Only the fields
 /// the reference engine consumes today are stored; other `dd::Column`
-/// attributes (column name, unsigned flag, ...) are intentionally left
-/// off until a downstream consumer needs them.
+/// attributes (column name, ordinal position, ...) are intentionally
+/// left off until a downstream consumer needs them.
 #[derive(Debug, Clone)]
 pub struct ColumnMeta {
     /// MySQL data-dictionary type.
     pub(crate) column_type: ColumnType,
     /// `NULL`-allowed?
     pub(crate) is_nullable: bool,
+    /// `true` for unsigned integer columns. Drives the
+    /// signed-vs-unsigned interpretation of [`crate::store::KeyValue`]
+    /// when encoding `record[0]` bytes into a key.
+    pub(crate) is_unsigned: bool,
     /// Declared character length for string types; `0` for non-string
     /// types where it is not meaningful. For multi-byte charsets the
     /// in-row storage is `prefix + char_length * mbmaxlen` — see
@@ -56,6 +60,7 @@ impl ColumnMeta {
         Self {
             column_type: column.column_type(),
             is_nullable: column.is_nullable(),
+            is_unsigned: column.is_unsigned(),
             char_length: column.char_length(),
             is_hidden: column.is_hidden(),
         }
@@ -100,6 +105,7 @@ mod tests {
         ColumnMeta {
             column_type: ty,
             is_nullable: false,
+            is_unsigned: false,
             char_length: char_len,
             is_hidden: false,
         }

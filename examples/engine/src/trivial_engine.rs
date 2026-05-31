@@ -22,19 +22,35 @@
 
 //! `TrivialEngine`: the reference `StorageEngine` implementation.
 //!
-//! Index scan is a linear pass with a first-column key match whose byte
-//! offset comes from [`store::TableMeta`] (populated from `dd::Table` in
-//! `open` / `create`). No sorted iteration. `update_row` / `delete_row`
-//! mutate the committed store directly, so `BEGIN..ROLLBACK` does **not**
-//! undo them — the transactional path stays limited to `INSERT` via
-//! [`TxnSession`](crate::trivial_txn::TrivialTxn).
+//! Storage is a sorted [`TableStore`](crate::store::TableStore) per table
+//! (a `BTreeMap<Key, Vec<u8>>`). Index scans walk the BTree directly via
+//! a per-statement snapshot of `(Key, row)` pairs taken at `index_init`.
+//! `index_flags` advertises `HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER
+//! | HA_READ_RANGE`, which assumes every declared index is a single
+//! column ASCending — the only shape the reference fixtures exercise.
+//! Multi-column and DESC-declared indexes would need a per-index gate
+//! (deferred to a downstream consumer that actually creates them).
+//!
+//! `update_row` / `delete_row` still mutate the committed store directly,
+//! so `BEGIN..ROLLBACK` does **not** undo them — the transactional path
+//! stays limited to `INSERT` via
+//! [`TrivialTxn`](crate::trivial_txn::TrivialTxn).
+//!
+//! **Line-limit note.** This file exceeds the 250-line ceiling because
+//! its single responsibility is the `impl StorageEngine for TrivialEngine`
+//! block (one `impl Trait for Type` per the coding-style exemption).
+//! Splitting cursor / key / range helpers out leaves the impl thin and
+//! useful as a reference, so the assistants live in this file too.
 
 use std::ffi::CStr;
 
 use mysql_handler::engine::{EngineError, EngineResult, RKeyFunction, RangeKey, StorageEngine};
-use mysql_handler::sys::{self, HA_BINLOG_ROW_CAPABLE, HA_BINLOG_STMT_CAPABLE};
+use mysql_handler::sys::{
+    self, HA_BINLOG_ROW_CAPABLE, HA_BINLOG_STMT_CAPABLE, HA_READ_NEXT, HA_READ_ORDER, HA_READ_PREV,
+    HA_READ_RANGE,
+};
 
-use crate::store;
+use crate::store::{self, Key, TableMeta};
 
 /// The committed-row store keys by table name; `name` from create / open is a
 /// path-like `./db/table`, so reduce it to the bare table name that the write
@@ -43,101 +59,121 @@ fn table_key(name: &str) -> String {
     name.rsplit('/').next().unwrap_or(name).to_owned()
 }
 
-/// Reference engine that scans the rows committed to its table via the shared
-/// committed-row store, so a committed transaction becomes visible to the
-/// fresh handler a later statement opens
+/// Direction the cursor walks the [`TrivialEngine::snapshot`].
+#[derive(Debug, Clone, Copy)]
+enum ScanDir {
+    Forward,
+    Backward,
+}
+
+/// Which endpoint of a range a [`RangeKey`] describes. Used as the second
+/// argument of [`TrivialEngine::decode_bound`] instead of a bare `bool`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Endpoint {
+    Start,
+    End,
+}
+
+/// Reference engine backed by [`crate::store::TableStore`].
 #[derive(Debug)]
 pub struct TrivialEngine {
     table: String,
-    /// Schema snapshot taken from `dd::Table` in `open` / `create`; drives the
-    /// key-column offset used by `index_read_map`'s linear key match.
-    meta: Option<store::TableMeta>,
-    /// Per-statement snapshot; populated by `rnd_init` / `index_init`.
-    snapshot: Vec<Vec<u8>>,
-    /// Cursor into `snapshot`. `position()` writes `scan_pos - 1`.
-    scan_pos: usize,
-    /// Key from the last `index_read_map`; cleared on sequential walks.
-    last_index_key: Vec<u8>,
+    /// Schema snapshot taken from `dd::Table` in `open` / `create`.
+    meta: Option<TableMeta>,
+    /// Per-statement snapshot of `(Key, row)` pairs in key order.
+    /// `rnd_init` takes the full table; `index_init` and `read_range_first`
+    /// refine to the relevant window.
+    snapshot: Vec<(Key, Vec<u8>)>,
+    /// Cursor into `snapshot`. `None` once the scan is exhausted.
+    scan_pos: Option<usize>,
+    /// Cursor direction; flipped to `Backward` by `index_last` /
+    /// `index_prev`, `Forward` everywhere else.
+    scan_dir: ScanDir,
+    /// Search key recorded by `index_read_map`; `index_next_same` reads
+    /// it back to stop when the cursor walks off the equality range.
+    last_search_key: Option<Key>,
     next_auto_inc: u64,
 }
 
-/// Fallback first-column offset used when no [`store::TableMeta`] is
-/// available: one NULL-bits byte for the single-nullable-column fixtures
-/// the demo uses. Real schemas always populate `meta`, but `delete_table`
-/// and other code paths called before `open` see `None`.
-const DEFAULT_KEY_OFFSET: usize = 1;
-
 impl TrivialEngine {
-    /// New engine not yet bound to a table
+    /// New engine not yet bound to a table.
     pub const fn new() -> Self {
         Self {
             table: String::new(),
             meta: None,
             snapshot: Vec::new(),
-            scan_pos: 0,
-            last_index_key: Vec::new(),
+            scan_pos: None,
+            scan_dir: ScanDir::Forward,
+            last_search_key: None,
             next_auto_inc: 1,
         }
     }
 
-    /// Byte offset of the primary-key column in `record[0]`, resolved from
-    /// `meta` when present; otherwise [`DEFAULT_KEY_OFFSET`].
-    fn key_offset(&self) -> usize {
-        let meta = match self.meta.as_ref() {
-            Some(m) => m,
-            None => return DEFAULT_KEY_OFFSET,
-        };
-        match meta.primary_key_offset() {
-            Some(o) => o,
-            None => DEFAULT_KEY_OFFSET,
-        }
-    }
-
     /// Copy `row` into `buf`, truncating to the shorter length.
-    /// A length mismatch is a schema bug silently dropped for the demo.
     fn copy_row_into(buf: &mut [u8], row: &[u8]) {
         let n = buf.len().min(row.len());
         buf[..n].copy_from_slice(&row[..n]);
     }
 
-    /// Yield `snapshot[*pos]`, advance `*pos`. `EndOfFile` once exhausted.
-    fn yield_from(snapshot: &[Vec<u8>], pos: &mut usize, buf: &mut [u8]) -> EngineResult {
-        let row = match snapshot.get(*pos) {
-            Some(r) => r,
-            None => return Err(EngineError::EndOfFile),
-        };
+    /// Yield the row at `self.scan_pos`, then advance the cursor in the
+    /// current direction. Returns [`EngineError::EndOfFile`] when the
+    /// cursor has already walked off the end.
+    fn yield_and_advance(&mut self, buf: &mut [u8]) -> EngineResult {
+        let pos = self.scan_pos.ok_or(EngineError::EndOfFile)?;
+        let (_, row) = self.snapshot.get(pos).ok_or(EngineError::EndOfFile)?;
         Self::copy_row_into(buf, row);
-        *pos += 1;
+        self.scan_pos = match self.scan_dir {
+            ScanDir::Forward => {
+                let next = pos.saturating_add(1);
+                (next < self.snapshot.len()).then_some(next)
+            }
+            ScanDir::Backward => (pos > 0).then(|| pos - 1),
+        };
         Ok(())
     }
 
-    /// Byte-compare `row`'s key column against `key` at the byte offset the
-    /// caller resolved from `TableMeta`. MySQL's `type=ref` trusts this
-    /// filter. Empty `key` returns `false`.
-    fn row_matches_key(row: &[u8], key: &[u8], offset: usize) -> bool {
-        if key.is_empty() {
-            return false;
-        }
-        let end = offset.saturating_add(key.len());
-        row.get(offset..end).is_some_and(|slice| slice == key)
+    /// Take a fresh sorted snapshot of the whole table and position the
+    /// cursor at the start.
+    fn refresh_snapshot(&mut self) {
+        self.snapshot = store::pairs_sorted(&self.table);
+        self.scan_pos = (!self.snapshot.is_empty()).then_some(0);
+        self.scan_dir = ScanDir::Forward;
+        self.last_search_key = None;
     }
 
-    /// Yield the next `snapshot[*pos]` matching `key`. `EndOfFile` at end.
-    fn yield_next_matching(
-        snapshot: &[Vec<u8>],
-        pos: &mut usize,
-        buf: &mut [u8],
-        key: &[u8],
-        offset: usize,
-    ) -> EngineResult {
-        while let Some(row) = snapshot.get(*pos) {
-            *pos += 1;
-            if Self::row_matches_key(row, key, offset) {
-                Self::copy_row_into(buf, row);
-                return Ok(());
-            }
+    /// Convert a [`RangeKey`] endpoint to a `Bound<Key>` suitable for
+    /// [`crate::store::range_pairs`]. Missing endpoints become
+    /// [`std::ops::Bound::Unbounded`]. Type / schema mismatches fall back
+    /// to `Unbounded` rather than yielding wrong rows.
+    fn decode_bound(
+        meta: &TableMeta,
+        endpoint: Option<RangeKey<'_>>,
+        kind: Endpoint,
+    ) -> std::ops::Bound<Key> {
+        let rk = match endpoint {
+            Some(r) => r,
+            None => return std::ops::Bound::Unbounded,
+        };
+        let key = match store::build_key_from_search_buffer(rk.key(), meta) {
+            Some(k) => k,
+            None => return std::ops::Bound::Unbounded,
+        };
+        match (rk.flag(), kind) {
+            (RKeyFunction::AfterKey, Endpoint::Start)
+            | (RKeyFunction::BeforeKey, Endpoint::End) => std::ops::Bound::Excluded(key),
+            // KeyExact / KeyOrNext / KeyOrPrev all include the endpoint;
+            // any unrecognised flag falls back to inclusive.
+            _ => std::ops::Bound::Included(key),
         }
-        Err(EngineError::EndOfFile)
+    }
+
+    /// Refresh `snapshot` to the rows whose key falls in `[start, end]`,
+    /// positioned at the first row.
+    fn refresh_range(&mut self, start: &std::ops::Bound<Key>, end: &std::ops::Bound<Key>) {
+        self.snapshot = store::range_pairs(&self.table, start, end);
+        self.scan_pos = (!self.snapshot.is_empty()).then_some(0);
+        self.scan_dir = ScanDir::Forward;
+        self.last_search_key = None;
     }
 }
 
@@ -157,18 +193,24 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn index_flags(&self, _idx: u32, _part: u32, _all_parts: bool) -> u32 {
-        0
+        HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER | HA_READ_RANGE
     }
 
     fn create(&mut self, name: &str, table_def: Option<&sys::DdTable>) -> EngineResult {
         self.table = table_key(name);
-        self.meta = table_def.map(store::TableMeta::from_dd_table);
+        self.meta = table_def.map(TableMeta::from_dd_table);
+        if let Some(m) = self.meta.clone() {
+            store::register_meta(&self.table, m);
+        }
         Ok(())
     }
 
     fn open(&mut self, name: &str, _mode: i32, table_def: Option<&sys::DdTable>) -> EngineResult {
         self.table = table_key(name);
-        self.meta = table_def.map(store::TableMeta::from_dd_table);
+        self.meta = table_def.map(TableMeta::from_dd_table);
+        if let Some(m) = self.meta.clone() {
+            store::register_meta(&self.table, m);
+        }
         Ok(())
     }
 
@@ -177,19 +219,18 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn rnd_init(&mut self, _scan: bool) -> EngineResult {
-        self.snapshot = store::committed_rows(&self.table);
-        self.scan_pos = 0;
+        self.refresh_snapshot();
         Ok(())
     }
 
     fn rnd_end(&mut self) -> EngineResult {
         self.snapshot.clear();
-        self.scan_pos = 0;
+        self.scan_pos = None;
         Ok(())
     }
 
     fn rnd_next(&mut self, buf: &mut [u8]) -> EngineResult {
-        Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
+        self.yield_and_advance(buf)
     }
 
     fn rnd_pos(&mut self, buf: &mut [u8], pos: &[u8]) -> EngineResult {
@@ -202,8 +243,8 @@ impl StorageEngine for TrivialEngine {
             Ok(n) => n,
             Err(_) => usize::MAX,
         };
-        let row = match self.snapshot.get(idx) {
-            Some(r) => r,
+        let (_, row) = match self.snapshot.get(idx) {
+            Some(p) => p,
             None => return Err(EngineError::EndOfFile),
         };
         Self::copy_row_into(buf, row);
@@ -211,23 +252,56 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn position(&mut self, _record: &[u8], ref_out: &mut [u8]) {
-        // Encode the just-yielded row's snapshot index as u64 LE for rnd_pos.
-        let idx = self.scan_pos.saturating_sub(1) as u64;
+        // scan_pos points one past the yielded row; back off by one in
+        // the scan direction. When the cursor has been exhausted, the
+        // yielded row sat at the natural endpoint for that direction
+        // (`len - 1` after a forward walk, `0` after a backward walk).
+        let yielded_index = match (self.scan_pos, self.scan_dir) {
+            (Some(p), ScanDir::Forward) => p.saturating_sub(1),
+            (Some(p), ScanDir::Backward) => p.saturating_add(1),
+            (None, ScanDir::Forward) => self.snapshot.len().saturating_sub(1),
+            (None, ScanDir::Backward) => 0,
+        } as u64;
         if ref_out.len() >= 8 {
-            ref_out[..8].copy_from_slice(&idx.to_le_bytes());
+            ref_out[..8].copy_from_slice(&yielded_index.to_le_bytes());
         }
     }
 
     fn update_row(&mut self, old: &[u8], new: &[u8]) -> EngineResult {
-        if store::replace_row(&self.table, old, new) {
-            Ok(())
-        } else {
-            Err(EngineError::EndOfFile)
+        let meta = match self.meta.as_ref() {
+            Some(m) => m,
+            None => return finish_replace(store::replace_by_bytes(&self.table, old, new.to_vec())),
+        };
+        let old_key = store::extract_key_from_row(old, meta);
+        let new_key = store::extract_key_from_row(new, meta);
+        match (old_key, new_key) {
+            (Some(k_old), Some(k_new)) if k_old == k_new => {
+                finish_replace(store::replace_by_key(&self.table, &k_old, new.to_vec()))
+            }
+            (Some(k_old), Some(k_new)) => {
+                // Indexed column changed: drop the old entry and reinsert
+                // under the new key so a later `WHERE id = new` finds it.
+                let removed = store::remove_by_key(&self.table, &k_old);
+                if !removed {
+                    return Err(EngineError::EndOfFile);
+                }
+                store::commit_keyed(&self.table, vec![(k_new, new.to_vec())]);
+                Ok(())
+            }
+            _ => finish_replace(store::replace_by_bytes(&self.table, old, new.to_vec())),
         }
     }
 
     fn delete_row(&mut self, buf: &[u8]) -> EngineResult {
-        if store::remove_row(&self.table, buf) {
+        let key = match self.meta.as_ref() {
+            Some(m) => store::extract_key_from_row(buf, m),
+            None => None,
+        };
+        let removed = match key {
+            Some(k) => store::remove_by_key(&self.table, &k),
+            None => store::remove_by_bytes(&self.table, buf),
+        };
+        if removed {
             Ok(())
         } else {
             Err(EngineError::EndOfFile)
@@ -238,7 +312,8 @@ impl StorageEngine for TrivialEngine {
         Ok(())
     }
 
-    fn delete_table(&mut self, _name: &str, _table_def: Option<&sys::DdTable>) -> EngineResult {
+    fn delete_table(&mut self, name: &str, _table_def: Option<&sys::DdTable>) -> EngineResult {
+        store::forget_table(&table_key(name));
         Ok(())
     }
 
@@ -252,35 +327,35 @@ impl StorageEngine for TrivialEngine {
         Ok(())
     }
 
-    fn drop_table(&mut self, _name: &str) {}
+    fn drop_table(&mut self, name: &str) {
+        store::forget_table(&table_key(name));
+    }
 
     fn truncate(&mut self, _table_def: Option<&sys::DdTable>) -> EngineResult {
         store::reset_table(&self.table);
         self.snapshot.clear();
-        self.scan_pos = 0;
-        self.last_index_key.clear();
+        self.scan_pos = None;
+        self.last_search_key = None;
         Ok(())
     }
 
     fn delete_all_rows(&mut self) -> EngineResult {
         store::reset_table(&self.table);
         self.snapshot.clear();
-        self.scan_pos = 0;
-        self.last_index_key.clear();
+        self.scan_pos = None;
+        self.last_search_key = None;
         Ok(())
     }
 
     fn index_init(&mut self, _idx: u32, _sorted: bool) -> EngineResult {
-        self.snapshot = store::committed_rows(&self.table);
-        self.scan_pos = 0;
-        self.last_index_key.clear();
+        self.refresh_snapshot();
         Ok(())
     }
 
     fn index_end(&mut self) -> EngineResult {
         self.snapshot.clear();
-        self.scan_pos = 0;
-        self.last_index_key.clear();
+        self.scan_pos = None;
+        self.last_search_key = None;
         Ok(())
     }
 
@@ -288,73 +363,95 @@ impl StorageEngine for TrivialEngine {
         &mut self,
         buf: &mut [u8],
         key: &[u8],
-        _find_flag: RKeyFunction,
+        find_flag: RKeyFunction,
     ) -> EngineResult {
-        self.scan_pos = 0;
-        self.last_index_key = key.to_vec();
-        let offset = self.key_offset();
-        Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, key, offset)
+        let meta = self.meta.as_ref().ok_or(EngineError::WrongCommand)?;
+        let target =
+            store::build_key_from_search_buffer(key, meta).ok_or(EngineError::WrongCommand)?;
+        let (pos, dir) = locate(&self.snapshot, &target, find_flag);
+        self.scan_pos = pos;
+        self.scan_dir = dir;
+        self.last_search_key = Some(target);
+        self.yield_and_advance(buf)
     }
 
     fn index_next(&mut self, buf: &mut [u8]) -> EngineResult {
-        // Honour the index_read_map key; empty means sequential walk.
-        if self.last_index_key.is_empty() {
-            Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
-        } else {
-            let key = self.last_index_key.clone();
-            let offset = self.key_offset();
-            Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, &key, offset)
-        }
+        self.scan_dir = ScanDir::Forward;
+        self.yield_and_advance(buf)
     }
 
     fn index_prev(&mut self, buf: &mut [u8]) -> EngineResult {
-        // Clear key like index_first / index_last to avoid leaked filtering.
-        self.last_index_key.clear();
-        Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
+        self.scan_dir = ScanDir::Backward;
+        self.last_search_key = None;
+        self.yield_and_advance(buf)
     }
 
     fn index_first(&mut self, buf: &mut [u8]) -> EngineResult {
-        self.scan_pos = 0;
-        self.last_index_key.clear();
-        Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
+        self.scan_pos = (!self.snapshot.is_empty()).then_some(0);
+        self.scan_dir = ScanDir::Forward;
+        self.last_search_key = None;
+        self.yield_and_advance(buf)
     }
 
     fn index_last(&mut self, buf: &mut [u8]) -> EngineResult {
-        // The snapshot is unsorted, so this is just `index_first`.
-        self.scan_pos = 0;
-        self.last_index_key.clear();
-        Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
+        self.scan_pos = self.snapshot.len().checked_sub(1);
+        self.scan_dir = ScanDir::Backward;
+        self.last_search_key = None;
+        self.yield_and_advance(buf)
     }
 
     fn index_next_same(&mut self, buf: &mut [u8], key: &[u8]) -> EngineResult {
-        let offset = self.key_offset();
-        Self::yield_next_matching(&self.snapshot, &mut self.scan_pos, buf, key, offset)
+        // Prefer the key recorded by `index_read_map` so a follow-up call
+        // does not have to re-decode the same bytes. When the caller has
+        // not been through `index_read_map` (e.g. `index_first` then
+        // `index_next_same`), decode the supplied `key` through the same
+        // path instead of giving up.
+        let target = match self.last_search_key.clone() {
+            Some(k) => k,
+            None => {
+                let meta = self.meta.as_ref().ok_or(EngineError::WrongCommand)?;
+                store::build_key_from_search_buffer(key, meta).ok_or(EngineError::WrongCommand)?
+            }
+        };
+        let pos = self.scan_pos.ok_or(EngineError::EndOfFile)?;
+        let (k, _) = self.snapshot.get(pos).ok_or(EngineError::EndOfFile)?;
+        if k != &target {
+            return Err(EngineError::EndOfFile);
+        }
+        self.scan_dir = ScanDir::Forward;
+        self.yield_and_advance(buf)
     }
 
     fn records_in_range(
         &mut self,
         _inx: u32,
-        _min: Option<RangeKey<'_>>,
-        _max: Option<RangeKey<'_>>,
+        min: Option<RangeKey<'_>>,
+        max: Option<RangeKey<'_>>,
     ) -> Option<u64> {
-        None
+        let meta = self.meta.as_ref()?;
+        let start = Self::decode_bound(meta, min, Endpoint::Start);
+        let end = Self::decode_bound(meta, max, Endpoint::End);
+        Some(store::range_len(&self.table, &start, &end))
     }
 
     fn read_range_first(
         &mut self,
         buf: &mut [u8],
-        _start: Option<RangeKey<'_>>,
-        _end: Option<RangeKey<'_>>,
+        start: Option<RangeKey<'_>>,
+        end: Option<RangeKey<'_>>,
         _eq_range: bool,
         _sorted: bool,
     ) -> EngineResult {
-        self.scan_pos = 0;
-        self.last_index_key.clear();
-        Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
+        let meta = self.meta.as_ref().ok_or(EngineError::WrongCommand)?;
+        let start_b = Self::decode_bound(meta, start, Endpoint::Start);
+        let end_b = Self::decode_bound(meta, end, Endpoint::End);
+        self.refresh_range(&start_b, &end_b);
+        self.yield_and_advance(buf)
     }
 
     fn read_range_next(&mut self, buf: &mut [u8]) -> EngineResult {
-        Self::yield_from(&self.snapshot, &mut self.scan_pos, buf)
+        self.scan_dir = ScanDir::Forward;
+        self.yield_and_advance(buf)
     }
 
     fn max_supported_keys(&self) -> Option<u32> {
@@ -366,16 +463,16 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn scan_time(&mut self) -> Option<f64> {
-        let rows = u32::try_from(store::committed_row_count(&self.table)).unwrap_or(u32::MAX);
+        let rows = u32::try_from(store::row_count(&self.table)).unwrap_or(u32::MAX);
         Some(f64::from(rows))
     }
 
     fn records(&mut self) -> Option<EngineResult<u64>> {
-        Some(Ok(store::committed_row_count(&self.table)))
+        Some(Ok(store::row_count(&self.table)))
     }
 
     fn estimate_rows_upper_bound(&mut self) -> Option<u64> {
-        Some(store::committed_row_count(&self.table))
+        Some(store::row_count(&self.table))
     }
 
     fn get_auto_increment(
@@ -392,15 +489,68 @@ impl StorageEngine for TrivialEngine {
 
     fn reset(&mut self) -> EngineResult {
         self.snapshot.clear();
-        self.scan_pos = 0;
-        self.last_index_key.clear();
+        self.scan_pos = None;
+        self.last_search_key = None;
         Ok(())
+    }
+}
+
+/// `Ok(())` when the store reported a row was replaced, `EndOfFile`
+/// otherwise — `update_row` / `delete_row` use this so a missed lookup
+/// surfaces as MySQL's documented "no row matched" sentinel rather than a
+/// silent success.
+fn finish_replace(replaced: bool) -> EngineResult {
+    if replaced {
+        Ok(())
+    } else {
+        Err(EngineError::EndOfFile)
+    }
+}
+
+/// Position the cursor at the first row matching `find_flag` against
+/// `target`, returning the index into `snapshot` and the natural follow-up
+/// direction. The forward / backward semantics mirror MySQL's:
+/// `KeyExact` / `KeyOrNext` / `AfterKey` walk forward, `KeyOrPrev` /
+/// `BeforeKey` walk backward, and unrecognised flags fall back to
+/// `KeyOrNext`.
+fn locate(
+    snapshot: &[(Key, Vec<u8>)],
+    target: &Key,
+    find_flag: RKeyFunction,
+) -> (Option<usize>, ScanDir) {
+    match find_flag {
+        RKeyFunction::KeyExact => (
+            snapshot.iter().position(|(k, _)| k == target),
+            ScanDir::Forward,
+        ),
+        RKeyFunction::KeyOrNext => (
+            snapshot.iter().position(|(k, _)| k >= target),
+            ScanDir::Forward,
+        ),
+        RKeyFunction::AfterKey => (
+            snapshot.iter().position(|(k, _)| k > target),
+            ScanDir::Forward,
+        ),
+        RKeyFunction::KeyOrPrev => (
+            snapshot.iter().rposition(|(k, _)| k <= target),
+            ScanDir::Backward,
+        ),
+        RKeyFunction::BeforeKey => (
+            snapshot.iter().rposition(|(k, _)| k < target),
+            ScanDir::Backward,
+        ),
+        _ => (
+            snapshot.iter().position(|(k, _)| k >= target),
+            ScanDir::Forward,
+        ),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mysql_handler::dd::ColumnType;
+    use store::KeyValue;
 
     #[test]
     fn copy_row_into_writes_full_row_when_lengths_match() {
@@ -430,51 +580,90 @@ mod tests {
         assert_eq!(table_key("/abs/db/t1"), "t1");
     }
 
-    #[test]
-    fn row_matches_key_compares_at_given_offset() {
-        // row layout: [null-bits, id (4 bytes LE), ...]
-        let row_20 = [0xFE, 20, 0, 0, 0, 1, b'b', 0];
-        assert!(TrivialEngine::row_matches_key(&row_20, &[20, 0, 0, 0], 1));
-        assert!(!TrivialEngine::row_matches_key(&row_20, &[21, 0, 0, 0], 1));
+    fn fake_snapshot(values: &[i64]) -> Vec<(Key, Vec<u8>)> {
+        values
+            .iter()
+            .map(|n| (Key::single(KeyValue::Signed(*n)), vec![*n as u8]))
+            .collect()
     }
 
     #[test]
-    fn row_matches_key_honours_a_non_default_offset() {
-        // id at offset 2 (e.g. table with 9-16 nullable columns -> 2 null bytes).
-        let row = [0xFE, 0xFE, 7, 0, 0, 0];
-        assert!(TrivialEngine::row_matches_key(&row, &[7, 0, 0, 0], 2));
-        assert!(!TrivialEngine::row_matches_key(&row, &[7, 0, 0, 0], 1));
+    fn locate_key_exact_returns_the_matching_index() {
+        let snap = fake_snapshot(&[10, 20, 30]);
+        let target = Key::single(KeyValue::Signed(20));
+        let (pos, _) = locate(&snap, &target, RKeyFunction::KeyExact);
+        assert_eq!(pos, Some(1));
     }
 
     #[test]
-    fn row_matches_key_rejects_short_rows() {
-        // A row shorter than the offset + key cannot match.
-        let row = [0xFE, 1];
-        assert!(!TrivialEngine::row_matches_key(&row, &[1, 0, 0, 0], 1));
+    fn locate_key_exact_misses_when_no_match() {
+        let snap = fake_snapshot(&[10, 20, 30]);
+        let target = Key::single(KeyValue::Signed(25));
+        let (pos, _) = locate(&snap, &target, RKeyFunction::KeyExact);
+        assert_eq!(pos, None);
     }
 
     #[test]
-    fn yield_next_matching_skips_non_matches_and_advances_past_hit() {
-        let rows = vec![
-            vec![0xFE, 10, 0, 0, 0, 1, b'a', 0],
-            vec![0xFE, 20, 0, 0, 0, 1, b'b', 0],
-            vec![0xFE, 30, 0, 0, 0, 1, b'c', 0],
-        ];
-        let mut pos = 0usize;
-        let mut buf = [0u8; 8];
-        let r = TrivialEngine::yield_next_matching(&rows, &mut pos, &mut buf, &[20, 0, 0, 0], 1);
-        assert!(r.is_ok());
-        assert_eq!(buf, [0xFE, 20, 0, 0, 0, 1, b'b', 0]);
-        assert_eq!(pos, 2);
-        // No further match → EndOfFile, pos advances past the end.
-        let r2 = TrivialEngine::yield_next_matching(&rows, &mut pos, &mut buf, &[20, 0, 0, 0], 1);
-        assert!(matches!(r2, Err(EngineError::EndOfFile)));
-        assert_eq!(pos, 3);
+    fn locate_key_or_next_returns_first_geq() {
+        let snap = fake_snapshot(&[10, 20, 30]);
+        let target = Key::single(KeyValue::Signed(15));
+        let (pos, dir) = locate(&snap, &target, RKeyFunction::KeyOrNext);
+        assert_eq!(pos, Some(1));
+        assert!(matches!(dir, ScanDir::Forward));
     }
 
     #[test]
-    fn key_offset_falls_back_to_default_when_meta_is_none() {
-        let eng = TrivialEngine::new();
-        assert_eq!(eng.key_offset(), DEFAULT_KEY_OFFSET);
+    fn locate_key_or_prev_returns_last_leq_and_backward() {
+        let snap = fake_snapshot(&[10, 20, 30]);
+        let target = Key::single(KeyValue::Signed(25));
+        let (pos, dir) = locate(&snap, &target, RKeyFunction::KeyOrPrev);
+        assert_eq!(pos, Some(1));
+        assert!(matches!(dir, ScanDir::Backward));
+    }
+
+    #[test]
+    fn yield_and_advance_walks_forward_then_terminates() {
+        let mut e = TrivialEngine::new();
+        e.snapshot = fake_snapshot(&[1, 2]);
+        e.scan_pos = Some(0);
+        e.scan_dir = ScanDir::Forward;
+        let mut buf = [0u8; 1];
+        assert!(e.yield_and_advance(&mut buf).is_ok());
+        assert_eq!(buf, [1]);
+        assert!(e.yield_and_advance(&mut buf).is_ok());
+        assert_eq!(buf, [2]);
+        assert!(matches!(
+            e.yield_and_advance(&mut buf),
+            Err(EngineError::EndOfFile)
+        ));
+    }
+
+    #[test]
+    fn yield_and_advance_walks_backward() {
+        let mut e = TrivialEngine::new();
+        e.snapshot = fake_snapshot(&[1, 2, 3]);
+        e.scan_pos = Some(2);
+        e.scan_dir = ScanDir::Backward;
+        let mut buf = [0u8; 1];
+        e.yield_and_advance(&mut buf).unwrap();
+        assert_eq!(buf, [3]);
+        e.yield_and_advance(&mut buf).unwrap();
+        assert_eq!(buf, [2]);
+        e.yield_and_advance(&mut buf).unwrap();
+        assert_eq!(buf, [1]);
+        assert!(matches!(
+            e.yield_and_advance(&mut buf),
+            Err(EngineError::EndOfFile)
+        ));
+    }
+
+    #[test]
+    fn index_flags_advertises_range_and_order_capabilities() {
+        let e = TrivialEngine::new();
+        let f = e.index_flags(0, 0, false);
+        assert!(f & HA_READ_RANGE != 0);
+        assert!(f & HA_READ_ORDER != 0);
+        assert!(f & HA_READ_NEXT != 0);
+        assert!(f & HA_READ_PREV != 0);
     }
 }

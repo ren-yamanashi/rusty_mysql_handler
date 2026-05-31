@@ -114,6 +114,24 @@ SELECT @crud_sum := SUM(id), @crud_count := COUNT(*) FROM crud;
 SELECT @crud_label_20 := label FROM crud WHERE id = 20;
 DROP TABLE crud;
 
+-- Sortable storage: a 5-row table to exercise partial BETWEEN ranges
+-- (the engine must yield only rows inside the bounds, since HA_READ_RANGE
+-- is now advertised and the server no longer re-filters), and ORDER BY
+-- ASC / DESC with LIMIT 1 to confirm `index_first` / `index_last` return
+-- the actual endpoints (the server trusts HA_READ_ORDER and does not
+-- sort again).
+CREATE TABLE rng (id INT NOT NULL, KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO rng VALUES (1), (2), (3), (4), (5);
+SELECT @rng_between_sum := SUM(id) FROM rng WHERE id BETWEEN 2 AND 3;
+SELECT @rng_between_count := COUNT(*) FROM rng WHERE id BETWEEN 2 AND 3;
+SELECT @rng_first := id FROM rng ORDER BY id LIMIT 1;
+SELECT @rng_last := id FROM rng ORDER BY id DESC LIMIT 1;
+-- Half-open probes: a `Bound::Unbounded` regression in `decode_bound`
+-- or `range_pairs` would surface as the wrong sum / count here.
+SELECT @rng_gt_sum := SUM(id) FROM rng WHERE id > 3;
+SELECT @rng_lt_count := COUNT(*) FROM rng WHERE id < 3;
+DROP TABLE rng;
+
 -- Non-default key offset: `pad` (INT NOT NULL, 4 bytes) sits in front of
 -- `id`, so the indexed column starts at byte 5 in record[0] (1 null bits
 -- byte + 4 bytes of pad). A regression that silently falls back to
@@ -218,6 +236,9 @@ SELECT IF(
   AND @rv_sum = 60 AND @rv_count = 3
   AND @crud_sum = 50 AND @crud_count = 2 AND @crud_label_20 = 'X'
   AND @crud_off_sum = 50 AND @crud_off_count = 2 AND @crud_off_label_20 = 'Y'
-  AND @crud_tx_label = 'after',
+  AND @crud_tx_label = 'after'
+  AND @rng_between_sum = 5 AND @rng_between_count = 2
+  AND @rng_first = 1 AND @rng_last = 5
+  AND @rng_gt_sum = 9 AND @rng_lt_count = 2,
   3, 0
 ) AS sentinel;
