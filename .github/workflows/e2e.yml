@@ -37,29 +37,38 @@ jobs:
     name: Smoke (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
-    # arm64 stays continue-on-error until the maintainer runs
-    # publish-mysql-base.yml on main and pins MYSQL_BASE_SHA256_ARM64 in
-    # tests/e2e/Dockerfile. Drop the flag in the SHA-pin PR.
-    continue-on-error: ${{ matrix.continue-on-error }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-24.04
             arch: x86_64
-            continue-on-error: false
           - runner: ubuntu-24.04-arm
             arch: arm64
-            continue-on-error: true
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
           submodules: false
 
+      # arm64 build needs MYSQL_BASE_SHA256_ARM64 pinned in the Dockerfile;
+      # publish-mysql-base.yml produces the asset and the SHA. Until that
+      # pin lands, skip the build cleanly (job stays green) so the CI matrix
+      # does not show a misleading red failure for a known-pending bootstrap.
+      - name: Check arm64 base SHA pin
+        if: matrix.arch == 'arm64'
+        id: arm64_gate
+        run: |
+          if ! grep -qE '^ARG MYSQL_BASE_SHA256_ARM64=[0-9a-f]+' tests/e2e/Dockerfile; then
+            echo "::notice::arm64 mysql-base SHA not pinned; run publish-mysql-base.yml and pin MYSQL_BASE_SHA256_ARM64"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        if: steps.arm64_gate.outputs.skip != 'true'
 
       - name: Build plugin image
+        if: steps.arm64_gate.outputs.skip != 'true'
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
@@ -70,4 +79,5 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.arch }},mode=max
 
       - name: Run smoke
+        if: steps.arm64_gate.outputs.skip != 'true'
         run: bash tests/e2e/run.sh
