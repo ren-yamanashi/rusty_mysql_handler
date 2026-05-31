@@ -119,11 +119,12 @@ jobs:
           CHECK_TEST: ${{ needs.check-test.result }}
           MSRV: ${{ needs.msrv.result }}
         run: |
+          set -euo pipefail
           fail=0
           for entry in "lint=$LINT" "check-test=$CHECK_TEST" "msrv=$MSRV"; do
             name="${entry%%=*}"
             result="${entry#*=}"
             echo "$name: $result"
-            if [ "$result" != "success" ]; then fail=1; fi
+            if [[ "$result" != "success" ]]; then fail=1; fi
           done
           exit "$fail"
