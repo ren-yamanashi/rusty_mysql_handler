@@ -55,7 +55,7 @@ include_directories(
 # Built as STATIC so a downstream Rust cdylib (built by mysql-handler's
 # build.rs) can pull it in. The final ha_rusty.{so,dylib} is produced
 # by `cargo build --release -p engine`, not by this CMakeLists.
-add_library(ha_rusty_shim STATIC binding.cc handler_bulk_load.cc
+add_library(ha_rusty_shim STATIC binding.cc dd_table.cc handler_bulk_load.cc
                                  handler_bulk_operations.cc handler_caps.cc
                                  handler_cost.cc handler_error_handling.cc
                                  handler_fulltext.cc handler_hints.cc

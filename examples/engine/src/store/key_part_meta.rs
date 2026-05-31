@@ -20,12 +20,30 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Rust bindings for the MySQL 8.4 storage engine handler API
+//! Per-key-part snapshot taken from `dd::Index_element`.
 
-pub mod dd;
-pub mod engine;
-pub mod handler;
-pub mod hton;
-pub mod panic_guard;
-pub mod runtime;
-pub mod sys;
+use mysql_handler::dd::IndexElementOrder;
+use mysql_handler::sys::DdIndexElement;
+
+/// Per-key-part snapshot taken from `dd::Index_element`.
+#[derive(Debug, Clone)]
+pub struct KeyPartMeta {
+    /// 1-based ordinal position of the underlying column in the table.
+    pub column_ordinal: u32,
+    /// Prefix length, or `0` for the whole column.
+    pub length: u32,
+    /// Declared sort order.
+    pub order: IndexElementOrder,
+}
+
+impl KeyPartMeta {
+    /// Snapshot the fields of `elt` into an owned [`KeyPartMeta`].
+    #[must_use]
+    pub fn from_dd_index_element(elt: &DdIndexElement) -> Self {
+        Self {
+            column_ordinal: elt.column_ordinal(),
+            length: elt.length(),
+            order: elt.order(),
+        }
+    }
+}

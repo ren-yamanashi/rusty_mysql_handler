@@ -20,12 +20,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Rust bindings for the MySQL 8.4 storage engine handler API
+//! Safe Rust view of the MySQL data-dictionary `dd::Table` tree.
+//!
+//! Engine implementations receive `Option<&sys::DdTable>` in `open` / `create`
+//! and walk it through the accessor methods on [`sys::DdTable`],
+//! [`sys::DdColumn`], [`sys::DdIndex`], and [`sys::DdIndexElement`] defined
+//! here. The opaque pointers are valid only for the originating callback;
+//! copy out anything that needs to outlive it.
+//!
+//! [`sys::DdTable`]: crate::sys::DdTable
+//! [`sys::DdColumn`]: crate::sys::DdColumn
+//! [`sys::DdIndex`]: crate::sys::DdIndex
+//! [`sys::DdIndexElement`]: crate::sys::DdIndexElement
 
-pub mod dd;
-pub mod engine;
-pub mod handler;
-pub mod hton;
-pub mod panic_guard;
-pub mod runtime;
-pub mod sys;
+mod column;
+mod ffi;
+mod index;
+mod table;
+
+pub use column::ColumnType;
+pub use index::{IndexElementOrder, IndexType};

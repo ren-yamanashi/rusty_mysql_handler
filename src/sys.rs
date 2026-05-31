@@ -79,6 +79,21 @@ pub struct XID([u8; 0]);
 #[derive(Debug)]
 pub struct DdTable([u8; 0]);
 
+/// Opaque MySQL data-dictionary `dd::Column`
+#[repr(C)]
+#[derive(Debug)]
+pub struct DdColumn([u8; 0]);
+
+/// Opaque MySQL data-dictionary `dd::Index`
+#[repr(C)]
+#[derive(Debug)]
+pub struct DdIndex([u8; 0]);
+
+/// Opaque MySQL data-dictionary `dd::Index_element` (key part)
+#[repr(C)]
+#[derive(Debug)]
+pub struct DdIndexElement([u8; 0]);
+
 /// Opaque MySQL `HA_CREATE_INFO`
 #[allow(non_camel_case_types)]
 #[repr(C)]

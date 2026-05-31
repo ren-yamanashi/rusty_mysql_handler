@@ -26,6 +26,16 @@
 //! the next statement's fresh handler reads them back. Unbounded; a real
 //! engine would cap, evict, or persist them.
 
+mod column_meta;
+mod index_meta;
+mod key_part_meta;
+mod table_meta;
+
+pub use column_meta::ColumnMeta;
+pub use index_meta::IndexMeta;
+pub use key_part_meta::KeyPartMeta;
+pub use table_meta::TableMeta;
+
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
 

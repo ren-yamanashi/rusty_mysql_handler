@@ -90,14 +90,16 @@ ulong RustHandlerBase::index_flags(uint idx, uint part, bool all_parts) const {
   return 0;
 }
 
-int RustHandlerBase::open(const char *name, int mode, uint, const dd::Table *) {
+int RustHandlerBase::open(const char *name, int mode, uint,
+                          const dd::Table *table_def) {
   DBUG_TRACE;
   if (!(share_ = get_share())) return HA_ERR_OUT_OF_MEM;
   thr_lock_data_init(&share_->lock, &lock_data_, nullptr);
   if (!rust_ctx_ || !name) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__open(rust_ctx_,
                              reinterpret_cast<const uint8_t *>(name),
-                             shim::safe_name_len(name), mode);
+                             shim::safe_name_len(name), mode,
+                             static_cast<const void *>(table_def));
 }
 
 // Reachable from the `handler::drop_table` chain even when no Rust engine has
@@ -110,12 +112,13 @@ int RustHandlerBase::close() {
 }
 
 int RustHandlerBase::create(const char *name, TABLE *, HA_CREATE_INFO *,
-                            dd::Table *) {
+                            dd::Table *table_def) {
   DBUG_TRACE;
   if (!rust_ctx_ || !name) return HA_ERR_INTERNAL_ERROR;
   return rust__handler__create(rust_ctx_,
                                reinterpret_cast<const uint8_t *>(name),
-                               shim::safe_name_len(name));
+                               shim::safe_name_len(name),
+                               static_cast<const void *>(table_def));
 }
 
 int RustHandlerBase::rnd_init(bool scan) {

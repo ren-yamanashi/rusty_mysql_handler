@@ -67,12 +67,22 @@ pub trait StorageEngine: Send {
     fn index_flags(&self, idx: u32, part: u32, all_parts: bool) -> u32;
 
     /// Create the on-disk representation for a new table named `name`.
-    /// Errors are implementation-defined.
-    fn create(&mut self, name: &str) -> EngineResult;
+    /// `table_def` is the data-dictionary descriptor of the table being
+    /// created; it carries column and key metadata the engine should snapshot
+    /// out, since the borrow is only valid for the duration of the call.
+    ///
+    /// # Errors
+    /// Implementation-defined.
+    fn create(&mut self, name: &str, table_def: Option<&sys::DdTable>) -> EngineResult;
 
-    /// Open an existing table named `name` in the given `mode`.
-    /// Errors are implementation-defined.
-    fn open(&mut self, name: &str, mode: i32) -> EngineResult;
+    /// Open an existing table named `name` in the given `mode`. `table_def`
+    /// is the data-dictionary descriptor for the table; it carries the same
+    /// column / key metadata as on [`create`](Self::create) and is similarly
+    /// borrowed only for the call.
+    ///
+    /// # Errors
+    /// Implementation-defined.
+    fn open(&mut self, name: &str, mode: i32, table_def: Option<&sys::DdTable>) -> EngineResult;
 
     /// Release any resources acquired by [`open`](Self::open).
     /// Errors are implementation-defined.

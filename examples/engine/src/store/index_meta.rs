@@ -20,12 +20,39 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Rust bindings for the MySQL 8.4 storage engine handler API
+//! Per-index snapshot taken from `dd::Index`.
 
-pub mod dd;
-pub mod engine;
-pub mod handler;
-pub mod hton;
-pub mod panic_guard;
-pub mod runtime;
-pub mod sys;
+use mysql_handler::dd::IndexType;
+use mysql_handler::sys::DdIndex;
+
+use crate::store::KeyPartMeta;
+
+/// Per-index snapshot taken from `dd::Index`.
+#[derive(Debug, Clone)]
+pub struct IndexMeta {
+    /// Index name (`PRIMARY` for the primary key).
+    pub name: String,
+    /// Index kind.
+    pub index_type: IndexType,
+    /// Key parts in declared order.
+    pub parts: Vec<KeyPartMeta>,
+}
+
+impl IndexMeta {
+    /// Snapshot the fields of `index` (and each of its key parts) into an
+    /// owned [`IndexMeta`].
+    #[must_use]
+    pub fn from_dd_index(index: &DdIndex) -> Self {
+        let mut parts = Vec::with_capacity(index.element_count());
+        for i in 0..index.element_count() {
+            if let Some(e) = index.element_at(i) {
+                parts.push(KeyPartMeta::from_dd_index_element(e));
+            }
+        }
+        Self {
+            name: index.name(),
+            index_type: index.index_type(),
+            parts,
+        }
+    }
+}
