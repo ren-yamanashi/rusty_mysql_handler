@@ -35,6 +35,33 @@ fn sv_index(sv: &[u8]) -> Option<usize> {
     usize::try_from(u64::from_le_bytes(bytes)).ok()
 }
 
+/// Push `rows` into `table`'s committed store, picking the keyed path
+/// when the table's registered schema yields a primary-key value per row
+/// and the sequence-key path otherwise.
+fn flush_table(table: &str, rows: Vec<Vec<u8>>) {
+    let meta = match store::lookup_meta(table) {
+        Some(m) => m,
+        None => {
+            store::commit_seq(table, rows);
+            return;
+        }
+    };
+    let mut keyed = Vec::with_capacity(rows.len());
+    let mut unkeyed = Vec::new();
+    for row in rows {
+        match store::extract_key_from_row(&row, &meta) {
+            Some(k) => keyed.push((k, row)),
+            None => unkeyed.push(row),
+        }
+    }
+    if !keyed.is_empty() {
+        store::commit_keyed(table, keyed);
+    }
+    if !unkeyed.is_empty() {
+        store::commit_seq(table, unkeyed);
+    }
+}
+
 /// Per-connection transaction. Stages row writes per table; commit
 /// (`all=true`) flushes to the committed store, rollback discards.
 /// Savepoints snapshot the staged state.
@@ -58,7 +85,7 @@ impl TxnSession for TrivialTxn {
         // autocommit statement commits to all=true so they flush too.
         if all {
             for (table, rows) in self.staged.drain() {
-                store::commit_rows(&table, rows);
+                flush_table(&table, rows);
             }
         }
         Ok(())
