@@ -191,18 +191,40 @@ impl BuildScript {
         println!("cargo:rerun-if-changed={dir}");
         let entries = match fs::read_dir(dir) {
             Ok(e) => e,
-            Err(_) => return,
+            Err(e) => {
+                println!("cargo:warning=skip rerun for {dir}: {e}");
+                return;
+            }
         };
         for entry in entries.flatten() {
             let path = entry.path();
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            // Skip dotfiles and conventional build-output dirs so a future
+            // `shim/build/` or `shim/.cache/` does not enrol every generated
+            // artefact into Cargo's rerun set and trigger rebuild loops.
+            if name_str.starts_with('.')
+                || matches!(name_str.as_ref(), "build" | "target" | "CMakeFiles")
+            {
+                continue;
+            }
             let is_dir = match entry.file_type() {
                 Ok(t) => t.is_dir(),
                 Err(_) => false,
             };
             if is_dir {
-                Self::declare_rerun_for_tree(&path.display().to_string());
+                Self::declare_rerun_for_tree(&path.to_string_lossy());
             } else {
-                println!("cargo:rerun-if-changed={}", path.display());
+                // Watch only sources that affect the cmake build of the shim;
+                // README / .md / generated artefacts in shim/ would otherwise
+                // pad the rerun set without changing the staticlib.
+                let watch = matches!(
+                    path.extension().and_then(|s| s.to_str()),
+                    Some("cc" | "cpp" | "hpp" | "h")
+                ) || name_str == "CMakeLists.txt";
+                if watch {
+                    println!("cargo:rerun-if-changed={}", path.to_string_lossy());
+                }
             }
         }
     }

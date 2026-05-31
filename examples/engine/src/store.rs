@@ -30,6 +30,12 @@
 //! into the caller-owned buffer. Keys by bare table name, so this store does
 //! not distinguish same-named tables in different databases — fine for a
 //! single-schema demo.
+//!
+//! No bound on the map. Any client with `INSERT` on a RUSTY table can grow it
+//! without limit (committed rows are only ever released by `TRUNCATE TABLE` /
+//! `DELETE` without `WHERE`). This is intentional for a single-process
+//! reference demo; a downstream storage engine must cap, evict, or persist
+//! committed rows to be safe under real workloads.
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};

@@ -50,7 +50,7 @@ pub struct TrivialEngine {
 
 impl TrivialEngine {
     /// New engine not yet bound to a table
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             table: String::new(),
             current_row: 0,
@@ -72,11 +72,11 @@ impl TrivialEngine {
         Ok(())
     }
 
-    /// Copy `row` into the caller-owned `buf`, truncating to the smaller
-    /// of the two lengths. MySQL hands a buffer sized `rec_buff_length`
-    /// and the row was captured at the same length, so they normally
-    /// match; the saturating copy keeps a misconfigured demo from
-    /// panicking.
+    /// Copy `row` into `buf`, truncating to the shorter length so a
+    /// mis-sized demo buffer does not panic. A length mismatch indicates
+    /// a `rec_buff_length` / schema bug; the demo silently truncates and
+    /// the dropped tail is invisible — a production engine would treat
+    /// the mismatch as an error.
     fn copy_row_into(buf: &mut [u8], row: &[u8]) {
         let n = buf.len().min(row.len());
         buf[..n].copy_from_slice(&row[..n]);
