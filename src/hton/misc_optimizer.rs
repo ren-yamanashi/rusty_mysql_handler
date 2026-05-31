@@ -36,16 +36,10 @@
 
 use core::ffi::c_void;
 
+use crate::hton::result::result_to_error;
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
 use crate::sys;
-
-fn result_to_error(r: crate::engine::EngineResult) -> bool {
-    match r {
-        Ok(()) => false,
-        Err(_) => true,
-    }
-}
 
 /// # Safety
 /// Takes no MySQL-owned pointer.
@@ -134,20 +128,4 @@ pub unsafe extern "C" fn rust__hton__get_cost_constants(storage_category: u32) {
             h.get_cost_constants(storage_category);
         }
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::engine::EngineError;
-
-    #[test]
-    fn ok_maps_to_no_error() {
-        assert!(!result_to_error(Ok(())));
-    }
-
-    #[test]
-    fn err_maps_to_error() {
-        assert!(result_to_error(Err(EngineError::Internal)));
-    }
 }

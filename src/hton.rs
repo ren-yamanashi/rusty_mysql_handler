@@ -65,6 +65,7 @@ pub mod notifications;
 #[doc(hidden)]
 pub mod page_track;
 mod panic_function;
+mod result;
 #[doc(hidden)]
 pub mod savepoint_ffi;
 #[doc(hidden)]

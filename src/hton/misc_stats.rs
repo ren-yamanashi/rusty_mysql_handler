@@ -40,17 +40,11 @@
 
 #![allow(unsafe_code)]
 
+use crate::hton::result::result_to_error;
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
 use crate::runtime::FfiPtr;
 use crate::sys;
-
-fn result_to_error(r: crate::engine::EngineResult) -> bool {
-    match r {
-        Ok(()) => false,
-        Err(_) => true,
-    }
-}
 
 /// # Safety
 /// Takes no MySQL-owned pointer.
