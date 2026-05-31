@@ -72,15 +72,11 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --workspace --all-targets
 
-  best-effort:
-    name: Best-effort Check (${{ matrix.os }})
+  best-effort-windows:
+    name: Best-effort Check & Test (windows-2025)
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-2025
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2025, macos-13]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -88,9 +84,27 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
         with:
-          shared-key: best-effort-${{ matrix.os }}
+          shared-key: best-effort-windows-2025
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --workspace --all-targets
+      - run: cargo test --workspace
+
+  best-effort-macos-intel:
+    name: Best-effort Check & Test (macos-13)
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: macos-13
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+        with:
+          shared-key: best-effort-macos-13
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo check --workspace --all-targets
+      - run: cargo test --workspace
 
   quality:
     name: Quality
