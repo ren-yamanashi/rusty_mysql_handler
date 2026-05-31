@@ -34,9 +34,23 @@ concurrency:
 
 jobs:
   smoke:
-    name: Smoke
-    runs-on: ubuntu-24.04
+    name: Smoke (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    # arm64 stays continue-on-error until the maintainer runs
+    # publish-mysql-base.yml on main and pins MYSQL_BASE_SHA256_ARM64 in
+    # tests/e2e/Dockerfile. Drop the flag in the SHA-pin PR.
+    continue-on-error: ${{ matrix.continue-on-error }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+            continue-on-error: false
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            continue-on-error: true
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -52,8 +66,8 @@ jobs:
           file: tests/e2e/Dockerfile
           tags: rusty-mysql-handler-e2e:latest
           load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
 
       - name: Run smoke
         run: bash tests/e2e/run.sh

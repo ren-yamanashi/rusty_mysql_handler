@@ -20,21 +20,24 @@ make setup
 ## Updating the E2E build base
 
 `make test_e2e` compiles the plugin in Docker against a prebuilt
-`mysql-server` tree published as a GitHub Release asset
-(`mysql-base-<version>`). Recipe: `tests/e2e/Dockerfile.base`. Publisher:
-`.github/workflows/publish-mysql-base.yml`.
+`mysql-server` tree published as GitHub Release assets
+(`mysql-base-<version>`), one per supported arch (x86_64, arm64). Recipe:
+`tests/e2e/Dockerfile.base`. Publisher: `.github/workflows/publish-mysql-base.yml`.
 
 To rebuild on a MySQL version bump:
 
 1. Edit `Dockerfile.base` (new clone tag + commit SHA) and `MYSQL_VERSION`
    in the publisher workflow.
-2. Run **Publish mysql build base** via `workflow_dispatch`; it uploads
-   the tarball and prints the SHA-256.
-3. Commit the 64-hex digest into `ARG MYSQL_BASE_SHA256=` in
-   `tests/e2e/Dockerfile`.
+2. Run **Publish mysql build base** via `workflow_dispatch`; the matrix
+   uploads `mysql-build-base-<version>.tar.gz` (x86_64, legacy name) and
+   `mysql-build-base-<version>-arm64.tar.gz` and prints each SHA-256.
+3. Commit the digests into `ARG MYSQL_BASE_SHA256_AMD64=` /
+   `ARG MYSQL_BASE_SHA256_ARM64=` in `tests/e2e/Dockerfile`.
 
-The E2E build is fail-closed — it refuses to start if `MYSQL_BASE_SHA256`
-does not match the downloaded asset.
+The E2E build is fail-closed — Docker refuses to start if the SHA for the
+target arch is unset or does not match the downloaded asset. After the
+first arm64 base publish, the arm64 SHA pin needs to be set or the
+arm64 `Smoke` job will fail.
 
 ## Releasing
 

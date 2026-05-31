@@ -25,6 +25,7 @@
 # runtime. Driven by tests/e2e/run.sh; build base is documented in CONTRIBUTING.md.
 
 FROM rust:1.95.0-slim AS builder
+ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       cmake \
@@ -44,13 +45,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
-ARG MYSQL_BASE_URL=https://github.com/ren-yamanashi/rusty_mysql_handler/releases/download/mysql-base-8.4.9/mysql-build-base-8.4.9.tar.gz
-# Verified against this pin (fail-closed); updated when the base is re-published.
-ARG MYSQL_BASE_SHA256=e15fb561edccf787e9e5280f3e1f2b9538bc1efd8845a112abf406d00955ac96
-RUN test -n "$MYSQL_BASE_SHA256" \
-      || { echo "MYSQL_BASE_SHA256 unset; pin it from publish-mysql-base.yml" >&2; exit 1; }; \
-    curl -fsSL "$MYSQL_BASE_URL" -o base.tar.gz \
-    && echo "$MYSQL_BASE_SHA256  base.tar.gz" | sha256sum -c - \
+# x86_64 uses the legacy unsuffixed asset name (kept stable for the existing
+# pin). arm64 uses the arch-suffixed name introduced with multi-arch support.
+# Update the corresponding ARG below whenever the base is re-published.
+ARG MYSQL_BASE_URL_AMD64=https://github.com/ren-yamanashi/rusty_mysql_handler/releases/download/mysql-base-8.4.9/mysql-build-base-8.4.9.tar.gz
+ARG MYSQL_BASE_SHA256_AMD64=e15fb561edccf787e9e5280f3e1f2b9538bc1efd8845a112abf406d00955ac96
+ARG MYSQL_BASE_URL_ARM64=https://github.com/ren-yamanashi/rusty_mysql_handler/releases/download/mysql-base-8.4.9/mysql-build-base-8.4.9-arm64.tar.gz
+ARG MYSQL_BASE_SHA256_ARM64=
+
+RUN case "$TARGETARCH" in \
+      amd64) BASE_URL="$MYSQL_BASE_URL_AMD64"; BASE_SHA="$MYSQL_BASE_SHA256_AMD64" ;; \
+      arm64) BASE_URL="$MYSQL_BASE_URL_ARM64"; BASE_SHA="$MYSQL_BASE_SHA256_ARM64" ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    test -n "$BASE_SHA" \
+      || { echo "mysql-base SHA for $TARGETARCH unset; publish the base for this arch first" >&2; exit 1; }; \
+    curl -fsSL "$BASE_URL" -o base.tar.gz \
+    && echo "$BASE_SHA  base.tar.gz" | sha256sum -c - \
     && tar xzf base.tar.gz \
     && rm base.tar.gz
 

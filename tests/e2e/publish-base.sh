@@ -21,16 +21,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-# Publishes the configured mysql-server tree as a GitHub Release asset. See the
-# "Updating the E2E build base" section of CONTRIBUTING.md. Requires
-# MYSQL_VERSION and a gh-authenticated GH_TOKEN.
+# Publishes the configured mysql-server tree as a GitHub Release asset.
+# Per-arch: ARCH=x86_64|arm64 names the asset.
 
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 VERSION="${MYSQL_VERSION:?MYSQL_VERSION must be set}"
+ARCH="${ARCH:?ARCH must be set (x86_64 or arm64)}"
 TAG="mysql-base-${VERSION}"
-ASSET="mysql-build-base-${VERSION}.tar.gz"
+# x86_64 keeps the legacy unsuffixed name so the in-repo Dockerfile pin keeps
+# working; arm64 (added with multi-arch support) carries the arch suffix.
+if [[ "$ARCH" == "x86_64" ]]; then
+  ASSET="mysql-build-base-${VERSION}.tar.gz"
+else
+  ASSET="mysql-build-base-${VERSION}-${ARCH}.tar.gz"
+fi
 
 docker build -f tests/e2e/Dockerfile.base -t mysql-base-builder tests/e2e
 
