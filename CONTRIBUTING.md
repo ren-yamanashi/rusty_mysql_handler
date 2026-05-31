@@ -72,9 +72,11 @@ Releases are driven by [`release-plz`](https://release-plz.dev/). On
 every main push the `Release-plz` workflow updates a single rolling
 "Release" PR with the version bump (computed from Conventional Commits
 since the previous tag — `feat:` → minor, `fix:` → patch, `breaking:` /
-`!:` → major) and the regenerated `CHANGELOG.md` entries. Merging that
-PR triggers the same workflow to tag the new version, `cargo publish`
-to crates.io, and create the matching GitHub Release.
+`!:` → major) and the changelog for the new version. Merging that PR
+triggers the same workflow to tag the new version, `cargo publish` to
+crates.io, and create the matching GitHub Release with the same
+changelog. The repo intentionally does not keep a `CHANGELOG.md` — the
+GitHub Releases page is the canonical history.
 
 `crates-io` GitHub environment — required setup under
 **Settings → Environments → crates-io**:
