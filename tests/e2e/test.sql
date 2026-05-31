@@ -104,9 +104,27 @@ CREATE TABLE crud (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=R
 INSERT INTO crud VALUES (10, 'a'), (20, 'b'), (30, 'c');
 UPDATE crud SET label = 'X' WHERE id = 20;
 DELETE FROM crud WHERE id = 10;
+-- Zero-match UPDATE / DELETE: must leave the row set untouched and not
+-- surface a spurious EndOfFile to the client. The Rust EndOfFile from
+-- update_row / delete_row is the "no row matched" signal MySQL silently
+-- absorbs as `Rows matched: 0`.
+UPDATE crud SET label = 'Z' WHERE id = 999;
+DELETE FROM crud WHERE id = 999;
 SELECT @crud_sum := SUM(id), @crud_count := COUNT(*) FROM crud;
 SELECT @crud_label_20 := label FROM crud WHERE id = 20;
 DROP TABLE crud;
+
+-- BEGIN..UPDATE..ROLLBACK does NOT undo the change for the reference
+-- engine — UPDATE mutates the committed store directly. The assertion
+-- below pins this documented limitation: the post-rollback label is the
+-- new value, not the pre-update one.
+CREATE TABLE crud_tx (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO crud_tx VALUES (1, 'before');
+BEGIN;
+UPDATE crud_tx SET label = 'after' WHERE id = 1;
+ROLLBACK;
+SELECT @crud_tx_label := label FROM crud_tx WHERE id = 1;
+DROP TABLE crud_tx;
 
 -- Transaction observability: a transactional handlerton registers in
 -- external_lock when a statement touches a RUSTY table, so COMMIT must make its
@@ -171,12 +189,16 @@ DROP DATABASE rusty_drop_db_test;
 -- sentinel: 3 only when COMMIT persisted (1), ROLLBACK discarded (1),
 -- ROLLBACK TO SAVEPOINT undid only the post-savepoint insert (1),
 -- RELEASE SAVEPOINT kept both inserts (2), INSERT made real row values
--- visible to SELECT (sum 60, count 3), and UPDATE / DELETE found and
+-- visible to SELECT (sum 60, count 3), UPDATE / DELETE found and
 -- modified the right rows (UPDATE id=20 to 'X', DELETE id=10 → remaining
--- sum 50, count 2, label of id=20 is 'X').
+-- sum 50, count 2, label of id=20 is 'X'), zero-match UPDATE / DELETE
+-- left the row set unchanged, and BEGIN..UPDATE..ROLLBACK around UPDATE
+-- did not undo the change (the engine's documented non-transactional
+-- UPDATE limitation — the label after ROLLBACK is 'after', not 'before').
 SELECT IF(
   @after_commit = 1 AND @after_rollback = 1 AND @after_savepoint = 1 AND @after_release = 2
   AND @rv_sum = 60 AND @rv_count = 3
-  AND @crud_sum = 50 AND @crud_count = 2 AND @crud_label_20 = 'X',
+  AND @crud_sum = 50 AND @crud_count = 2 AND @crud_label_20 = 'X'
+  AND @crud_tx_label = 'after',
   3, 0
 ) AS sentinel;

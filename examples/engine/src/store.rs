@@ -85,13 +85,30 @@ pub fn reset_table(table: &str) {
     committed().remove(table);
 }
 
+/// Mutable reference to `table`'s row vector, or `None` if the table has
+/// no committed rows yet. Used by `replace_row` / `remove_row` to share one
+/// lookup / early-return path.
+fn rows_mut<'a>(
+    guard: &'a mut MutexGuard<'static, HashMap<String, Vec<Vec<u8>>>>,
+    table: &str,
+) -> Option<&'a mut Vec<Vec<u8>>> {
+    guard.get_mut(table)
+}
+
 /// Replace the first row in `table` whose bytes equal `old` with `new`.
 /// Returns `true` if a row was replaced, `false` if no match was found.
-/// Linear scan — the demo trades efficiency for an easy mental model.
+///
+/// Linear scan with first-match-wins. If two committed rows happen to have
+/// identical bytes (possible without a `UNIQUE` constraint), this replaces
+/// one of them and leaves the other; the choice is stable for any given
+/// `Vec` iteration order but not semantically meaningful. The reference
+/// demo never produces colliding rows, so this is fine; a downstream
+/// engine would key updates on a real row position rather than byte
+/// equality.
 #[must_use]
 pub fn replace_row(table: &str, old: &[u8], new: &[u8]) -> bool {
     let mut guard = committed();
-    let rows = match guard.get_mut(table) {
+    let rows = match rows_mut(&mut guard, table) {
         Some(r) => r,
         None => return false,
     };
@@ -106,10 +123,12 @@ pub fn replace_row(table: &str, old: &[u8], new: &[u8]) -> bool {
 
 /// Remove the first row in `table` whose bytes equal `target`. Returns
 /// `true` if a row was removed, `false` if no match was found.
+///
+/// Same first-match-wins caveat as [`replace_row`].
 #[must_use]
 pub fn remove_row(table: &str, target: &[u8]) -> bool {
     let mut guard = committed();
-    let rows = match guard.get_mut(table) {
+    let rows = match rows_mut(&mut guard, table) {
         Some(r) => r,
         None => return false,
     };
