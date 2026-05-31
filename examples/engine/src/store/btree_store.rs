@@ -136,6 +136,13 @@ impl TableStore {
             .collect()
     }
 
+    /// Count of rows whose key falls in `start..end`. Cheaper than
+    /// `range_pairs(start, end).len()` because no row bytes are cloned.
+    #[must_use]
+    pub fn range_len(&self, start: &Bound<Key>, end: &Bound<Key>) -> u64 {
+        self.rows.range((bound_ref(start), bound_ref(end))).count() as u64
+    }
+
     /// Number of rows committed to this store.
     #[must_use]
     pub fn len(&self) -> u64 {

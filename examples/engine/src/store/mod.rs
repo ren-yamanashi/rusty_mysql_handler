@@ -81,35 +81,38 @@ where
     f(committed().entry(table.to_owned()).or_default())
 }
 
-/// Snapshot of `table`'s rows in key order (empty when the table is
-/// absent). Returned by value so the caller can iterate without holding
-/// the global mutex.
-#[must_use]
-pub fn rows_sorted(table: &str) -> Vec<Vec<u8>> {
-    with_store(table, Vec::new(), TableStore::rows_sorted)
-}
-
 /// Snapshot of `(key, row)` pairs in key order.
 #[must_use]
-pub fn pairs_sorted(table: &str) -> Vec<(Key, Vec<u8>)> {
+pub(crate) fn pairs_sorted(table: &str) -> Vec<(Key, Vec<u8>)> {
     with_store(table, Vec::new(), TableStore::pairs_sorted)
 }
 
 /// Snapshot of `(key, row)` pairs whose key falls in `start..end`.
 #[must_use]
-pub fn range_pairs(table: &str, start: &Bound<Key>, end: &Bound<Key>) -> Vec<(Key, Vec<u8>)> {
+pub(crate) fn range_pairs(
+    table: &str,
+    start: &Bound<Key>,
+    end: &Bound<Key>,
+) -> Vec<(Key, Vec<u8>)> {
     with_store(table, Vec::new(), |s| s.range_pairs(start, end))
+}
+
+/// Count of rows whose key falls in `start..end`. Cheaper than
+/// `range_pairs(table, start, end).len()` since no row bytes are cloned.
+#[must_use]
+pub(crate) fn range_len(table: &str, start: &Bound<Key>, end: &Bound<Key>) -> u64 {
+    with_store(table, 0, |s| s.range_len(start, end))
 }
 
 /// Number of rows committed to `table`.
 #[must_use]
-pub fn row_count(table: &str) -> u64 {
+pub(crate) fn row_count(table: &str) -> u64 {
     with_store(table, 0, TableStore::len)
 }
 
 /// Append a batch of `(key, row)` pairs to `table` (a transaction
 /// committing rows that the engine could key from `record[0]`).
-pub fn commit_keyed(table: &str, rows: Vec<(Key, Vec<u8>)>) {
+pub(crate) fn commit_keyed(table: &str, rows: Vec<(Key, Vec<u8>)>) {
     if rows.is_empty() {
         return;
     }
@@ -122,7 +125,7 @@ pub fn commit_keyed(table: &str, rows: Vec<(Key, Vec<u8>)>) {
 
 /// Append a batch of rows under synthetic sequence keys (used when the
 /// table has no extractable primary key).
-pub fn commit_seq(table: &str, rows: Vec<Vec<u8>>) {
+pub(crate) fn commit_seq(table: &str, rows: Vec<Vec<u8>>) {
     if rows.is_empty() {
         return;
     }
@@ -134,12 +137,12 @@ pub fn commit_seq(table: &str, rows: Vec<Vec<u8>>) {
 }
 
 /// Drop `table`'s committed rows (TRUNCATE / delete-all).
-pub fn reset_table(table: &str) {
+pub(crate) fn reset_table(table: &str) {
     committed().remove(table);
 }
 
 /// Forget `table`'s rows and schema (DROP TABLE / DELETE TABLE).
-pub fn forget_table(table: &str) {
+pub(crate) fn forget_table(table: &str) {
     committed().remove(table);
     meta_guard().remove(table);
 }
@@ -147,40 +150,40 @@ pub fn forget_table(table: &str) {
 /// Register the schema snapshot the engine extracted from `dd::Table`
 /// in `open` / `create`. Later writes (which only see the table name)
 /// can look it up to derive a [`Key`] for the row.
-pub fn register_meta(table: &str, meta: TableMeta) {
+pub(crate) fn register_meta(table: &str, meta: TableMeta) {
     meta_guard().insert(table.to_owned(), meta);
 }
 
 /// Borrow a clone of `table`'s registered schema, if any.
 #[must_use]
-pub fn lookup_meta(table: &str) -> Option<TableMeta> {
+pub(crate) fn lookup_meta(table: &str) -> Option<TableMeta> {
     meta_guard().get(table).cloned()
 }
 
 /// Replace the row at `key` with `new` in `table`. `false` when the key
 /// is absent or the table has never been touched.
 #[must_use]
-pub fn replace_by_key(table: &str, key: &Key, new: Vec<u8>) -> bool {
+pub(crate) fn replace_by_key(table: &str, key: &Key, new: Vec<u8>) -> bool {
     with_store_mut(table, |s| s.replace_by_key(key, new))
 }
 
 /// Remove the row at `key` from `table`. `false` when the key is absent
 /// or the table has never been touched.
 #[must_use]
-pub fn remove_by_key(table: &str, key: &Key) -> bool {
+pub(crate) fn remove_by_key(table: &str, key: &Key) -> bool {
     with_store_mut(table, |s| s.remove_by_key(key))
 }
 
 /// Replace the first row whose bytes equal `old`. Fallback used when the
 /// engine cannot extract a [`Key`] (no schema info, no indexed column).
 #[must_use]
-pub fn replace_by_bytes(table: &str, old: &[u8], new: Vec<u8>) -> bool {
+pub(crate) fn replace_by_bytes(table: &str, old: &[u8], new: Vec<u8>) -> bool {
     with_store_mut(table, |s| s.replace_by_bytes(old, new))
 }
 
 /// Remove the first row whose bytes equal `target`. Fallback as above.
 #[must_use]
-pub fn remove_by_bytes(table: &str, target: &[u8]) -> bool {
+pub(crate) fn remove_by_bytes(table: &str, target: &[u8]) -> bool {
     with_store_mut(table, |s| s.remove_by_bytes(target))
 }
 
@@ -192,12 +195,16 @@ mod tests {
         Key::single(KeyValue::Signed(n))
     }
 
+    fn rows_only(table: &str) -> Vec<Vec<u8>> {
+        pairs_sorted(table).into_iter().map(|(_, v)| v).collect()
+    }
+
     #[test]
     fn commit_keyed_then_rows_sorted_returns_in_key_order() {
         let t = "_t_store_keyed";
         reset_table(t);
         commit_keyed(t, vec![(k(3), vec![3]), (k(1), vec![1]), (k(2), vec![2])]);
-        assert_eq!(rows_sorted(t), vec![vec![1], vec![2], vec![3]]);
+        assert_eq!(rows_only(t), vec![vec![1], vec![2], vec![3]]);
         reset_table(t);
     }
 
@@ -206,7 +213,7 @@ mod tests {
         let t = "_t_store_seq";
         reset_table(t);
         commit_seq(t, vec![vec![b'a'], vec![b'b'], vec![b'c']]);
-        assert_eq!(rows_sorted(t), vec![vec![b'a'], vec![b'b'], vec![b'c']]);
+        assert_eq!(rows_only(t), vec![vec![b'a'], vec![b'b'], vec![b'c']]);
         reset_table(t);
     }
 
@@ -230,7 +237,7 @@ mod tests {
         assert!(replace_by_key(t, &k(1), vec![9, 9]));
         assert!(!remove_by_key(t, &k(7)));
         assert!(remove_by_key(t, &k(2)));
-        assert_eq!(rows_sorted(t), vec![vec![9, 9]]);
+        assert_eq!(rows_only(t), vec![vec![9, 9]]);
         reset_table(t);
     }
 
@@ -253,7 +260,7 @@ mod tests {
         reset_table(t);
         commit_keyed(t, vec![(k(1), vec![1, 1]), (k(2), vec![2, 2])]);
         assert!(replace_by_bytes(t, &[1, 1], vec![9, 9]));
-        assert_eq!(rows_sorted(t), vec![vec![9, 9], vec![2, 2]]);
+        assert_eq!(rows_only(t), vec![vec![9, 9], vec![2, 2]]);
         reset_table(t);
     }
 }

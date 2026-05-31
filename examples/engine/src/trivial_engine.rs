@@ -26,14 +26,21 @@
 //! (a `BTreeMap<Key, Vec<u8>>`). Index scans walk the BTree directly via
 //! a per-statement snapshot of `(Key, row)` pairs taken at `index_init`.
 //! `index_flags` advertises `HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER
-//! | HA_READ_RANGE` so the optimizer picks the index path for `BETWEEN`,
-//! `ORDER BY`, and equality predicates instead of falling back to a
-//! server-side filter on a full scan.
+//! | HA_READ_RANGE`, which assumes every declared index is a single
+//! column ASCending — the only shape the reference fixtures exercise.
+//! Multi-column and DESC-declared indexes would need a per-index gate
+//! (deferred to a downstream consumer that actually creates them).
 //!
 //! `update_row` / `delete_row` still mutate the committed store directly,
 //! so `BEGIN..ROLLBACK` does **not** undo them — the transactional path
 //! stays limited to `INSERT` via
 //! [`TrivialTxn`](crate::trivial_txn::TrivialTxn).
+//!
+//! **Line-limit note.** This file exceeds the 250-line ceiling because
+//! its single responsibility is the `impl StorageEngine for TrivialEngine`
+//! block (one `impl Trait for Type` per the coding-style exemption).
+//! Splitting cursor / key / range helpers out leaves the impl thin and
+//! useful as a reference, so the assistants live in this file too.
 
 use std::ffi::CStr;
 
@@ -57,6 +64,14 @@ fn table_key(name: &str) -> String {
 enum ScanDir {
     Forward,
     Backward,
+}
+
+/// Which endpoint of a range a [`RangeKey`] describes. Used as the second
+/// argument of [`TrivialEngine::decode_bound`] instead of a bare `bool`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Endpoint {
+    Start,
+    End,
 }
 
 /// Reference engine backed by [`crate::store::TableStore`].
@@ -133,7 +148,7 @@ impl TrivialEngine {
     fn decode_bound(
         meta: &TableMeta,
         endpoint: Option<RangeKey<'_>>,
-        is_start: bool,
+        kind: Endpoint,
     ) -> std::ops::Bound<Key> {
         let rk = match endpoint {
             Some(r) => r,
@@ -143,10 +158,9 @@ impl TrivialEngine {
             Some(k) => k,
             None => return std::ops::Bound::Unbounded,
         };
-        match (rk.flag(), is_start) {
-            (RKeyFunction::AfterKey, true) | (RKeyFunction::BeforeKey, false) => {
-                std::ops::Bound::Excluded(key)
-            }
+        match (rk.flag(), kind) {
+            (RKeyFunction::AfterKey, Endpoint::Start)
+            | (RKeyFunction::BeforeKey, Endpoint::End) => std::ops::Bound::Excluded(key),
             // KeyExact / KeyOrNext / KeyOrPrev all include the endpoint;
             // any unrecognised flag falls back to inclusive.
             _ => std::ops::Bound::Included(key),
@@ -238,14 +252,15 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn position(&mut self, _record: &[u8], ref_out: &mut [u8]) {
-        // Encode the index of the row this scan just yielded as u64 LE.
-        // `yield_and_advance` already moved `scan_pos`, so the yielded
-        // row is the one just before whatever `scan_pos` now points at
-        // (or the last element when `scan_pos` became `None`).
+        // scan_pos points one past the yielded row; back off by one in
+        // the scan direction. When the cursor has been exhausted, the
+        // yielded row sat at the natural endpoint for that direction
+        // (`len - 1` after a forward walk, `0` after a backward walk).
         let yielded_index = match (self.scan_pos, self.scan_dir) {
             (Some(p), ScanDir::Forward) => p.saturating_sub(1),
             (Some(p), ScanDir::Backward) => p.saturating_add(1),
-            (None, _) => self.snapshot.len().saturating_sub(1),
+            (None, ScanDir::Forward) => self.snapshot.len().saturating_sub(1),
+            (None, ScanDir::Backward) => 0,
         } as u64;
         if ref_out.len() >= 8 {
             ref_out[..8].copy_from_slice(&yielded_index.to_le_bytes());
@@ -253,27 +268,36 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn update_row(&mut self, old: &[u8], new: &[u8]) -> EngineResult {
-        let replaced = match self
-            .meta
-            .as_ref()
-            .and_then(|m| store::extract_key_from_row(old, m))
-        {
-            Some(k) => store::replace_by_key(&self.table, &k, new.to_vec()),
-            None => store::replace_by_bytes(&self.table, old, new.to_vec()),
+        let meta = match self.meta.as_ref() {
+            Some(m) => m,
+            None => return finish_replace(store::replace_by_bytes(&self.table, old, new.to_vec())),
         };
-        if replaced {
-            Ok(())
-        } else {
-            Err(EngineError::EndOfFile)
+        let old_key = store::extract_key_from_row(old, meta);
+        let new_key = store::extract_key_from_row(new, meta);
+        match (old_key, new_key) {
+            (Some(k_old), Some(k_new)) if k_old == k_new => {
+                finish_replace(store::replace_by_key(&self.table, &k_old, new.to_vec()))
+            }
+            (Some(k_old), Some(k_new)) => {
+                // Indexed column changed: drop the old entry and reinsert
+                // under the new key so a later `WHERE id = new` finds it.
+                let removed = store::remove_by_key(&self.table, &k_old);
+                if !removed {
+                    return Err(EngineError::EndOfFile);
+                }
+                store::commit_keyed(&self.table, vec![(k_new, new.to_vec())]);
+                Ok(())
+            }
+            _ => finish_replace(store::replace_by_bytes(&self.table, old, new.to_vec())),
         }
     }
 
     fn delete_row(&mut self, buf: &[u8]) -> EngineResult {
-        let removed = match self
-            .meta
-            .as_ref()
-            .and_then(|m| store::extract_key_from_row(buf, m))
-        {
+        let key = match self.meta.as_ref() {
+            Some(m) => store::extract_key_from_row(buf, m),
+            None => None,
+        };
+        let removed = match key {
             Some(k) => store::remove_by_key(&self.table, &k),
             None => store::remove_by_bytes(&self.table, buf),
         };
@@ -376,18 +400,22 @@ impl StorageEngine for TrivialEngine {
         self.yield_and_advance(buf)
     }
 
-    fn index_next_same(&mut self, buf: &mut [u8], _key: &[u8]) -> EngineResult {
-        // Walk forward as long as the next row's key equals the one we
-        // recorded in `index_read_map`. The trailing `key` buffer MySQL
-        // hands here is the same bytes the previous `index_read_map` saw,
-        // so we trust the recorded `Key` and avoid re-decoding.
+    fn index_next_same(&mut self, buf: &mut [u8], key: &[u8]) -> EngineResult {
+        // Prefer the key recorded by `index_read_map` so a follow-up call
+        // does not have to re-decode the same bytes. When the caller has
+        // not been through `index_read_map` (e.g. `index_first` then
+        // `index_next_same`), decode the supplied `key` through the same
+        // path instead of giving up.
         let target = match self.last_search_key.clone() {
             Some(k) => k,
-            None => return Err(EngineError::EndOfFile),
+            None => {
+                let meta = self.meta.as_ref().ok_or(EngineError::WrongCommand)?;
+                store::build_key_from_search_buffer(key, meta).ok_or(EngineError::WrongCommand)?
+            }
         };
         let pos = self.scan_pos.ok_or(EngineError::EndOfFile)?;
-        let (key, _) = self.snapshot.get(pos).ok_or(EngineError::EndOfFile)?;
-        if key != &target {
+        let (k, _) = self.snapshot.get(pos).ok_or(EngineError::EndOfFile)?;
+        if k != &target {
             return Err(EngineError::EndOfFile);
         }
         self.scan_dir = ScanDir::Forward;
@@ -401,9 +429,9 @@ impl StorageEngine for TrivialEngine {
         max: Option<RangeKey<'_>>,
     ) -> Option<u64> {
         let meta = self.meta.as_ref()?;
-        let start = Self::decode_bound(meta, min, true);
-        let end = Self::decode_bound(meta, max, false);
-        Some(store::range_pairs(&self.table, &start, &end).len() as u64)
+        let start = Self::decode_bound(meta, min, Endpoint::Start);
+        let end = Self::decode_bound(meta, max, Endpoint::End);
+        Some(store::range_len(&self.table, &start, &end))
     }
 
     fn read_range_first(
@@ -415,8 +443,8 @@ impl StorageEngine for TrivialEngine {
         _sorted: bool,
     ) -> EngineResult {
         let meta = self.meta.as_ref().ok_or(EngineError::WrongCommand)?;
-        let start_b = Self::decode_bound(meta, start, true);
-        let end_b = Self::decode_bound(meta, end, false);
+        let start_b = Self::decode_bound(meta, start, Endpoint::Start);
+        let end_b = Self::decode_bound(meta, end, Endpoint::End);
         self.refresh_range(&start_b, &end_b);
         self.yield_and_advance(buf)
     }
@@ -464,6 +492,18 @@ impl StorageEngine for TrivialEngine {
         self.scan_pos = None;
         self.last_search_key = None;
         Ok(())
+    }
+}
+
+/// `Ok(())` when the store reported a row was replaced, `EndOfFile`
+/// otherwise — `update_row` / `delete_row` use this so a missed lookup
+/// surfaces as MySQL's documented "no row matched" sentinel rather than a
+/// silent success.
+fn finish_replace(replaced: bool) -> EngineResult {
+    if replaced {
+        Ok(())
+    } else {
+        Err(EngineError::EndOfFile)
     }
 }
 

@@ -126,6 +126,10 @@ SELECT @rng_between_sum := SUM(id) FROM rng WHERE id BETWEEN 2 AND 3;
 SELECT @rng_between_count := COUNT(*) FROM rng WHERE id BETWEEN 2 AND 3;
 SELECT @rng_first := id FROM rng ORDER BY id LIMIT 1;
 SELECT @rng_last := id FROM rng ORDER BY id DESC LIMIT 1;
+-- Half-open probes: a `Bound::Unbounded` regression in `decode_bound`
+-- or `range_pairs` would surface as the wrong sum / count here.
+SELECT @rng_gt_sum := SUM(id) FROM rng WHERE id > 3;
+SELECT @rng_lt_count := COUNT(*) FROM rng WHERE id < 3;
 DROP TABLE rng;
 
 -- Non-default key offset: `pad` (INT NOT NULL, 4 bytes) sits in front of
@@ -234,6 +238,7 @@ SELECT IF(
   AND @crud_off_sum = 50 AND @crud_off_count = 2 AND @crud_off_label_20 = 'Y'
   AND @crud_tx_label = 'after'
   AND @rng_between_sum = 5 AND @rng_between_count = 2
-  AND @rng_first = 1 AND @rng_last = 5,
+  AND @rng_first = 1 AND @rng_last = 5
+  AND @rng_gt_sum = 9 AND @rng_lt_count = 2,
   3, 0
 ) AS sentinel;

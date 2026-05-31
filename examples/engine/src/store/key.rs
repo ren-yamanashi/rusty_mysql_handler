@@ -58,19 +58,6 @@ pub enum KeyValue {
     Bytes(Vec<u8>),
 }
 
-impl KeyValue {
-    /// Sort discriminant: `Null` < numeric < bytes. Used as a tiebreaker
-    /// for cross-variant comparisons that the engine never intentionally
-    /// produces but must not panic on.
-    const fn variant_rank(&self) -> u8 {
-        match self {
-            Self::Null => 0,
-            Self::Signed(_) | Self::Unsigned(_) => 1,
-            Self::Bytes(_) => 2,
-        }
-    }
-}
-
 impl Ord for KeyValue {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
@@ -82,7 +69,12 @@ impl Ord for KeyValue {
             // i128 so the demo can survive a stray mismatch without panic.
             (Self::Signed(a), Self::Unsigned(b)) => i128::from(*a).cmp(&i128::from(*b)),
             (Self::Unsigned(a), Self::Signed(b)) => i128::from(*a).cmp(&i128::from(*b)),
-            _ => self.variant_rank().cmp(&other.variant_rank()),
+            // Sort discriminant: `Null` < numeric < bytes. The engine
+            // never intentionally produces these arms but must not panic.
+            (Self::Null, Self::Signed(_) | Self::Unsigned(_) | Self::Bytes(_))
+            | (Self::Signed(_) | Self::Unsigned(_), Self::Bytes(_)) => Ordering::Less,
+            (Self::Signed(_) | Self::Unsigned(_) | Self::Bytes(_), Self::Null)
+            | (Self::Bytes(_), Self::Signed(_) | Self::Unsigned(_)) => Ordering::Greater,
         }
     }
 }

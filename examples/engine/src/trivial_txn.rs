@@ -36,8 +36,12 @@ fn sv_index(sv: &[u8]) -> Option<usize> {
 }
 
 /// Push `rows` into `table`'s committed store, picking the keyed path
-/// when the table's registered schema yields a primary-key value per row
-/// and the sequence-key path otherwise.
+/// when *every* row in the batch yields a primary-key value, and the
+/// sequence-key path otherwise. The all-or-nothing choice avoids mixing
+/// real PK keys with synthetic `KeyValue::Unsigned(seq)` counters in the
+/// same BTreeMap — sequence numbers start at zero and would otherwise
+/// silently overwrite small unsigned PKs via `BTreeMap::insert`'s
+/// last-write-wins semantics.
 fn flush_table(table: &str, rows: Vec<Vec<u8>>) {
     let meta = match store::lookup_meta(table) {
         Some(m) => m,
@@ -47,19 +51,16 @@ fn flush_table(table: &str, rows: Vec<Vec<u8>>) {
         }
     };
     let mut keyed = Vec::with_capacity(rows.len());
-    let mut unkeyed = Vec::new();
-    for row in rows {
-        match store::extract_key_from_row(&row, &meta) {
-            Some(k) => keyed.push((k, row)),
-            None => unkeyed.push(row),
+    for row in &rows {
+        match store::extract_key_from_row(row, &meta) {
+            Some(k) => keyed.push((k, row.clone())),
+            None => {
+                store::commit_seq(table, rows);
+                return;
+            }
         }
     }
-    if !keyed.is_empty() {
-        store::commit_keyed(table, keyed);
-    }
-    if !unkeyed.is_empty() {
-        store::commit_seq(table, unkeyed);
-    }
+    store::commit_keyed(table, keyed);
 }
 
 /// Per-connection transaction. Stages row writes per table; commit
