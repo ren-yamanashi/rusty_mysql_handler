@@ -87,6 +87,15 @@ CREATE TABLE md1 (id INT) ENGINE=RUSTY;
 SHOW CREATE TABLE md1;
 DROP TABLE md1;
 
+-- Row visibility: INSERT must store the actual row bytes so a later SELECT
+-- returns the inserted values (not empty rows). The previous version of
+-- TrivialEngine kept only counts; after the demo bring-up it stores the raw
+-- record image so SUM / specific-value lookups return real data.
+CREATE TABLE rv (id INT, label VARCHAR(20)) ENGINE=RUSTY;
+INSERT INTO rv VALUES (10, 'a'), (20, 'b'), (30, 'c');
+SELECT @rv_sum := SUM(id), @rv_count := COUNT(*) FROM rv;
+DROP TABLE rv;
+
 -- Transaction observability: a transactional handlerton registers in
 -- external_lock when a statement touches a RUSTY table, so COMMIT must make its
 -- insert durable to the next statement and ROLLBACK must discard its insert.
@@ -148,6 +157,11 @@ CREATE TABLE rusty_drop_db_test.t1 (id INT) ENGINE=RUSTY;
 DROP DATABASE rusty_drop_db_test;
 
 -- sentinel: 3 only when COMMIT persisted (1), ROLLBACK discarded (1),
--- ROLLBACK TO SAVEPOINT undid only the post-savepoint insert (1), and
--- RELEASE SAVEPOINT kept both inserts (2)
-SELECT IF(@after_commit = 1 AND @after_rollback = 1 AND @after_savepoint = 1 AND @after_release = 2, 3, 0) AS sentinel;
+-- ROLLBACK TO SAVEPOINT undid only the post-savepoint insert (1),
+-- RELEASE SAVEPOINT kept both inserts (2), and INSERT made real row values
+-- visible to SELECT (sum 60, count 3).
+SELECT IF(
+  @after_commit = 1 AND @after_rollback = 1 AND @after_savepoint = 1 AND @after_release = 2
+  AND @rv_sum = 60 AND @rv_count = 3,
+  3, 0
+) AS sentinel;

@@ -43,6 +43,8 @@ fn table_key(name: &str) -> String {
 pub struct TrivialEngine {
     table: String,
     current_row: u64,
+    rnd_snapshot: Vec<Vec<u8>>,
+    rnd_pos: usize,
     next_auto_inc: u64,
 }
 
@@ -52,18 +54,32 @@ impl TrivialEngine {
         Self {
             table: String::new(),
             current_row: 0,
+            rnd_snapshot: Vec::new(),
+            rnd_pos: 0,
             next_auto_inc: 1,
         }
     }
 
-    /// Yield the next committed row, or `EndOfFile` once they are exhausted.
-    /// Shared by the random-scan and index-scan read paths.
+    /// Yield the next committed row's count slot, or `EndOfFile` once
+    /// exhausted. Used by the index-scan paths that do not yet copy row
+    /// bytes back to the caller; the random-scan path (`rnd_next`) goes
+    /// through `rnd_snapshot` and copies real bytes instead.
     fn yield_next(&mut self) -> EngineResult {
-        if self.current_row >= store::committed_rows(&self.table) {
+        if self.current_row >= store::committed_row_count(&self.table) {
             return Err(EngineError::EndOfFile);
         }
         self.current_row += 1;
         Ok(())
+    }
+
+    /// Copy `row` into `buf`, truncating to the shorter length so a
+    /// mis-sized demo buffer does not panic. A length mismatch indicates
+    /// a `rec_buff_length` / schema bug; the demo silently truncates and
+    /// the dropped tail is invisible — a production engine would treat
+    /// the mismatch as an error.
+    fn copy_row_into(buf: &mut [u8], row: &[u8]) {
+        let n = buf.len().min(row.len());
+        buf[..n].copy_from_slice(&row[..n]);
     }
 }
 
@@ -101,17 +117,25 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn rnd_init(&mut self, _scan: bool) -> EngineResult {
-        self.current_row = 0;
+        self.rnd_snapshot = store::committed_rows(&self.table);
+        self.rnd_pos = 0;
         Ok(())
     }
 
     fn rnd_end(&mut self) -> EngineResult {
-        self.current_row = 0;
+        self.rnd_snapshot.clear();
+        self.rnd_pos = 0;
         Ok(())
     }
 
-    fn rnd_next(&mut self, _buf: &mut [u8]) -> EngineResult {
-        self.yield_next()
+    fn rnd_next(&mut self, buf: &mut [u8]) -> EngineResult {
+        let row = match self.rnd_snapshot.get(self.rnd_pos) {
+            Some(r) => r,
+            None => return Err(EngineError::EndOfFile),
+        };
+        Self::copy_row_into(buf, row);
+        self.rnd_pos += 1;
+        Ok(())
     }
 
     fn rnd_pos(&mut self, _buf: &mut [u8], _pos: &[u8]) -> EngineResult {
@@ -143,12 +167,16 @@ impl StorageEngine for TrivialEngine {
     fn truncate(&mut self, _table_def: Option<&sys::DdTable>) -> EngineResult {
         store::reset_table(&self.table);
         self.current_row = 0;
+        self.rnd_snapshot.clear();
+        self.rnd_pos = 0;
         Ok(())
     }
 
     fn delete_all_rows(&mut self) -> EngineResult {
         store::reset_table(&self.table);
         self.current_row = 0;
+        self.rnd_snapshot.clear();
+        self.rnd_pos = 0;
         Ok(())
     }
 
@@ -227,16 +255,16 @@ impl StorageEngine for TrivialEngine {
     }
 
     fn scan_time(&mut self) -> Option<f64> {
-        let rows = u32::try_from(store::committed_rows(&self.table)).unwrap_or(u32::MAX);
+        let rows = u32::try_from(store::committed_row_count(&self.table)).unwrap_or(u32::MAX);
         Some(f64::from(rows))
     }
 
     fn records(&mut self) -> Option<EngineResult<u64>> {
-        Some(Ok(store::committed_rows(&self.table)))
+        Some(Ok(store::committed_row_count(&self.table)))
     }
 
     fn estimate_rows_upper_bound(&mut self) -> Option<u64> {
-        Some(store::committed_rows(&self.table))
+        Some(store::committed_row_count(&self.table))
     }
 
     fn get_auto_increment(
@@ -253,6 +281,41 @@ impl StorageEngine for TrivialEngine {
 
     fn reset(&mut self) -> EngineResult {
         self.current_row = 0;
+        self.rnd_pos = 0;
+        self.rnd_snapshot.clear();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn copy_row_into_writes_full_row_when_lengths_match() {
+        let mut buf = [0u8; 4];
+        TrivialEngine::copy_row_into(&mut buf, &[1, 2, 3, 4]);
+        assert_eq!(buf, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn copy_row_into_truncates_to_buf_length() {
+        let mut buf = [0u8; 2];
+        TrivialEngine::copy_row_into(&mut buf, &[1, 2, 3, 4]);
+        assert_eq!(buf, [1, 2]);
+    }
+
+    #[test]
+    fn copy_row_into_leaves_trailing_bytes_when_row_is_shorter() {
+        let mut buf = [9u8; 4];
+        TrivialEngine::copy_row_into(&mut buf, &[1, 2]);
+        assert_eq!(buf, [1, 2, 9, 9]);
+    }
+
+    #[test]
+    fn table_key_strips_path_prefix() {
+        assert_eq!(table_key("./e2e/rv"), "rv");
+        assert_eq!(table_key("rv"), "rv");
+        assert_eq!(table_key("/abs/db/t1"), "t1");
     }
 }

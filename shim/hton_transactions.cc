@@ -36,11 +36,15 @@ namespace {
 // the transaction.
 int rusty_hton_commit(handlerton *hton, THD *thd, bool all) {
   void *ctx = thd_get_ha_data(thd, hton);
-  int rc = rust__hton__txn_commit(ctx, all);
+  // In autocommit mode the statement boundary IS the transaction boundary, but
+  // MySQL only ever calls us with all=false. Upgrade to all=true so engines
+  // that flush staged work on the transaction boundary see one here.
+  bool autocommit = !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN);
+  int rc = rust__hton__txn_commit(ctx, all || autocommit);
   // Free on the real transaction boundary (all), and on an autocommit
   // statement, where no enclosing transaction will ever deliver all=true to
   // free the context otherwise allocated for the whole connection.
-  if (all || !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
+  if (all || autocommit) {
     rust__hton__txn_free(ctx);
     thd_set_ha_data(thd, hton, nullptr);
   }
@@ -49,11 +53,11 @@ int rusty_hton_commit(handlerton *hton, THD *thd, bool all) {
 
 int rusty_hton_rollback(handlerton *hton, THD *thd, bool all) {
   void *ctx = thd_get_ha_data(thd, hton);
-  int rc = rust__hton__txn_rollback(ctx, all);
-  // Free on the real transaction boundary (all), and on an autocommit
-  // statement, where no enclosing transaction will ever deliver all=true to
-  // free the context otherwise allocated for the whole connection.
-  if (all || !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
+  // Same autocommit upgrade as commit: present a transaction-scope rollback
+  // when MySQL would only ever call statement-scope.
+  bool autocommit = !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN);
+  int rc = rust__hton__txn_rollback(ctx, all || autocommit);
+  if (all || autocommit) {
     rust__hton__txn_free(ctx);
     thd_set_ha_data(thd, hton, nullptr);
   }
@@ -79,7 +83,9 @@ void rusty_hton_register_txn(THD *thd, handlerton *ht) {
   }
   // Register for the statement, and additionally for the whole transaction when
   // the connection is not in autocommit (an explicit BEGIN or autocommit=0), so
-  // a later COMMIT / ROLLBACK reaches this engine.
+  // a later COMMIT / ROLLBACK reaches this engine. In autocommit, MySQL never
+  // delivers all=true; `rusty_hton_commit` upgrades the statement commit so
+  // engines that key flush on all=true still see a transaction boundary.
   trans_register_ha(thd, false, ht, nullptr);
   if (thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
     trans_register_ha(thd, true, ht, nullptr);

@@ -35,31 +35,36 @@ fn sv_index(sv: &[u8]) -> Option<usize> {
     usize::try_from(u64::from_le_bytes(bytes)).ok()
 }
 
-/// The reference engine's per-connection transaction. It buffers each row write
-/// per table; a transaction commit (`all`) flushes the counts to the shared
-/// committed store, and a transaction rollback (`all`) discards them, so the
-/// effect of COMMIT vs ROLLBACK is visible to later statements. A savepoint
-/// snapshots the staged counts; rolling back to it restores that snapshot and
-/// drops later snapshots, while releasing it drops its snapshot but keeps the
-/// work.
+/// The reference engine's per-connection transaction. It buffers each row
+/// write per table as a `Vec<Vec<u8>>` of raw `record[0]` byte images; a
+/// transaction commit (`all`) flushes the staged rows to the shared committed
+/// store, and a transaction rollback (`all`) discards them, so the effect of
+/// COMMIT vs ROLLBACK is visible to later statements. A savepoint snapshots
+/// the staged rows; rolling back to it restores that snapshot and drops later
+/// snapshots, while releasing it drops its snapshot but keeps the work.
 #[derive(Debug, Default)]
 pub struct TrivialTxn {
-    staged: HashMap<String, u64>,
-    savepoints: Vec<HashMap<String, u64>>,
+    staged: HashMap<String, Vec<Vec<u8>>>,
+    savepoints: Vec<HashMap<String, Vec<Vec<u8>>>>,
 }
 
 impl TxnSession for TrivialTxn {
-    fn write_row(&mut self, table: &str, _row: &[u8]) -> EngineResult {
-        *self.staged.entry(table.to_owned()).or_insert(0) += 1;
+    fn write_row(&mut self, table: &str, row: &[u8]) -> EngineResult {
+        self.staged
+            .entry(table.to_owned())
+            .or_default()
+            .push(row.to_vec());
         Ok(())
     }
 
     fn commit(&mut self, all: bool) -> EngineResult {
         // Flush only on the whole-transaction boundary; a statement boundary
         // (all=false) keeps the staged rows for the rest of the transaction.
+        // The shim's `rusty_hton_commit` upgrades autocommit statement commits
+        // to all=true so the demo path also flushes there.
         if all {
-            for (table, n) in self.staged.drain() {
-                store::commit_rows(&table, n);
+            for (table, rows) in self.staged.drain() {
+                store::commit_rows(&table, rows);
             }
         }
         Ok(())
