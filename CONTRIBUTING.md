@@ -92,11 +92,9 @@ boundary rather than decoration, configure it under
 release-blocking issue (license, lint, test, dry-run publish) is caught
 before tagging.
 
-PR labels drive `gh release create --generate-notes` categorisation (see
-`.github/release.yml`). Labels are applied manually before the tag is
-pushed — set the matching Conventional Commits label (`feat`, `fix`,
-`refactor`, `docs`, `build`, `ci`, `chore`, `test`, `breaking`) on each
-PR merged into the release.
+Release notes are produced by `gh release create --generate-notes` with
+GitHub's default formatter — a flat list of PRs merged since the
+previous tag. No PR-label categorisation step is required.
 
 ## Coding Conventions
 
