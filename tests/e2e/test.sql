@@ -96,6 +96,18 @@ INSERT INTO rv VALUES (10, 'a'), (20, 'b'), (30, 'c');
 SELECT @rv_sum := SUM(id), @rv_count := COUNT(*) FROM rv;
 DROP TABLE rv;
 
+-- CRUD on an indexed table: UPDATE / DELETE locate the target row through
+-- MySQL's filtering, and the demo engine modifies the committed store
+-- in-place. The reference engine does not implement transactional UPDATE /
+-- DELETE, so these run under autocommit only.
+CREATE TABLE crud (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO crud VALUES (10, 'a'), (20, 'b'), (30, 'c');
+UPDATE crud SET label = 'X' WHERE id = 20;
+DELETE FROM crud WHERE id = 10;
+SELECT @crud_sum := SUM(id), @crud_count := COUNT(*) FROM crud;
+SELECT @crud_label_20 := label FROM crud WHERE id = 20;
+DROP TABLE crud;
+
 -- Transaction observability: a transactional handlerton registers in
 -- external_lock when a statement touches a RUSTY table, so COMMIT must make its
 -- insert durable to the next statement and ROLLBACK must discard its insert.
@@ -158,10 +170,13 @@ DROP DATABASE rusty_drop_db_test;
 
 -- sentinel: 3 only when COMMIT persisted (1), ROLLBACK discarded (1),
 -- ROLLBACK TO SAVEPOINT undid only the post-savepoint insert (1),
--- RELEASE SAVEPOINT kept both inserts (2), and INSERT made real row values
--- visible to SELECT (sum 60, count 3).
+-- RELEASE SAVEPOINT kept both inserts (2), INSERT made real row values
+-- visible to SELECT (sum 60, count 3), and UPDATE / DELETE found and
+-- modified the right rows (UPDATE id=20 to 'X', DELETE id=10 → remaining
+-- sum 50, count 2, label of id=20 is 'X').
 SELECT IF(
   @after_commit = 1 AND @after_rollback = 1 AND @after_savepoint = 1 AND @after_release = 2
-  AND @rv_sum = 60 AND @rv_count = 3,
+  AND @rv_sum = 60 AND @rv_count = 3
+  AND @crud_sum = 50 AND @crud_count = 2 AND @crud_label_20 = 'X',
   3, 0
 ) AS sentinel;

@@ -85,6 +85,43 @@ pub fn reset_table(table: &str) {
     committed().remove(table);
 }
 
+/// Replace the first row in `table` whose bytes equal `old` with `new`.
+/// Returns `true` if a row was replaced, `false` if no match was found.
+/// Linear scan — the demo trades efficiency for an easy mental model.
+#[must_use]
+pub fn replace_row(table: &str, old: &[u8], new: &[u8]) -> bool {
+    let mut guard = committed();
+    let rows = match guard.get_mut(table) {
+        Some(r) => r,
+        None => return false,
+    };
+    match rows.iter().position(|row| row.as_slice() == old) {
+        Some(i) => {
+            rows[i] = new.to_vec();
+            true
+        }
+        None => false,
+    }
+}
+
+/// Remove the first row in `table` whose bytes equal `target`. Returns
+/// `true` if a row was removed, `false` if no match was found.
+#[must_use]
+pub fn remove_row(table: &str, target: &[u8]) -> bool {
+    let mut guard = committed();
+    let rows = match guard.get_mut(table) {
+        Some(r) => r,
+        None => return false,
+    };
+    match rows.iter().position(|row| row.as_slice() == target) {
+        Some(i) => {
+            rows.remove(i);
+            true
+        }
+        None => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +164,45 @@ mod tests {
         reset_table(t);
         assert!(committed_rows(t).is_empty());
         assert_eq!(committed_row_count(t), 0);
+    }
+
+    #[test]
+    fn replace_row_swaps_a_matching_row() {
+        let t = "_t_store_replace";
+        reset_table(t);
+        commit_rows(t, vec![vec![1, 2], vec![3, 4]]);
+        assert!(replace_row(t, &[1, 2], &[9, 9]));
+        assert_eq!(committed_rows(t), vec![vec![9, 9], vec![3, 4]]);
+        reset_table(t);
+    }
+
+    #[test]
+    fn replace_row_returns_false_when_no_match() {
+        let t = "_t_store_replace_miss";
+        reset_table(t);
+        commit_rows(t, vec![vec![1, 2]]);
+        assert!(!replace_row(t, &[7, 7], &[8, 8]));
+        assert_eq!(committed_rows(t), vec![vec![1, 2]]);
+        reset_table(t);
+    }
+
+    #[test]
+    fn remove_row_drops_a_matching_row() {
+        let t = "_t_store_remove";
+        reset_table(t);
+        commit_rows(t, vec![vec![1], vec![2], vec![3]]);
+        assert!(remove_row(t, &[2]));
+        assert_eq!(committed_rows(t), vec![vec![1], vec![3]]);
+        reset_table(t);
+    }
+
+    #[test]
+    fn remove_row_returns_false_when_no_match() {
+        let t = "_t_store_remove_miss";
+        reset_table(t);
+        commit_rows(t, vec![vec![1]]);
+        assert!(!remove_row(t, &[7]));
+        assert_eq!(committed_rows(t), vec![vec![1]]);
+        reset_table(t);
     }
 }
