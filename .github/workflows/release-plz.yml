@@ -42,7 +42,7 @@ jobs:
     name: Release Gates
     # Only on the release PR merge so ordinary main pushes do not pile up
     # pending `crates-io` env approvals downstream.
-    if: ${{ startsWith(github.event.head_commit.message, 'chore: release') }}
+    if: "${{ startsWith(github.event.head_commit.message, 'chore: release') }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -65,7 +65,7 @@ jobs:
 
   release-plz-release:
     name: Release
-    if: ${{ startsWith(github.event.head_commit.message, 'chore: release') }}
+    if: "${{ startsWith(github.event.head_commit.message, 'chore: release') }}"
     needs: release-gates
     runs-on: ubuntu-24.04
     timeout-minutes: 30
