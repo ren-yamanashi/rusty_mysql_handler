@@ -4,11 +4,15 @@ on:
   pull_request:
     paths:
       - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'deny.toml'
       - '.github/workflows/audit.yml'
   push:
     branches: [main]
     paths:
       - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'deny.toml'
       - '.github/workflows/audit.yml'
 
 permissions:
@@ -31,3 +35,16 @@ jobs:
       - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@30f817c6f72275c6d54dc744fbca09ebc958599f # v2.0.12
+        with:
+          command: check
+          arguments: --workspace --all-features

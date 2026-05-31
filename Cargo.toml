@@ -7,8 +7,30 @@ authors = ["ren-yamanashi"]
 license = "GPL-2.0-only"
 edition = "2024"
 repository = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+homepage = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+documentation = "https://docs.rs/mysql-handler"
+keywords = ["mysql", "ffi", "plugin", "storage-engine", "handler"]
+categories = ["api-bindings", "database", "external-ffi-bindings"]
 rust-version = "1.85"
 links = "ha_rusty_shim"
+include = [
+  "src/**/*.rs",
+  "shim/**/*.cc",
+  "shim/**/*.hpp",
+  "shim/**/*.h",
+  "shim/CMakeLists.txt",
+  "build.rs",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE",
+]
+
+[package.metadata.docs.rs]
+# The build script's default path (no env var) skips bindgen and the cmake
+# shim build and re-uses the vendored `src/sys_bindings.rs`, so docs.rs can
+# build the rlib without MySQL headers or a C++ toolchain. `--cfg docsrs`
+# is wired so future doc-only items can gate on it.
+rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace]
 members = ["examples/engine"]
