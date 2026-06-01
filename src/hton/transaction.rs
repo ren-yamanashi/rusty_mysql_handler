@@ -75,6 +75,31 @@ pub trait TxnSession: Send {
         Ok(())
     }
 
+    /// Stage a row update. `old` is the pre-image (for rollback /
+    /// pre-image-keyed map lookups) and `new` is the post-image.
+    /// Same buffering contract as [`Self::write_row`]; default is a
+    /// no-op.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the
+    /// update cannot be staged.
+    fn update_row(&mut self, table: &str, old: &[u8], new: &[u8]) -> EngineResult {
+        let _ = (table, old, new);
+        Ok(())
+    }
+
+    /// Stage a row deletion. `row` is the pre-image of the row about
+    /// to be removed. Same buffering contract as [`Self::write_row`];
+    /// default is a no-op.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the
+    /// delete cannot be staged.
+    fn delete_row(&mut self, table: &str, row: &[u8]) -> EngineResult {
+        let _ = (table, row);
+        Ok(())
+    }
+
     /// Prepare phase: flush the transaction so a following `commit` is durable.
     ///
     /// MySQL drives this whenever the engine takes part in two-phase commit —

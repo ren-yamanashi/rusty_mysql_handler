@@ -46,14 +46,35 @@ int RustHandlerBase::write_row(uchar *buf) {
 
 int RustHandlerBase::update_row(const uchar *old_data, uchar *new_data) {
   DBUG_TRACE;
-  return rust__handler__update_row(rust_ctx_, old_data,
-                                   table->s->rec_buff_length, new_data,
-                                   table->s->rec_buff_length);
+  void *txn =
+      rust__hton__is_transactional() ? thd_get_ha_data(ha_thd(), ht) : nullptr;
+  // Non-transactional, or no transaction context yet: the change goes
+  // straight to the per-table engine.
+  if (!txn) {
+    return rust__handler__update_row(rust_ctx_, old_data,
+                                     table->s->rec_buff_length, new_data,
+                                     table->s->rec_buff_length);
+  }
+  // Transactional: stage so commit / rollback decides the row's fate.
+  return rust__hton__txn_update_row(
+      txn, reinterpret_cast<const uint8_t *>(table->s->table_name.str),
+      table->s->table_name.length, old_data, table->s->rec_buff_length,
+      new_data, table->s->rec_buff_length);
 }
 
 int RustHandlerBase::delete_row(const uchar *buf) {
   DBUG_TRACE;
-  return rust__handler__delete_row(rust_ctx_, buf, table->s->rec_buff_length);
+  void *txn =
+      rust__hton__is_transactional() ? thd_get_ha_data(ha_thd(), ht) : nullptr;
+  // Non-transactional, or no transaction context yet: the change goes
+  // straight to the per-table engine.
+  if (!txn) {
+    return rust__handler__delete_row(rust_ctx_, buf, table->s->rec_buff_length);
+  }
+  // Transactional: stage so commit / rollback decides the row's fate.
+  return rust__hton__txn_delete_row(
+      txn, reinterpret_cast<const uint8_t *>(table->s->table_name.str),
+      table->s->table_name.length, buf, table->s->rec_buff_length);
 }
 
 int RustHandlerBase::delete_all_rows() {

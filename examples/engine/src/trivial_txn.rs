@@ -21,6 +21,27 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 //! Per-connection transaction state for the reference engine.
+//!
+//! Writes, updates, and deletes accumulate as an [`Op`] log under their
+//! target table. `commit(all=true)` replays the log against the committed
+//! [`crate::store::TableStore`]; `rollback(all=true)` discards it.
+//! Savepoints snapshot the whole op log so `ROLLBACK TO SAVEPOINT` can
+//! restore the staging state.
+//!
+//! Known limitations (acceptable for the reference demo; downstream
+//! engines that need richer semantics should diverge here):
+//!
+//! - **No read-your-own-writes.** Scans always go through
+//!   [`crate::store::pairs_sorted`], which only sees committed rows.
+//!   A second statement within the same transaction observes the
+//!   pre-transaction state, so a sequence like
+//!   `BEGIN; UPDATE t SET x=2 WHERE id=1; UPDATE t SET x=3 WHERE x=2;`
+//!   silently loses the second update.
+//! - **`rollback(all=false)` is a no-op.** A per-statement rollback
+//!   (e.g. on a constraint violation mid-transaction) leaves the
+//!   failed statement's staged ops in place, so they replay at
+//!   `COMMIT`. Statement-boundary tracking would split the log into
+//!   per-statement segments; the demo skips it.
 
 use std::collections::HashMap;
 
@@ -35,49 +56,42 @@ fn sv_index(sv: &[u8]) -> Option<usize> {
     usize::try_from(u64::from_le_bytes(bytes)).ok()
 }
 
-/// Push `rows` into `table`'s committed store, picking the keyed path
-/// when *every* row in the batch yields a primary-key value, and the
-/// sequence-key path otherwise. The all-or-nothing choice avoids mixing
-/// real PK keys with synthetic `KeyValue::Unsigned(seq)` counters in the
-/// same BTreeMap — sequence numbers start at zero and would otherwise
-/// silently overwrite small unsigned PKs via `BTreeMap::insert`'s
-/// last-write-wins semantics.
-fn flush_table(table: &str, rows: Vec<Vec<u8>>) {
-    let meta = match store::lookup_meta(table) {
-        Some(m) => m,
-        None => {
-            store::commit_seq(table, rows);
-            return;
-        }
-    };
-    let mut keyed = Vec::with_capacity(rows.len());
-    for row in &rows {
-        match store::extract_key_from_row(row, &meta) {
-            Some(k) => keyed.push((k, row.clone())),
-            None => {
-                store::commit_seq(table, rows);
-                return;
-            }
-        }
-    }
-    store::commit_keyed(table, keyed);
+/// One staged change against a table's committed store.
+#[derive(Debug, Clone)]
+pub(crate) enum Op {
+    Insert(Vec<u8>),
+    Update { old: Vec<u8>, new: Vec<u8> },
+    Delete(Vec<u8>),
 }
 
-/// Per-connection transaction. Stages row writes per table; commit
-/// (`all=true`) flushes to the committed store, rollback discards.
-/// Savepoints snapshot the staged state.
+/// Per-connection transaction. Each statement's writes / updates /
+/// deletes append to the op log keyed by table; commit (`all=true`)
+/// replays them in order, rollback discards.
 #[derive(Debug, Default)]
 pub struct TrivialTxn {
-    staged: HashMap<String, Vec<Vec<u8>>>,
-    savepoints: Vec<HashMap<String, Vec<Vec<u8>>>>,
+    staged: HashMap<String, Vec<Op>>,
+    savepoints: Vec<HashMap<String, Vec<Op>>>,
 }
 
 impl TxnSession for TrivialTxn {
     fn write_row(&mut self, table: &str, row: &[u8]) -> EngineResult {
-        self.staged
-            .entry(table.to_owned())
-            .or_default()
-            .push(row.to_vec());
+        self.append(table, Op::Insert(row.to_vec()));
+        Ok(())
+    }
+
+    fn update_row(&mut self, table: &str, old: &[u8], new: &[u8]) -> EngineResult {
+        self.append(
+            table,
+            Op::Update {
+                old: old.to_vec(),
+                new: new.to_vec(),
+            },
+        );
+        Ok(())
+    }
+
+    fn delete_row(&mut self, table: &str, row: &[u8]) -> EngineResult {
+        self.append(table, Op::Delete(row.to_vec()));
         Ok(())
     }
 
@@ -85,8 +99,8 @@ impl TxnSession for TrivialTxn {
         // Flush only on the whole-transaction boundary. The shim upgrades
         // autocommit statement commits to all=true so they flush too.
         if all {
-            for (table, rows) in self.staged.drain() {
-                flush_table(&table, rows);
+            for (table, ops) in self.staged.drain() {
+                replay(&table, ops);
             }
         }
         Ok(())
@@ -101,6 +115,11 @@ impl TxnSession for TrivialTxn {
 
     fn savepoint_set(&mut self, sv: &mut [u8]) -> EngineResult {
         let index = self.savepoints.len() as u64;
+        // Demo-grade: clones the full op log (including old + new
+        // images for every staged update). `O(rows × row_size ×
+        // savepoints)` is intentional — a copy-on-write or persistent
+        // op log would scale, but the reference engine prefers the
+        // straightforward Vec<Op> shape.
         self.savepoints.push(self.staged.clone());
         if sv.len() >= 8 {
             sv[..8].copy_from_slice(&index.to_le_bytes());
@@ -127,5 +146,80 @@ impl TxnSession for TrivialTxn {
             self.savepoints.truncate(index);
         }
         Ok(())
+    }
+}
+
+impl TrivialTxn {
+    fn append(&mut self, table: &str, op: Op) {
+        self.staged.entry(table.to_owned()).or_default().push(op);
+    }
+}
+
+/// Replay `ops` against `table`'s committed store. Each variant chooses
+/// the index-aware path when a [`crate::store::TableMeta`] is registered
+/// and the byte-equality fallback otherwise.
+fn replay(table: &str, ops: Vec<Op>) {
+    let meta = store::lookup_meta(table);
+    for op in ops {
+        match op {
+            Op::Insert(row) => insert_row(table, meta.as_ref(), row),
+            Op::Update { old, new } => update_row(table, meta.as_ref(), &old, new),
+            Op::Delete(row) => delete_row(table, meta.as_ref(), &row),
+        }
+    }
+}
+
+fn insert_row(table: &str, meta: Option<&store::TableMeta>, row: Vec<u8>) {
+    let key = match meta {
+        Some(m) => store::extract_key_from_row(&row, m),
+        None => None,
+    };
+    match key {
+        Some(k) => store::commit_keyed(table, vec![(k, row)]),
+        None => store::commit_seq(table, vec![row]),
+    }
+}
+
+fn update_row(table: &str, meta: Option<&store::TableMeta>, old: &[u8], new: Vec<u8>) {
+    let (old_key, new_key) = match meta {
+        Some(m) => (
+            store::extract_key_from_row(old, m),
+            store::extract_key_from_row(&new, m),
+        ),
+        None => (None, None),
+    };
+    match (old_key, new_key) {
+        (Some(k_old), Some(k_new)) if k_old == k_new => {
+            let _applied = store::replace_by_key(table, &k_old, new);
+        }
+        (Some(k_old), Some(k_new)) => {
+            if store::remove_by_key(table, &k_old) {
+                store::commit_keyed(table, vec![(k_new, new)]);
+            }
+        }
+        _ => {
+            // No schema info: fall back to byte-equality against the
+            // committed pre-image. Two staged updates against the same
+            // row both carry the committed `old` image, so the second
+            // replay no longer finds it and silently drops the change.
+            // Schemas with a primary key avoid this via the keyed path
+            // above.
+            let _applied = store::replace_by_bytes(table, old, new);
+        }
+    }
+}
+
+fn delete_row(table: &str, meta: Option<&store::TableMeta>, row: &[u8]) {
+    let key = match meta {
+        Some(m) => store::extract_key_from_row(row, m),
+        None => None,
+    };
+    match key {
+        Some(k) => {
+            let _applied = store::remove_by_key(table, &k);
+        }
+        None => {
+            let _applied = store::remove_by_bytes(table, row);
+        }
     }
 }

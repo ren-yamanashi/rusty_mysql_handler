@@ -182,10 +182,10 @@ SELECT @crud_off_sum := SUM(id), @crud_off_count := COUNT(*) FROM crud_off;
 SELECT @crud_off_label_20 := label FROM crud_off WHERE id = 20;
 DROP TABLE crud_off;
 
--- BEGIN..UPDATE..ROLLBACK does NOT undo the change for the reference
--- engine — UPDATE mutates the committed store directly. The assertion
--- below pins this documented limitation: the post-rollback label is the
--- new value, not the pre-update one.
+-- Transactional UPDATE / DELETE: the engine now stages them through the
+-- TxnSession op log instead of mutating the committed store directly,
+-- so a `BEGIN..UPDATE..ROLLBACK` keeps the pre-image and a
+-- `BEGIN..DELETE..ROLLBACK` keeps the row.
 CREATE TABLE crud_tx (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
 INSERT INTO crud_tx VALUES (1, 'before');
 BEGIN;
@@ -193,6 +193,48 @@ UPDATE crud_tx SET label = 'after' WHERE id = 1;
 ROLLBACK;
 SELECT @crud_tx_label := label FROM crud_tx WHERE id = 1;
 DROP TABLE crud_tx;
+
+CREATE TABLE crud_tx_del (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO crud_tx_del VALUES (1, 'keep');
+BEGIN;
+DELETE FROM crud_tx_del WHERE id = 1;
+ROLLBACK;
+SELECT @crud_tx_del_count := COUNT(*) FROM crud_tx_del;
+DROP TABLE crud_tx_del;
+
+-- COMMIT-side of the same op-log path: a regression that skipped the
+-- replay (rather than skipping the discard) would not surface from the
+-- ROLLBACK fixtures alone, so a UPDATE..COMMIT and DELETE..COMMIT pair
+-- assert the post-image is visible / the row is gone.
+CREATE TABLE crud_tx_upd_commit (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO crud_tx_upd_commit VALUES (1, 'before');
+BEGIN;
+UPDATE crud_tx_upd_commit SET label = 'after' WHERE id = 1;
+COMMIT;
+SELECT @crud_tx_upd_commit_label := label FROM crud_tx_upd_commit WHERE id = 1;
+DROP TABLE crud_tx_upd_commit;
+
+CREATE TABLE crud_tx_del_commit (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO crud_tx_del_commit VALUES (1, 'drop');
+BEGIN;
+DELETE FROM crud_tx_del_commit WHERE id = 1;
+COMMIT;
+SELECT @crud_tx_del_commit_count := COUNT(*) FROM crud_tx_del_commit;
+DROP TABLE crud_tx_del_commit;
+
+-- Savepoint semantics over the op log: ROLLBACK TO sp must discard
+-- only the post-savepoint UPDATE, keep the pre-savepoint INSERT, and
+-- still commit cleanly.
+CREATE TABLE crud_tx_sp (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+BEGIN;
+INSERT INTO crud_tx_sp VALUES (1, 'kept'), (2, 'kept');
+SAVEPOINT sp;
+UPDATE crud_tx_sp SET label = 'lost' WHERE id = 1;
+ROLLBACK TO SAVEPOINT sp;
+COMMIT;
+SELECT @crud_tx_sp_label_1 := label FROM crud_tx_sp WHERE id = 1;
+SELECT @crud_tx_sp_count := COUNT(*) FROM crud_tx_sp;
+DROP TABLE crud_tx_sp;
 
 -- Transaction observability: a transactional handlerton registers in
 -- external_lock when a statement touches a RUSTY table, so COMMIT must make its
@@ -262,16 +304,18 @@ DROP DATABASE rusty_drop_db_test;
 -- sum 50, count 2, label of id=20 is 'X'), the same UPDATE / DELETE /
 -- SELECT path located id correctly even when it lives at a non-default
 -- offset (sum 50, count 2, label of id=20 is 'Y'), zero-match UPDATE /
--- DELETE left the row set unchanged, and BEGIN..UPDATE..ROLLBACK around
--- UPDATE did not undo the change (the engine's documented
--- non-transactional UPDATE limitation — the label after ROLLBACK is
--- 'after', not 'before').
+-- DELETE left the row set unchanged, and the transactional UPDATE /
+-- DELETE paths now roll back correctly — the label after
+-- BEGIN..UPDATE..ROLLBACK is 'before', and the row count after
+-- BEGIN..DELETE..ROLLBACK is 1.
 SELECT IF(
   @after_commit = 1 AND @after_rollback = 1 AND @after_savepoint = 1 AND @after_release = 2
   AND @rv_sum = 60 AND @rv_count = 3
   AND @crud_sum = 50 AND @crud_count = 2 AND @crud_label_20 = 'X'
   AND @crud_off_sum = 50 AND @crud_off_count = 2 AND @crud_off_label_20 = 'Y'
-  AND @crud_tx_label = 'after'
+  AND @crud_tx_label = 'before' AND @crud_tx_del_count = 1
+  AND @crud_tx_upd_commit_label = 'after' AND @crud_tx_del_commit_count = 0
+  AND @crud_tx_sp_label_1 = 'kept' AND @crud_tx_sp_count = 2
   AND @rng_between_sum = 5 AND @rng_between_count = 2
   AND @rng_first = 1 AND @rng_last = 5
   AND @rng_gt_sum = 9 AND @rng_lt_count = 2
