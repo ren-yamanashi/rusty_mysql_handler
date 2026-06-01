@@ -202,6 +202,40 @@ ROLLBACK;
 SELECT @crud_tx_del_count := COUNT(*) FROM crud_tx_del;
 DROP TABLE crud_tx_del;
 
+-- COMMIT-side of the same op-log path: a regression that skipped the
+-- replay (rather than skipping the discard) would not surface from the
+-- ROLLBACK fixtures alone, so a UPDATE..COMMIT and DELETE..COMMIT pair
+-- assert the post-image is visible / the row is gone.
+CREATE TABLE crud_tx_upd_commit (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO crud_tx_upd_commit VALUES (1, 'before');
+BEGIN;
+UPDATE crud_tx_upd_commit SET label = 'after' WHERE id = 1;
+COMMIT;
+SELECT @crud_tx_upd_commit_label := label FROM crud_tx_upd_commit WHERE id = 1;
+DROP TABLE crud_tx_upd_commit;
+
+CREATE TABLE crud_tx_del_commit (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+INSERT INTO crud_tx_del_commit VALUES (1, 'drop');
+BEGIN;
+DELETE FROM crud_tx_del_commit WHERE id = 1;
+COMMIT;
+SELECT @crud_tx_del_commit_count := COUNT(*) FROM crud_tx_del_commit;
+DROP TABLE crud_tx_del_commit;
+
+-- Savepoint semantics over the op log: ROLLBACK TO sp must discard
+-- only the post-savepoint UPDATE, keep the pre-savepoint INSERT, and
+-- still commit cleanly.
+CREATE TABLE crud_tx_sp (id INT NOT NULL, label VARCHAR(20), KEY idx_id (id)) ENGINE=RUSTY;
+BEGIN;
+INSERT INTO crud_tx_sp VALUES (1, 'kept'), (2, 'kept');
+SAVEPOINT sp;
+UPDATE crud_tx_sp SET label = 'lost' WHERE id = 1;
+ROLLBACK TO SAVEPOINT sp;
+COMMIT;
+SELECT @crud_tx_sp_label_1 := label FROM crud_tx_sp WHERE id = 1;
+SELECT @crud_tx_sp_count := COUNT(*) FROM crud_tx_sp;
+DROP TABLE crud_tx_sp;
+
 -- Transaction observability: a transactional handlerton registers in
 -- external_lock when a statement touches a RUSTY table, so COMMIT must make its
 -- insert durable to the next statement and ROLLBACK must discard its insert.
@@ -280,6 +314,8 @@ SELECT IF(
   AND @crud_sum = 50 AND @crud_count = 2 AND @crud_label_20 = 'X'
   AND @crud_off_sum = 50 AND @crud_off_count = 2 AND @crud_off_label_20 = 'Y'
   AND @crud_tx_label = 'before' AND @crud_tx_del_count = 1
+  AND @crud_tx_upd_commit_label = 'after' AND @crud_tx_del_commit_count = 0
+  AND @crud_tx_sp_label_1 = 'kept' AND @crud_tx_sp_count = 2
   AND @rng_between_sum = 5 AND @rng_between_count = 2
   AND @rng_first = 1 AND @rng_last = 5
   AND @rng_gt_sum = 9 AND @rng_lt_count = 2

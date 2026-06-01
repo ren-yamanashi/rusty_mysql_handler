@@ -88,6 +88,8 @@ pub mod txn_context;
 #[doc(hidden)]
 pub mod txn_ffi;
 #[doc(hidden)]
+pub mod txn_row_ffi;
+#[doc(hidden)]
 pub mod xa;
 
 pub use binlog_kind::{BinlogCommand, BinlogFunc};

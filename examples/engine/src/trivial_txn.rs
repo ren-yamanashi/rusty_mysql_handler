@@ -27,6 +27,21 @@
 //! [`crate::store::TableStore`]; `rollback(all=true)` discards it.
 //! Savepoints snapshot the whole op log so `ROLLBACK TO SAVEPOINT` can
 //! restore the staging state.
+//!
+//! Known limitations (acceptable for the reference demo; downstream
+//! engines that need richer semantics should diverge here):
+//!
+//! - **No read-your-own-writes.** Scans always go through
+//!   [`crate::store::pairs_sorted`], which only sees committed rows.
+//!   A second statement within the same transaction observes the
+//!   pre-transaction state, so a sequence like
+//!   `BEGIN; UPDATE t SET x=2 WHERE id=1; UPDATE t SET x=3 WHERE x=2;`
+//!   silently loses the second update.
+//! - **`rollback(all=false)` is a no-op.** A per-statement rollback
+//!   (e.g. on a constraint violation mid-transaction) leaves the
+//!   failed statement's staged ops in place, so they replay at
+//!   `COMMIT`. Statement-boundary tracking would split the log into
+//!   per-statement segments; the demo skips it.
 
 use std::collections::HashMap;
 
@@ -100,6 +115,11 @@ impl TxnSession for TrivialTxn {
 
     fn savepoint_set(&mut self, sv: &mut [u8]) -> EngineResult {
         let index = self.savepoints.len() as u64;
+        // Demo-grade: clones the full op log (including old + new
+        // images for every staged update). `O(rows × row_size ×
+        // savepoints)` is intentional — a copy-on-write or persistent
+        // op log would scale, but the reference engine prefers the
+        // straightforward Vec<Op> shape.
         self.savepoints.push(self.staged.clone());
         if sv.len() >= 8 {
             sv[..8].copy_from_slice(&index.to_le_bytes());
@@ -150,7 +170,10 @@ fn replay(table: &str, ops: Vec<Op>) {
 }
 
 fn insert_row(table: &str, meta: Option<&store::TableMeta>, row: Vec<u8>) {
-    let key = meta.and_then(|m| store::extract_key_from_row(&row, m));
+    let key = match meta {
+        Some(m) => store::extract_key_from_row(&row, m),
+        None => None,
+    };
     match key {
         Some(k) => store::commit_keyed(table, vec![(k, row)]),
         None => store::commit_seq(table, vec![row]),
@@ -158,11 +181,16 @@ fn insert_row(table: &str, meta: Option<&store::TableMeta>, row: Vec<u8>) {
 }
 
 fn update_row(table: &str, meta: Option<&store::TableMeta>, old: &[u8], new: Vec<u8>) {
-    let old_key = meta.and_then(|m| store::extract_key_from_row(old, m));
-    let new_key = meta.and_then(|m| store::extract_key_from_row(&new, m));
+    let (old_key, new_key) = match meta {
+        Some(m) => (
+            store::extract_key_from_row(old, m),
+            store::extract_key_from_row(&new, m),
+        ),
+        None => (None, None),
+    };
     match (old_key, new_key) {
         (Some(k_old), Some(k_new)) if k_old == k_new => {
-            let _ = store::replace_by_key(table, &k_old, new);
+            let _applied = store::replace_by_key(table, &k_old, new);
         }
         (Some(k_old), Some(k_new)) => {
             if store::remove_by_key(table, &k_old) {
@@ -170,19 +198,28 @@ fn update_row(table: &str, meta: Option<&store::TableMeta>, old: &[u8], new: Vec
             }
         }
         _ => {
-            let _ = store::replace_by_bytes(table, old, new);
+            // No schema info: fall back to byte-equality against the
+            // committed pre-image. Two staged updates against the same
+            // row both carry the committed `old` image, so the second
+            // replay no longer finds it and silently drops the change.
+            // Schemas with a primary key avoid this via the keyed path
+            // above.
+            let _applied = store::replace_by_bytes(table, old, new);
         }
     }
 }
 
 fn delete_row(table: &str, meta: Option<&store::TableMeta>, row: &[u8]) {
-    let key = meta.and_then(|m| store::extract_key_from_row(row, m));
+    let key = match meta {
+        Some(m) => store::extract_key_from_row(row, m),
+        None => None,
+    };
     match key {
         Some(k) => {
-            let _ = store::remove_by_key(table, &k);
+            let _applied = store::remove_by_key(table, &k);
         }
         None => {
-            let _ = store::remove_by_bytes(table, row);
+            let _applied = store::remove_by_bytes(table, row);
         }
     }
 }

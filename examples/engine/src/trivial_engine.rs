@@ -30,10 +30,13 @@
 //! the index actually being single-column ASCending — the only shape
 //! whose natural [`Key`] order matches what the optimizer expects.
 //!
-//! `update_row` / `delete_row` still mutate the committed store directly,
-//! so `BEGIN..ROLLBACK` does **not** undo them — the transactional path
-//! stays limited to `INSERT` via
-//! [`TrivialTxn`](crate::trivial_txn::TrivialTxn).
+//! `update_row` / `delete_row` route through the per-connection
+//! [`TrivialTxn`](crate::trivial_txn::TrivialTxn) op log whenever the
+//! handlerton is registered as transactional, so `BEGIN..ROLLBACK`
+//! discards the change and `BEGIN..COMMIT` replays it. The
+//! `StorageEngine::update_row` / `delete_row` impls below remain the
+//! non-transactional fallback the shim chooses when no txn context is
+//! attached to the connection.
 //!
 //! **Line-limit note.** This file exceeds the 250-line ceiling because
 //! its single responsibility is the `impl StorageEngine for TrivialEngine`

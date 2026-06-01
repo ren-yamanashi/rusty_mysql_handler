@@ -75,14 +75,10 @@ pub trait TxnSession: Send {
         Ok(())
     }
 
-    /// Stage a row update into `table` as part of this transaction.
-    ///
-    /// `old` is the row image before the change, `new` after. A
-    /// transactional engine receives each update here (rather than on
-    /// the per-table handler) so the change is buffered until `commit`
-    /// makes it visible or `rollback` discards it. The default ignores
-    /// the update; an engine that stores data overrides this to buffer
-    /// the (old, new) pair so rollback can restore the pre-image.
+    /// Stage a row update. `old` is the pre-image (for rollback /
+    /// pre-image-keyed map lookups) and `new` is the post-image.
+    /// Same buffering contract as [`Self::write_row`]; default is a
+    /// no-op.
     ///
     /// # Errors
     /// Returns an [`EngineError`](crate::engine::EngineError) if the
@@ -92,14 +88,9 @@ pub trait TxnSession: Send {
         Ok(())
     }
 
-    /// Stage a row deletion in `table` as part of this transaction.
-    ///
-    /// `row` is the image of the row about to be removed. A
-    /// transactional engine receives each delete here so the change is
-    /// buffered until `commit` makes it visible or `rollback` discards
-    /// it. The default ignores the delete; an engine that stores data
-    /// overrides this to buffer the pre-image so rollback can restore
-    /// the row.
+    /// Stage a row deletion. `row` is the pre-image of the row about
+    /// to be removed. Same buffering contract as [`Self::write_row`];
+    /// default is a no-op.
     ///
     /// # Errors
     /// Returns an [`EngineError`](crate::engine::EngineError) if the
