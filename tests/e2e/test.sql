@@ -132,9 +132,11 @@ SELECT @rng_gt_sum := SUM(id) FROM rng WHERE id > 3;
 SELECT @rng_lt_count := COUNT(*) FROM rng WHERE id < 3;
 -- Optimizer-visible row count: `info(HA_STATUS_VARIABLE)` now refreshes
 -- `handler::stats.records` from the engine, so information_schema reads
--- back the real number rather than `0`. ANALYZE TABLE forces the
--- refresh in case the cached value is still stale.
+-- back the real number rather than `0`.
+-- ANALYZE TABLE forces `info(HA_STATUS_VARIABLE)` to refresh `stats.records`
+-- so information_schema reads back the actual row count.
 ANALYZE TABLE rng;
+SET SESSION information_schema_stats_expiry = 0;
 SELECT @rng_rows_stat := TABLE_ROWS FROM information_schema.tables
   WHERE table_schema = 'e2e' AND table_name = 'rng';
 DROP TABLE rng;
