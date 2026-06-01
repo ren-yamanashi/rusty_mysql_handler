@@ -49,6 +49,10 @@ criterion = "0.7"
 name = "ffi_overhead"
 harness = false
 
+[[bench]]
+name = "callback_overhead"
+harness = false
+
 [lints]
 workspace = true
 
