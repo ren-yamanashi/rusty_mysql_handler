@@ -25,11 +25,10 @@
 //! Storage is a sorted [`TableStore`](crate::store::TableStore) per table
 //! (a `BTreeMap<Key, Vec<u8>>`). Index scans walk the BTree directly via
 //! a per-statement snapshot of `(Key, row)` pairs taken at `index_init`.
-//! `index_flags` advertises `HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER
-//! | HA_READ_RANGE`, which assumes every declared index is a single
-//! column ASCending — the only shape the reference fixtures exercise.
-//! Multi-column and DESC-declared indexes would need a per-index gate
-//! (deferred to a downstream consumer that actually creates them).
+//! `index_flags` advertises range / ordered / forward / backward
+//! capabilities per index, gating `HA_READ_ORDER` and `HA_READ_PREV` on
+//! the index actually being single-column ASCending — the only shape
+//! whose natural [`Key`] order matches what the optimizer expects.
 //!
 //! `update_row` / `delete_row` still mutate the committed store directly,
 //! so `BEGIN..ROLLBACK` does **not** undo them — the transactional path
@@ -50,7 +49,7 @@ use mysql_handler::sys::{
     HA_READ_RANGE,
 };
 
-use crate::store::{self, Key, TableMeta};
+use crate::store::{self, IndexMeta, Key, TableMeta};
 
 /// The committed-row store keys by table name; `name` from create / open is a
 /// path-like `./db/table`, so reduce it to the bare table name that the write
@@ -192,8 +191,22 @@ impl StorageEngine for TrivialEngine {
         HA_BINLOG_STMT_CAPABLE | HA_BINLOG_ROW_CAPABLE
     }
 
-    fn index_flags(&self, _idx: u32, _part: u32, _all_parts: bool) -> u32 {
-        HA_READ_NEXT | HA_READ_PREV | HA_READ_ORDER | HA_READ_RANGE
+    fn index_flags(&self, idx: u32, _part: u32, _all_parts: bool) -> u32 {
+        // Range scans work for any index — the cursor honours
+        // [`Key`]-ordered bounds either way. Ordered iteration only
+        // matches MySQL's expectation when the index is single-column
+        // ASC, so gate `HA_READ_ORDER` (and `HA_READ_PREV`, which only
+        // makes sense once order is established) on the snapshot.
+        let mut flags = HA_READ_NEXT | HA_READ_RANGE;
+        let is_ordered = self
+            .meta
+            .as_ref()
+            .and_then(|m| m.indexes().get(idx as usize))
+            .is_some_and(IndexMeta::is_single_column_ascending);
+        if is_ordered {
+            flags |= HA_READ_ORDER | HA_READ_PREV;
+        }
+        flags
     }
 
     fn create(&mut self, name: &str, table_def: Option<&sys::DdTable>) -> EngineResult {
@@ -549,8 +562,8 @@ fn locate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mysql_handler::dd::ColumnType;
-    use store::KeyValue;
+    use mysql_handler::dd::{ColumnType, IndexElementOrder, IndexType};
+    use store::{ColumnMeta, IndexMeta, KeyPartMeta, KeyValue};
 
     #[test]
     fn copy_row_into_writes_full_row_when_lengths_match() {
@@ -657,13 +670,67 @@ mod tests {
         ));
     }
 
+    fn engine_with_index(parts: Vec<KeyPartMeta>) -> TrivialEngine {
+        let column = ColumnMeta {
+            column_type: ColumnType::Long,
+            is_nullable: false,
+            is_unsigned: false,
+            char_length: 0,
+            is_hidden: false,
+        };
+        let mut e = TrivialEngine::new();
+        e.meta = Some(TableMeta::from_parts(
+            vec![column],
+            vec![IndexMeta {
+                index_type: IndexType::Multiple,
+                parts,
+            }],
+        ));
+        e
+    }
+
+    fn part(column_ordinal: u32, order: IndexElementOrder) -> KeyPartMeta {
+        KeyPartMeta {
+            column_ordinal,
+            order,
+        }
+    }
+
     #[test]
-    fn index_flags_advertises_range_and_order_capabilities() {
+    fn index_flags_advertises_range_only_when_no_meta_is_registered() {
         let e = TrivialEngine::new();
         let f = e.index_flags(0, 0, false);
         assert!(f & HA_READ_RANGE != 0);
-        assert!(f & HA_READ_ORDER != 0);
         assert!(f & HA_READ_NEXT != 0);
+        assert!(f & HA_READ_ORDER == 0);
+        assert!(f & HA_READ_PREV == 0);
+    }
+
+    #[test]
+    fn index_flags_adds_order_for_single_column_ascending_index() {
+        let e = engine_with_index(vec![part(1, IndexElementOrder::Ascending)]);
+        let f = e.index_flags(0, 0, false);
+        assert!(f & HA_READ_ORDER != 0);
         assert!(f & HA_READ_PREV != 0);
+    }
+
+    #[test]
+    fn index_flags_drops_order_for_multi_column_index() {
+        let e = engine_with_index(vec![
+            part(1, IndexElementOrder::Ascending),
+            part(2, IndexElementOrder::Ascending),
+        ]);
+        let f = e.index_flags(0, 0, false);
+        assert!(f & HA_READ_RANGE != 0);
+        assert!(f & HA_READ_ORDER == 0);
+        assert!(f & HA_READ_PREV == 0);
+    }
+
+    #[test]
+    fn index_flags_drops_order_for_descending_index() {
+        let e = engine_with_index(vec![part(1, IndexElementOrder::Descending)]);
+        let f = e.index_flags(0, 0, false);
+        assert!(f & HA_READ_ORDER == 0);
+        assert!(f & HA_READ_PREV == 0);
     }
 }

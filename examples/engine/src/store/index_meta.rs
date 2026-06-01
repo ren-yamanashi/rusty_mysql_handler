@@ -22,7 +22,7 @@
 
 //! Per-index snapshot taken from `dd::Index`.
 
-use mysql_handler::dd::IndexType;
+use mysql_handler::dd::{IndexElementOrder, IndexType};
 use mysql_handler::sys::DdIndex;
 
 use crate::store::KeyPartMeta;
@@ -53,6 +53,20 @@ impl IndexMeta {
         Self {
             index_type: index.index_type(),
             parts,
+        }
+    }
+
+    /// `true` when the index is a single key part declared `Ascending`
+    /// (the only shape whose natural [`crate::store::Key`] order matches
+    /// MySQL's expected `HA_READ_ORDER` row sequence).
+    #[must_use]
+    pub fn is_single_column_ascending(&self) -> bool {
+        match self.parts.as_slice() {
+            [only] => matches!(
+                only.order,
+                IndexElementOrder::Ascending | IndexElementOrder::Undefined
+            ),
+            _ => false,
         }
     }
 }

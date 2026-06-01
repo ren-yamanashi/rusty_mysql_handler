@@ -44,6 +44,15 @@ pub struct TableMeta {
 }
 
 impl TableMeta {
+    /// Build a [`TableMeta`] directly from pre-populated column and
+    /// index lists (used by sibling tests that need a deterministic
+    /// snapshot without going through `dd::Table`).
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn from_parts(columns: Vec<ColumnMeta>, indexes: Vec<IndexMeta>) -> Self {
+        Self { columns, indexes }
+    }
+
     /// Build a [`TableMeta`] by walking `table_def`'s column and index
     /// collections.
     #[must_use]
@@ -159,7 +168,10 @@ mod tests {
     fn primary_on(column_ordinal: u32) -> IndexMeta {
         IndexMeta {
             index_type: IndexType::Primary,
-            parts: vec![KeyPartMeta { column_ordinal }],
+            parts: vec![KeyPartMeta {
+                column_ordinal,
+                order: mysql_handler::dd::IndexElementOrder::Ascending,
+            }],
         }
     }
 
@@ -240,7 +252,10 @@ mod tests {
             ],
             indexes: vec![IndexMeta {
                 index_type: IndexType::Multiple,
-                parts: vec![KeyPartMeta { column_ordinal: 1 }],
+                parts: vec![KeyPartMeta {
+                    column_ordinal: 1,
+                    order: mysql_handler::dd::IndexElementOrder::Ascending,
+                }],
             }],
         };
         assert_eq!(m.primary_key_offset(), Some(1));
