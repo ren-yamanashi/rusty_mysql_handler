@@ -132,6 +132,41 @@ SELECT @rng_gt_sum := SUM(id) FROM rng WHERE id > 3;
 SELECT @rng_lt_count := COUNT(*) FROM rng WHERE id < 3;
 DROP TABLE rng;
 
+-- Secondary index alongside a single-column primary key. The optimizer
+-- picks `idx_lbl` for `WHERE lbl = ?`, calling `records_in_range` and
+-- `read_range_first` against index 1 (the secondary). The engine must
+-- decode the search bytes using `lbl`'s column type, walk the row store
+-- with the rekeyed snapshot, and return only the matching row. A
+-- regression that always decoded under the primary index would mis-key
+-- and return zero rows.
+CREATE TABLE sec (id INT NOT NULL, lbl INT NOT NULL, PRIMARY KEY (id), KEY idx_lbl (lbl)) ENGINE=RUSTY;
+INSERT INTO sec VALUES (1, 10), (2, 20), (3, 30);
+SELECT @sec_pk_lookup := id FROM sec WHERE id = 2;
+SELECT @sec_lbl_count := COUNT(*) FROM sec WHERE lbl = 20;
+SELECT @sec_id_for_lbl_30 := id FROM sec WHERE lbl = 30;
+-- ORDER BY on the secondary's column: the optimizer trusts HA_READ_ORDER
+-- on idx_lbl and reads rows in lbl-sorted order. A regression in
+-- `resort_by_secondary` would scramble the snapshot and these LIMIT 1
+-- endpoints would surface the wrong row.
+SELECT @sec_order_first := lbl FROM sec ORDER BY lbl LIMIT 1;
+SELECT @sec_order_last := lbl FROM sec ORDER BY lbl DESC LIMIT 1;
+DROP TABLE sec;
+
+-- Composite key (treated as the table's effective primary by the engine,
+-- since the reference handler does not advertise PRIMARY KEY support):
+-- every key part must be decoded out of `record[0]` (and out of the
+-- search buffer) for `WHERE a = ? AND b = ?` and range scans to land on
+-- the right BTreeMap entry. A regression to single-column key
+-- extraction would either mis-key the row on insert or miss the
+-- equality lookup downstream.
+CREATE TABLE cpk (a INT NOT NULL, b INT NOT NULL, label VARCHAR(20), KEY idx_ab (a, b)) ENGINE=RUSTY;
+INSERT INTO cpk VALUES (1, 1, 'x'), (1, 2, 'y'), (2, 1, 'z'), (2, 2, 'w');
+SELECT @cpk_count := COUNT(*) FROM cpk;
+SELECT @cpk_label_11 := label FROM cpk WHERE a = 1 AND b = 1;
+SELECT @cpk_label_22 := label FROM cpk WHERE a = 2 AND b = 2;
+SELECT @cpk_range_count := COUNT(*) FROM cpk WHERE a = 1;
+DROP TABLE cpk;
+
 -- Non-default key offset: `pad` (INT NOT NULL, 4 bytes) sits in front of
 -- `id`, so the indexed column starts at byte 5 in record[0] (1 null bits
 -- byte + 4 bytes of pad). A regression that silently falls back to
@@ -239,6 +274,10 @@ SELECT IF(
   AND @crud_tx_label = 'after'
   AND @rng_between_sum = 5 AND @rng_between_count = 2
   AND @rng_first = 1 AND @rng_last = 5
-  AND @rng_gt_sum = 9 AND @rng_lt_count = 2,
+  AND @rng_gt_sum = 9 AND @rng_lt_count = 2
+  AND @cpk_count = 4 AND @cpk_label_11 = 'x' AND @cpk_label_22 = 'w'
+  AND @cpk_range_count = 2
+  AND @sec_pk_lookup = 2 AND @sec_lbl_count = 1 AND @sec_id_for_lbl_30 = 3
+  AND @sec_order_first = 10 AND @sec_order_last = 30,
   3, 0
 ) AS sentinel;

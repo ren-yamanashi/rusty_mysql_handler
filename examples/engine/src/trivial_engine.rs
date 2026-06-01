@@ -73,15 +73,30 @@ enum Endpoint {
     End,
 }
 
+/// Whether a decoded search key covers every part of the active index
+/// or only a leading prefix. Used by [`TrivialEngine::decode_bound`] so
+/// partial-prefix endpoints can choose the right
+/// [`Key::next_prefix`] semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeyShape {
+    Full,
+    Partial,
+}
+
 /// Reference engine backed by [`crate::store::TableStore`].
 #[derive(Debug)]
 pub struct TrivialEngine {
     table: String,
     /// Schema snapshot taken from `dd::Table` in `open` / `create`.
     meta: Option<TableMeta>,
+    /// Index ordinal active for the current scan. Recorded by
+    /// `index_init`; drives the snapshot reordering for secondary
+    /// indexes and the column-set used when decoding search buffers.
+    active_idx: usize,
     /// Per-statement snapshot of `(Key, row)` pairs in key order.
-    /// `rnd_init` takes the full table; `index_init` and `read_range_first`
-    /// refine to the relevant window.
+    /// `rnd_init` takes the full table keyed by primary; `index_init`
+    /// re-keys the rows by `active_idx`'s columns; `read_range_first`
+    /// refines to the relevant window.
     snapshot: Vec<(Key, Vec<u8>)>,
     /// Cursor into `snapshot`. `None` once the scan is exhausted.
     scan_pos: Option<usize>,
@@ -100,6 +115,7 @@ impl TrivialEngine {
         Self {
             table: String::new(),
             meta: None,
+            active_idx: 0,
             snapshot: Vec::new(),
             scan_pos: None,
             scan_dir: ScanDir::Forward,
@@ -131,21 +147,67 @@ impl TrivialEngine {
         Ok(())
     }
 
-    /// Take a fresh sorted snapshot of the whole table and position the
-    /// cursor at the start.
+    /// Refresh the cursor with a snapshot sorted by the active index.
+    /// Primary scans walk the natural BTree order; secondary scans
+    /// re-extract keys under the secondary's columns and re-sort.
     fn refresh_snapshot(&mut self) {
-        self.snapshot = store::pairs_sorted(&self.table);
+        let primary = store::pairs_sorted(&self.table);
+        self.snapshot = match self.active_secondary_index() {
+            Some(idx) => Self::resort_by_secondary(primary, self.meta.as_ref(), idx),
+            None => primary,
+        };
         self.scan_pos = (!self.snapshot.is_empty()).then_some(0);
         self.scan_dir = ScanDir::Forward;
         self.last_search_key = None;
     }
 
+    /// The active index's [`IndexMeta`] when it is *not* the primary
+    /// one, `None` otherwise (primary scans walk the natural BTree
+    /// order).
+    fn active_secondary_index(&self) -> Option<&IndexMeta> {
+        let meta = self.meta.as_ref()?;
+        if meta.primary_index_ordinal() == Some(self.active_idx) {
+            return None;
+        }
+        meta.indexes().get(self.active_idx)
+    }
+
+    /// Re-key `primary` (rows already in primary order) by `index`'s
+    /// columns and re-sort. Rows whose secondary key cannot be
+    /// extracted (e.g. hidden columns, unsupported types) are dropped.
+    fn resort_by_secondary(
+        primary: Vec<(Key, Vec<u8>)>,
+        meta: Option<&TableMeta>,
+        index: &IndexMeta,
+    ) -> Vec<(Key, Vec<u8>)> {
+        let meta = match meta {
+            Some(m) => m,
+            None => return primary,
+        };
+        let mut out: Vec<(Key, Vec<u8>)> = primary
+            .into_iter()
+            .filter_map(|(_, row)| {
+                let k = store::extract_index_key_from_row(&row, meta, index)?;
+                Some((k, row))
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
     /// Convert a [`RangeKey`] endpoint to a `Bound<Key>` suitable for
-    /// [`crate::store::range_pairs`]. Missing endpoints become
-    /// [`std::ops::Bound::Unbounded`]. Type / schema mismatches fall back
-    /// to `Unbounded` rather than yielding wrong rows.
+    /// the active index. Missing endpoints become
+    /// [`std::ops::Bound::Unbounded`]. Type / schema mismatches fall
+    /// back to `Unbounded` rather than yielding wrong rows.
+    ///
+    /// Partial-prefix buffers (`WHERE a = 1` on a `KEY (a, b)`) decode
+    /// into a [`Key`] with fewer parts than the index's declared key
+    /// parts. For the end endpoint of a partial-prefix range, the
+    /// bound bumps to [`Key::next_prefix`] so the BTree walks across
+    /// every row whose leading parts equal the prefix.
     fn decode_bound(
         meta: &TableMeta,
+        index: &IndexMeta,
         endpoint: Option<RangeKey<'_>>,
         kind: Endpoint,
     ) -> std::ops::Bound<Key> {
@@ -153,23 +215,59 @@ impl TrivialEngine {
             Some(r) => r,
             None => return std::ops::Bound::Unbounded,
         };
-        let key = match store::build_key_from_search_buffer(rk.key(), meta) {
+        let key = match store::decode_index_search_buffer(rk.key(), meta, index) {
             Some(k) => k,
             None => return std::ops::Bound::Unbounded,
         };
-        match (rk.flag(), kind) {
-            (RKeyFunction::AfterKey, Endpoint::Start)
-            | (RKeyFunction::BeforeKey, Endpoint::End) => std::ops::Bound::Excluded(key),
-            // KeyExact / KeyOrNext / KeyOrPrev all include the endpoint;
-            // any unrecognised flag falls back to inclusive.
+        let shape = if key.parts().len() < index.parts.len() {
+            KeyShape::Partial
+        } else {
+            KeyShape::Full
+        };
+        let bumped = || match key.next_prefix() {
+            Some(k) => std::ops::Bound::Excluded(k),
+            None => std::ops::Bound::Unbounded,
+        };
+        match (rk.flag(), kind, shape) {
+            // Partial-prefix `WHERE a > 1` on `KEY (a, b)` must skip
+            // every `(1, *)` row; bumping to the next prefix sentinel
+            // is the same trick that covers the End side of an
+            // inclusive prefix range.
+            (RKeyFunction::AfterKey, Endpoint::Start, KeyShape::Partial)
+            | (
+                RKeyFunction::AfterKey | RKeyFunction::KeyOrPrev,
+                Endpoint::End,
+                KeyShape::Partial,
+            ) => bumped(),
+            (RKeyFunction::AfterKey, Endpoint::Start, KeyShape::Full)
+            | (RKeyFunction::BeforeKey, Endpoint::End, _) => std::ops::Bound::Excluded(key),
             _ => std::ops::Bound::Included(key),
         }
     }
 
-    /// Refresh `snapshot` to the rows whose key falls in `[start, end]`,
-    /// positioned at the first row.
-    fn refresh_range(&mut self, start: &std::ops::Bound<Key>, end: &std::ops::Bound<Key>) {
-        self.snapshot = store::range_pairs(&self.table, start, end);
+    /// The active index's [`IndexMeta`], or the primary fallback.
+    fn active_index<'a>(&self, meta: &'a TableMeta) -> Option<&'a IndexMeta> {
+        match meta.indexes().get(self.active_idx) {
+            Some(i) => Some(i),
+            None => meta.primary_index(),
+        }
+    }
+
+    /// Replace the cursor's snapshot with the rows in `[start, end]`.
+    /// `read_range_first` may be called multiple times within a single
+    /// `index_init` (multi-range plans, MRR, `WHERE id IN (..)`), so
+    /// the snapshot is re-fetched and re-sorted under the active index
+    /// rather than destructively shrinking the previous window.
+    fn narrow_to_range(&mut self, start: &std::ops::Bound<Key>, end: &std::ops::Bound<Key>) {
+        let fresh = store::pairs_sorted(&self.table);
+        let resorted = match self.active_secondary_index() {
+            Some(idx) => Self::resort_by_secondary(fresh, self.meta.as_ref(), idx),
+            None => fresh,
+        };
+        self.snapshot = resorted
+            .into_iter()
+            .filter(|(k, _)| key_in_bounds(k, start, end))
+            .collect();
         self.scan_pos = (!self.snapshot.is_empty()).then_some(0);
         self.scan_dir = ScanDir::Forward;
         self.last_search_key = None;
@@ -360,7 +458,8 @@ impl StorageEngine for TrivialEngine {
         Ok(())
     }
 
-    fn index_init(&mut self, _idx: u32, _sorted: bool) -> EngineResult {
+    fn index_init(&mut self, idx: u32, _sorted: bool) -> EngineResult {
+        self.active_idx = idx as usize;
         self.refresh_snapshot();
         Ok(())
     }
@@ -379,8 +478,9 @@ impl StorageEngine for TrivialEngine {
         find_flag: RKeyFunction,
     ) -> EngineResult {
         let meta = self.meta.as_ref().ok_or(EngineError::WrongCommand)?;
-        let target =
-            store::build_key_from_search_buffer(key, meta).ok_or(EngineError::WrongCommand)?;
+        let active = self.active_index(meta).ok_or(EngineError::WrongCommand)?;
+        let target = store::decode_index_search_buffer(key, meta, active)
+            .ok_or(EngineError::WrongCommand)?;
         let (pos, dir) = locate(&self.snapshot, &target, find_flag);
         self.scan_pos = pos;
         self.scan_dir = dir;
@@ -423,12 +523,14 @@ impl StorageEngine for TrivialEngine {
             Some(k) => k,
             None => {
                 let meta = self.meta.as_ref().ok_or(EngineError::WrongCommand)?;
-                store::build_key_from_search_buffer(key, meta).ok_or(EngineError::WrongCommand)?
+                let active = self.active_index(meta).ok_or(EngineError::WrongCommand)?;
+                store::decode_index_search_buffer(key, meta, active)
+                    .ok_or(EngineError::WrongCommand)?
             }
         };
         let pos = self.scan_pos.ok_or(EngineError::EndOfFile)?;
         let (k, _) = self.snapshot.get(pos).ok_or(EngineError::EndOfFile)?;
-        if k != &target {
+        if !key_matches_target(k, &target) {
             return Err(EngineError::EndOfFile);
         }
         self.scan_dir = ScanDir::Forward;
@@ -437,14 +539,26 @@ impl StorageEngine for TrivialEngine {
 
     fn records_in_range(
         &mut self,
-        _inx: u32,
+        inx: u32,
         min: Option<RangeKey<'_>>,
         max: Option<RangeKey<'_>>,
     ) -> Option<u64> {
         let meta = self.meta.as_ref()?;
-        let start = Self::decode_bound(meta, min, Endpoint::Start);
-        let end = Self::decode_bound(meta, max, Endpoint::End);
-        Some(store::range_len(&self.table, &start, &end))
+        let index = meta.indexes().get(inx as usize)?;
+        let start = Self::decode_bound(meta, index, min, Endpoint::Start);
+        let end = Self::decode_bound(meta, index, max, Endpoint::End);
+        // Secondary: snapshot not yet built when records_in_range fires;
+        // rekey on demand from the primary store. The primary path
+        // counts directly off the BTreeMap.
+        if meta.primary_index_ordinal() == Some(inx as usize) {
+            return Some(store::range_len(&self.table, &start, &end));
+        }
+        let count = store::pairs_sorted(&self.table)
+            .iter()
+            .filter_map(|(_, row)| store::extract_index_key_from_row(row, meta, index))
+            .filter(|k| key_in_bounds(k, &start, &end))
+            .count();
+        Some(u64::try_from(count).unwrap_or(u64::MAX))
     }
 
     fn read_range_first(
@@ -456,9 +570,10 @@ impl StorageEngine for TrivialEngine {
         _sorted: bool,
     ) -> EngineResult {
         let meta = self.meta.as_ref().ok_or(EngineError::WrongCommand)?;
-        let start_b = Self::decode_bound(meta, start, Endpoint::Start);
-        let end_b = Self::decode_bound(meta, end, Endpoint::End);
-        self.refresh_range(&start_b, &end_b);
+        let active = self.active_index(meta).ok_or(EngineError::WrongCommand)?;
+        let start_b = Self::decode_bound(meta, active, start, Endpoint::Start);
+        let end_b = Self::decode_bound(meta, active, end, Endpoint::End);
+        self.narrow_to_range(&start_b, &end_b);
         self.yield_and_advance(buf)
     }
 
@@ -508,6 +623,30 @@ impl StorageEngine for TrivialEngine {
     }
 }
 
+/// `true` when `key` falls within `[start, end]` per the bound flags.
+fn key_in_bounds(key: &Key, start: &std::ops::Bound<Key>, end: &std::ops::Bound<Key>) -> bool {
+    let after_start = match start {
+        std::ops::Bound::Unbounded => true,
+        std::ops::Bound::Included(s) => key >= s,
+        std::ops::Bound::Excluded(s) => key > s,
+    };
+    let before_end = match end {
+        std::ops::Bound::Unbounded => true,
+        std::ops::Bound::Included(e) => key <= e,
+        std::ops::Bound::Excluded(e) => key < e,
+    };
+    after_start && before_end
+}
+
+/// True when `target` equals `k` or is a strict leading prefix of `k`
+/// (composite-key partial-equality case).
+fn key_matches_target(k: &Key, target: &Key) -> bool {
+    if target.parts().len() > k.parts().len() {
+        return false;
+    }
+    k.parts()[..target.parts().len()] == *target.parts()
+}
+
 /// `Ok(())` when the store reported a row was replaced, `EndOfFile`
 /// otherwise — `update_row` / `delete_row` use this so a missed lookup
 /// surfaces as MySQL's documented "no row matched" sentinel rather than a
@@ -526,6 +665,10 @@ fn finish_replace(replaced: bool) -> EngineResult {
 /// `KeyExact` / `KeyOrNext` / `AfterKey` walk forward, `KeyOrPrev` /
 /// `BeforeKey` walk backward, and unrecognised flags fall back to
 /// `KeyOrNext`.
+///
+/// `KeyExact` against a partial target (`WHERE a = ?` on a composite
+/// `KEY (a, b)`) matches every row whose leading parts equal the target,
+/// not just rows whose full key equals it.
 fn locate(
     snapshot: &[(Key, Vec<u8>)],
     target: &Key,
@@ -533,7 +676,9 @@ fn locate(
 ) -> (Option<usize>, ScanDir) {
     match find_flag {
         RKeyFunction::KeyExact => (
-            snapshot.iter().position(|(k, _)| k == target),
+            snapshot
+                .iter()
+                .position(|(k, _)| key_matches_target(k, target)),
             ScanDir::Forward,
         ),
         RKeyFunction::KeyOrNext => (

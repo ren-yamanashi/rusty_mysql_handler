@@ -38,8 +38,8 @@ pub use btree_store::TableStore;
 pub use column_meta::ColumnMeta;
 pub use index_meta::IndexMeta;
 pub use key::{
-    Key, KeyValue, build_key_from_search_buffer, decode_int_key_buffer, extract_int_from_record,
-    extract_key_from_row,
+    Key, KeyValue, decode_index_search_buffer, decode_int_key_buffer, extract_index_key_from_row,
+    extract_int_from_record, extract_key_from_row,
 };
 pub use key_part_meta::KeyPartMeta;
 pub use table_meta::TableMeta;
@@ -87,18 +87,8 @@ pub(crate) fn pairs_sorted(table: &str) -> Vec<(Key, Vec<u8>)> {
     with_store(table, Vec::new(), TableStore::pairs_sorted)
 }
 
-/// Snapshot of `(key, row)` pairs whose key falls in `start..end`.
-#[must_use]
-pub(crate) fn range_pairs(
-    table: &str,
-    start: &Bound<Key>,
-    end: &Bound<Key>,
-) -> Vec<(Key, Vec<u8>)> {
-    with_store(table, Vec::new(), |s| s.range_pairs(start, end))
-}
-
 /// Count of rows whose key falls in `start..end`. Cheaper than
-/// `range_pairs(table, start, end).len()` since no row bytes are cloned.
+/// materialising the full range since no row bytes are cloned.
 #[must_use]
 pub(crate) fn range_len(table: &str, start: &Bound<Key>, end: &Bound<Key>) -> u64 {
     with_store(table, 0, |s| s.range_len(start, end))
@@ -242,14 +232,13 @@ mod tests {
     }
 
     #[test]
-    fn range_pairs_yields_keys_in_window() {
+    fn range_len_counts_keys_in_window() {
         let t = "_t_store_range";
         reset_table(t);
         commit_keyed(t, (1..=5).map(|n| (k(n), vec![n as u8])).collect());
-        let win = range_pairs(t, &Bound::Included(k(2)), &Bound::Included(k(3)));
         assert_eq!(
-            win.into_iter().map(|(_, v)| v[0]).collect::<Vec<_>>(),
-            vec![2, 3]
+            range_len(t, &Bound::Included(k(2)), &Bound::Included(k(3))),
+            2
         );
         reset_table(t);
     }

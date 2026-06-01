@@ -38,7 +38,7 @@ use core::cmp::Ordering;
 
 use mysql_handler::dd::ColumnType;
 
-use crate::store::{ColumnMeta, TableMeta};
+use crate::store::{ColumnMeta, IndexMeta, TableMeta};
 
 /// One indexed value. The variants intentionally cover only the cases the
 /// reference engine exercises today (INT family, sequence counter, opaque
@@ -99,10 +99,33 @@ impl Key {
         Self { parts: vec![v] }
     }
 
+    /// Build a key from an explicit list of parts. Composite primary
+    /// keys and multi-column secondary indexes share this constructor.
+    #[must_use]
+    pub fn from_parts(parts: Vec<KeyValue>) -> Self {
+        Self { parts }
+    }
+
     /// Borrow the underlying parts.
     #[must_use]
     pub fn parts(&self) -> &[KeyValue] {
         &self.parts
+    }
+
+    /// Smallest key strictly greater than every key with `self` as a
+    /// prefix — the exclusive end bound for partial-prefix scans
+    /// (`WHERE a = 1` on `KEY (a, b)` becomes `[Key([1]), Key([2]))`).
+    /// `None` on overflow or a non-incrementable tail variant.
+    #[must_use]
+    pub fn next_prefix(&self) -> Option<Self> {
+        let mut parts = self.parts.clone();
+        let last = parts.last_mut()?;
+        match last {
+            KeyValue::Signed(n) => *n = n.checked_add(1)?,
+            KeyValue::Unsigned(n) => *n = n.checked_add(1)?,
+            KeyValue::Null | KeyValue::Bytes(_) => return None,
+        }
+        Some(Self { parts })
     }
 }
 
@@ -125,18 +148,49 @@ pub fn decode_int_key_buffer(buf: &[u8], column: &ColumnMeta) -> Option<KeyValue
     decode_int(buf, 0, column.column_type, column.is_unsigned)
 }
 
-/// Build a [`Key`] for `row` using `meta`'s primary-key column.
+/// Build a [`Key`] for `row` using `meta`'s primary index columns.
+/// Composite primary keys yield a multi-part `Key`.
 #[must_use]
 pub fn extract_key_from_row(row: &[u8], meta: &TableMeta) -> Option<Key> {
-    let (offset, column) = meta.primary_key_column()?;
-    Some(Key::single(extract_int_from_record(row, offset, column)?))
+    let primary = meta.primary_index()?;
+    extract_index_key_from_row(row, meta, primary)
 }
 
-/// Build a [`Key`] from MySQL's `index_read_map` search buffer.
+/// Build a [`Key`] for `row` using `index`'s declared key parts.
 #[must_use]
-pub fn build_key_from_search_buffer(buf: &[u8], meta: &TableMeta) -> Option<Key> {
-    let (_, column) = meta.primary_key_column()?;
-    Some(Key::single(decode_int_key_buffer(buf, column)?))
+pub fn extract_index_key_from_row(row: &[u8], meta: &TableMeta, index: &IndexMeta) -> Option<Key> {
+    let cols = meta.index_columns(index)?;
+    let mut parts = Vec::with_capacity(cols.len());
+    for (offset, column) in cols {
+        parts.push(extract_int_from_record(row, offset, column)?);
+    }
+    Some(Key::from_parts(parts))
+}
+
+/// Decode `index`'s search-key buffer into a [`Key`]. Each part is read
+/// in declared order from the buffer's leading bytes. A buffer shorter
+/// than the full key yields a partial-prefix [`Key`] — used by MySQL
+/// when only the leading columns are constrained (`WHERE a = ?` on
+/// `KEY (a, b)`).
+#[must_use]
+pub fn decode_index_search_buffer(buf: &[u8], meta: &TableMeta, index: &IndexMeta) -> Option<Key> {
+    let cols = meta.index_columns(index)?;
+    let mut parts = Vec::with_capacity(cols.len());
+    let mut cursor: usize = 0;
+    for (_, column) in cols {
+        let width = int_width(column.column_type)?;
+        let end = match cursor.checked_add(width) {
+            Some(e) if e <= buf.len() => e,
+            _ => break,
+        };
+        let value = decode_int(buf, cursor, column.column_type, column.is_unsigned)?;
+        parts.push(value);
+        cursor = end;
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    Some(Key::from_parts(parts))
 }
 
 fn decode_int(
