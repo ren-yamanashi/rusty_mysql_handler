@@ -149,10 +149,14 @@ impl TableMeta {
     /// the table has no indexes.
     #[must_use]
     pub fn primary_index(&self) -> Option<&IndexMeta> {
-        self.indexes
+        let declared = self
+            .indexes
             .iter()
-            .find(|i| i.index_type == IndexType::Primary)
-            .or_else(|| self.indexes.first())
+            .find(|i| i.index_type == IndexType::Primary);
+        match declared {
+            Some(i) => Some(i),
+            None => self.indexes.first(),
+        }
     }
 
     /// Ordinal of [`Self::primary_index`] within [`Self::indexes`]; `None`
@@ -160,8 +164,6 @@ impl TableMeta {
     #[must_use]
     pub fn primary_index_ordinal(&self) -> Option<usize> {
         let primary = self.primary_index()?;
-        // Indexes are uniquely identified by their declared position;
-        // compare pointers via `ordinal` lookup.
         self.indexes.iter().position(|i| std::ptr::eq(i, primary))
     }
 

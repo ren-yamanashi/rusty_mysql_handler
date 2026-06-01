@@ -73,6 +73,16 @@ enum Endpoint {
     End,
 }
 
+/// Whether a decoded search key covers every part of the active index
+/// or only a leading prefix. Used by [`TrivialEngine::decode_bound`] so
+/// partial-prefix endpoints can choose the right
+/// [`Key::next_prefix`] semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeyShape {
+    Full,
+    Partial,
+}
+
 /// Reference engine backed by [`crate::store::TableStore`].
 #[derive(Debug)]
 pub struct TrivialEngine {
@@ -137,12 +147,9 @@ impl TrivialEngine {
         Ok(())
     }
 
-    /// Take a fresh sorted snapshot of the whole table and position the
-    /// cursor at the start. The snapshot is keyed by the active index:
-    /// for the primary index (or when no meta is registered) it uses
-    /// the rows in their natural primary order; for a secondary index
-    /// it re-extracts each row's key under the secondary's columns and
-    /// re-sorts.
+    /// Refresh the cursor with a snapshot sorted by the active index.
+    /// Primary scans walk the natural BTree order; secondary scans
+    /// re-extract keys under the secondary's columns and re-sort.
     fn refresh_snapshot(&mut self) {
         let primary = store::pairs_sorted(&self.table);
         self.snapshot = match self.active_secondary_index() {
@@ -212,29 +219,55 @@ impl TrivialEngine {
             Some(k) => k,
             None => return std::ops::Bound::Unbounded,
         };
-        let is_partial = key.parts().len() < index.parts.len();
-        match (rk.flag(), kind, is_partial) {
-            (RKeyFunction::AfterKey, Endpoint::Start, _)
+        let shape = if key.parts().len() < index.parts.len() {
+            KeyShape::Partial
+        } else {
+            KeyShape::Full
+        };
+        let bumped = || match key.next_prefix() {
+            Some(k) => std::ops::Bound::Excluded(k),
+            None => std::ops::Bound::Unbounded,
+        };
+        match (rk.flag(), kind, shape) {
+            // Partial-prefix `WHERE a > 1` on `KEY (a, b)` must skip
+            // every `(1, *)` row; bumping to the next prefix sentinel
+            // is the same trick that covers the End side of an
+            // inclusive prefix range.
+            (RKeyFunction::AfterKey, Endpoint::Start, KeyShape::Partial)
+            | (
+                RKeyFunction::AfterKey | RKeyFunction::KeyOrPrev,
+                Endpoint::End,
+                KeyShape::Partial,
+            ) => bumped(),
+            (RKeyFunction::AfterKey, Endpoint::Start, KeyShape::Full)
             | (RKeyFunction::BeforeKey, Endpoint::End, _) => std::ops::Bound::Excluded(key),
-            (RKeyFunction::AfterKey | RKeyFunction::KeyOrPrev, Endpoint::End, true) => key
-                .next_prefix()
-                .map_or(std::ops::Bound::Unbounded, std::ops::Bound::Excluded),
             _ => std::ops::Bound::Included(key),
         }
     }
 
     /// The active index's [`IndexMeta`], or the primary fallback.
     fn active_index<'a>(&self, meta: &'a TableMeta) -> Option<&'a IndexMeta> {
-        meta.indexes()
-            .get(self.active_idx)
-            .or_else(|| meta.primary_index())
+        match meta.indexes().get(self.active_idx) {
+            Some(i) => Some(i),
+            None => meta.primary_index(),
+        }
     }
 
-    /// Narrow the existing snapshot to keys within `[start, end]`. The
-    /// snapshot was already sorted by the active index in
-    /// `index_init`, so this is a simple in-place retain.
+    /// Replace the cursor's snapshot with the rows in `[start, end]`.
+    /// `read_range_first` may be called multiple times within a single
+    /// `index_init` (multi-range plans, MRR, `WHERE id IN (..)`), so
+    /// the snapshot is re-fetched and re-sorted under the active index
+    /// rather than destructively shrinking the previous window.
     fn narrow_to_range(&mut self, start: &std::ops::Bound<Key>, end: &std::ops::Bound<Key>) {
-        self.snapshot.retain(|(k, _)| key_in_bounds(k, start, end));
+        let fresh = store::pairs_sorted(&self.table);
+        let resorted = match self.active_secondary_index() {
+            Some(idx) => Self::resort_by_secondary(fresh, self.meta.as_ref(), idx),
+            None => fresh,
+        };
+        self.snapshot = resorted
+            .into_iter()
+            .filter(|(k, _)| key_in_bounds(k, start, end))
+            .collect();
         self.scan_pos = (!self.snapshot.is_empty()).then_some(0);
         self.scan_dir = ScanDir::Forward;
         self.last_search_key = None;
@@ -514,11 +547,9 @@ impl StorageEngine for TrivialEngine {
         let index = meta.indexes().get(inx as usize)?;
         let start = Self::decode_bound(meta, index, min, Endpoint::Start);
         let end = Self::decode_bound(meta, index, max, Endpoint::End);
-        // For the primary path the BTreeMap can count cheaply. For a
-        // secondary the optimizer calls `records_in_range` before
-        // `index_init`, so the per-statement snapshot is still empty;
-        // walk the primary rows on demand, extract the secondary key
-        // for each, and filter.
+        // Secondary: snapshot not yet built when records_in_range fires;
+        // rekey on demand from the primary store. The primary path
+        // counts directly off the BTreeMap.
         if meta.primary_index_ordinal() == Some(inx as usize) {
             return Some(store::range_len(&self.table, &start, &end));
         }
@@ -527,7 +558,7 @@ impl StorageEngine for TrivialEngine {
             .filter_map(|(_, row)| store::extract_index_key_from_row(row, meta, index))
             .filter(|k| key_in_bounds(k, &start, &end))
             .count();
-        Some(count as u64)
+        Some(u64::try_from(count).unwrap_or(u64::MAX))
     }
 
     fn read_range_first(
@@ -607,9 +638,8 @@ fn key_in_bounds(key: &Key, start: &std::ops::Bound<Key>, end: &std::ops::Bound<
     after_start && before_end
 }
 
-/// `true` when `k` "matches" `target` — either an exact equality or a
-/// prefix match when `target` has fewer parts than `k` (the partial
-/// composite-key case).
+/// True when `target` equals `k` or is a strict leading prefix of `k`
+/// (composite-key partial-equality case).
 fn key_matches_target(k: &Key, target: &Key) -> bool {
     if target.parts().len() > k.parts().len() {
         return false;

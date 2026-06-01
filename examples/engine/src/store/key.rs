@@ -112,13 +112,10 @@ impl Key {
         &self.parts
     }
 
-    /// The next-prefix sentinel: a key that compares strictly greater
-    /// than every key starting with `self`'s parts. Used as the
-    /// exclusive end bound for partial-prefix range scans
+    /// Smallest key strictly greater than every key with `self` as a
+    /// prefix — the exclusive end bound for partial-prefix scans
     /// (`WHERE a = 1` on `KEY (a, b)` becomes `[Key([1]), Key([2]))`).
-    /// `None` when the last part has no representable successor
-    /// (numeric overflow or a variant the engine does not know how to
-    /// bump).
+    /// `None` on overflow or a non-incrementable tail variant.
     #[must_use]
     pub fn next_prefix(&self) -> Option<Self> {
         let mut parts = self.parts.clone();
@@ -126,7 +123,7 @@ impl Key {
         match last {
             KeyValue::Signed(n) => *n = n.checked_add(1)?,
             KeyValue::Unsigned(n) => *n = n.checked_add(1)?,
-            _ => return None,
+            KeyValue::Null | KeyValue::Bytes(_) => return None,
         }
         Some(Self { parts })
     }
@@ -170,13 +167,11 @@ pub fn extract_index_key_from_row(row: &[u8], meta: &TableMeta, index: &IndexMet
     Some(Key::from_parts(parts))
 }
 
-/// Decode a multi-column search-key buffer using `index`'s declared key
-/// parts. The buffer concatenates each part's bytes in declaration order
-/// (no null prefix; the engine only advertises indexes on `NOT NULL`
-/// columns today). When the buffer is shorter than the full key, the
-/// returned [`Key`] holds however many leading parts fit — MySQL passes
-/// partial prefix buffers for queries that only constrain the leading
-/// columns of a composite index (`WHERE a = ?` on `KEY (a, b)`).
+/// Decode `index`'s search-key buffer into a [`Key`]. Each part is read
+/// in declared order from the buffer's leading bytes. A buffer shorter
+/// than the full key yields a partial-prefix [`Key`] — used by MySQL
+/// when only the leading columns are constrained (`WHERE a = ?` on
+/// `KEY (a, b)`).
 #[must_use]
 pub fn decode_index_search_buffer(buf: &[u8], meta: &TableMeta, index: &IndexMeta) -> Option<Key> {
     let cols = meta.index_columns(index)?;

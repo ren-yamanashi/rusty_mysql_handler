@@ -144,6 +144,12 @@ INSERT INTO sec VALUES (1, 10), (2, 20), (3, 30);
 SELECT @sec_pk_lookup := id FROM sec WHERE id = 2;
 SELECT @sec_lbl_count := COUNT(*) FROM sec WHERE lbl = 20;
 SELECT @sec_id_for_lbl_30 := id FROM sec WHERE lbl = 30;
+-- ORDER BY on the secondary's column: the optimizer trusts HA_READ_ORDER
+-- on idx_lbl and reads rows in lbl-sorted order. A regression in
+-- `resort_by_secondary` would scramble the snapshot and these LIMIT 1
+-- endpoints would surface the wrong row.
+SELECT @sec_order_first := lbl FROM sec ORDER BY lbl LIMIT 1;
+SELECT @sec_order_last := lbl FROM sec ORDER BY lbl DESC LIMIT 1;
 DROP TABLE sec;
 
 -- Composite key (treated as the table's effective primary by the engine,
@@ -271,6 +277,7 @@ SELECT IF(
   AND @rng_gt_sum = 9 AND @rng_lt_count = 2
   AND @cpk_count = 4 AND @cpk_label_11 = 'x' AND @cpk_label_22 = 'w'
   AND @cpk_range_count = 2
-  AND @sec_pk_lookup = 2 AND @sec_lbl_count = 1 AND @sec_id_for_lbl_30 = 3,
+  AND @sec_pk_lookup = 2 AND @sec_lbl_count = 1 AND @sec_id_for_lbl_30 = 3
+  AND @sec_order_first = 10 AND @sec_order_last = 30,
   3, 0
 ) AS sentinel;
