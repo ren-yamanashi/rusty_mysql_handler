@@ -130,9 +130,6 @@ SELECT @rng_last := id FROM rng ORDER BY id DESC LIMIT 1;
 -- or `range_pairs` would surface as the wrong sum / count here.
 SELECT @rng_gt_sum := SUM(id) FROM rng WHERE id > 3;
 SELECT @rng_lt_count := COUNT(*) FROM rng WHERE id < 3;
--- Optimizer-visible row count: `info(HA_STATUS_VARIABLE)` now refreshes
--- `handler::stats.records` from the engine, so information_schema reads
--- back the real number rather than `0`.
 -- ANALYZE TABLE forces `info(HA_STATUS_VARIABLE)` to refresh `stats.records`
 -- so information_schema reads back the actual row count.
 ANALYZE TABLE rng;
