@@ -136,16 +136,48 @@ impl TableMeta {
     /// when the byte offset cannot be computed.
     #[must_use]
     pub fn primary_key_column(&self) -> Option<(usize, &ColumnMeta)> {
-        let idx = self
-            .indexes
-            .iter()
-            .find(|i| i.index_type == IndexType::Primary)
-            .or_else(|| self.indexes.first())?;
+        let idx = self.primary_index()?;
         let first_part = idx.parts.first()?;
         let column_index = (first_part.column_ordinal as usize).checked_sub(1)?;
         let offset = self.data_offset(column_index)?;
         let column = self.columns.get(column_index)?;
         Some((offset, column))
+    }
+
+    /// The index treated as primary: the declared `PRIMARY` index, or
+    /// the first index when no `PRIMARY` is declared. `None` only when
+    /// the table has no indexes.
+    #[must_use]
+    pub fn primary_index(&self) -> Option<&IndexMeta> {
+        self.indexes
+            .iter()
+            .find(|i| i.index_type == IndexType::Primary)
+            .or_else(|| self.indexes.first())
+    }
+
+    /// Ordinal of [`Self::primary_index`] within [`Self::indexes`]; `None`
+    /// when the table has no indexes.
+    #[must_use]
+    pub fn primary_index_ordinal(&self) -> Option<usize> {
+        let primary = self.primary_index()?;
+        // Indexes are uniquely identified by their declared position;
+        // compare pointers via `ordinal` lookup.
+        self.indexes.iter().position(|i| std::ptr::eq(i, primary))
+    }
+
+    /// Resolve `(offset, &ColumnMeta)` for each column referenced by
+    /// `index`'s key parts (in declared order). `None` when any
+    /// referenced column is hidden or its offset cannot be computed.
+    #[must_use]
+    pub fn index_columns(&self, index: &IndexMeta) -> Option<Vec<(usize, &ColumnMeta)>> {
+        let mut out = Vec::with_capacity(index.parts.len());
+        for part in &index.parts {
+            let col_idx = (part.column_ordinal as usize).checked_sub(1)?;
+            let offset = self.data_offset(col_idx)?;
+            let column = self.columns.get(col_idx)?;
+            out.push((offset, column));
+        }
+        Some(out)
     }
 }
 
