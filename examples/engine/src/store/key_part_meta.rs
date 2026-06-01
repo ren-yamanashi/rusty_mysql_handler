@@ -22,16 +22,20 @@
 
 //! Per-key-part snapshot taken from `dd::Index_element`.
 
+use mysql_handler::dd::IndexElementOrder;
 use mysql_handler::sys::DdIndexElement;
 
-/// Per-key-part snapshot taken from `dd::Index_element`. Only the field
-/// the reference engine consumes today is stored; prefix length and
-/// declared sort order are intentionally left off until a downstream
-/// consumer needs them.
+/// Per-key-part snapshot taken from `dd::Index_element`. Only the fields
+/// the reference engine consumes today are stored; the prefix length is
+/// intentionally left off until a downstream consumer needs it.
 #[derive(Debug, Clone)]
 pub struct KeyPartMeta {
     /// 1-based ordinal position of the underlying column in the table.
     pub(crate) column_ordinal: u32,
+    /// Declared sort order. The engine only advertises `HA_READ_ORDER`
+    /// for indexes whose every key part is `Ascending`, because the
+    /// `Key` type's `Ord` produces ASC order.
+    pub(crate) order: IndexElementOrder,
 }
 
 impl KeyPartMeta {
@@ -40,6 +44,7 @@ impl KeyPartMeta {
     pub fn from_dd_index_element(elt: &DdIndexElement) -> Self {
         Self {
             column_ordinal: elt.column_ordinal(),
+            order: elt.order(),
         }
     }
 }
