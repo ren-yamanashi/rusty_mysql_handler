@@ -74,6 +74,11 @@ COPY Cargo.toml Cargo.lock build.rs rust-toolchain.toml ./
 COPY src ./src
 COPY shim ./shim
 COPY examples ./examples
+# Cargo parses every `[[bench]]` entry in the root manifest and requires
+# the source file to exist, even when `cargo build -p engine` itself
+# never compiles the bench. Copying `benches/` keeps the manifest valid
+# without dragging bench dev-deps into the plugin binary.
+COPY benches ./benches
 
 RUN MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release -p engine
 
