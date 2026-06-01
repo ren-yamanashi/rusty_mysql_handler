@@ -130,6 +130,12 @@ SELECT @rng_last := id FROM rng ORDER BY id DESC LIMIT 1;
 -- or `range_pairs` would surface as the wrong sum / count here.
 SELECT @rng_gt_sum := SUM(id) FROM rng WHERE id > 3;
 SELECT @rng_lt_count := COUNT(*) FROM rng WHERE id < 3;
+-- ANALYZE TABLE forces `info(HA_STATUS_VARIABLE)` to refresh `stats.records`
+-- so information_schema reads back the actual row count.
+ANALYZE TABLE rng;
+SET SESSION information_schema_stats_expiry = 0;
+SELECT @rng_rows_stat := TABLE_ROWS FROM information_schema.tables
+  WHERE table_schema = 'e2e' AND table_name = 'rng';
 DROP TABLE rng;
 
 -- Secondary index alongside a single-column primary key. The optimizer
@@ -319,6 +325,7 @@ SELECT IF(
   AND @rng_between_sum = 5 AND @rng_between_count = 2
   AND @rng_first = 1 AND @rng_last = 5
   AND @rng_gt_sum = 9 AND @rng_lt_count = 2
+  AND @rng_rows_stat = 5
   AND @cpk_count = 4 AND @cpk_label_11 = 'x' AND @cpk_label_22 = 'w'
   AND @cpk_range_count = 2
   AND @sec_pk_lookup = 2 AND @sec_lbl_count = 1 AND @sec_id_for_lbl_30 = 3

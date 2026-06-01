@@ -158,7 +158,26 @@ int RustHandlerBase::rnd_pos_by_record(uchar *record) {
 
 int RustHandlerBase::info(uint flag) {
   DBUG_TRACE;
-  return rust__handler__info(rust_ctx_, flag);
+  int rc = rust__handler__info(rust_ctx_, flag);
+  // Refresh stats.records on HA_STATUS_VARIABLE so the optimizer sees
+  // real rows. Bail early if engine info() failed (leaving stats partly
+  // stale would be worse than leaving them as-is) or if the call is
+  // not the variable-stats slot.
+  if (rc != 0 || !(flag & HA_STATUS_VARIABLE) || !rust_ctx_ || !table ||
+      !table->s) {
+    return rc;
+  }
+  uint64_t n = 0;
+  bool handled = false;
+  if (rust__handler__records(rust_ctx_, &n, &handled) != 0 || !handled) {
+    return rc;
+  }
+  stats.records = static_cast<ha_rows>(n);
+  stats.mean_rec_length = table->s->rec_buff_length;
+  stats.data_file_length =
+      static_cast<ulonglong>(stats.records) * stats.mean_rec_length;
+  stats.deleted = 0;
+  return rc;
 }
 
 THR_LOCK_DATA **RustHandlerBase::store_lock(THD *, THR_LOCK_DATA **to,
