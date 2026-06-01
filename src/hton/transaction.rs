@@ -75,6 +75,40 @@ pub trait TxnSession: Send {
         Ok(())
     }
 
+    /// Stage a row update into `table` as part of this transaction.
+    ///
+    /// `old` is the row image before the change, `new` after. A
+    /// transactional engine receives each update here (rather than on
+    /// the per-table handler) so the change is buffered until `commit`
+    /// makes it visible or `rollback` discards it. The default ignores
+    /// the update; an engine that stores data overrides this to buffer
+    /// the (old, new) pair so rollback can restore the pre-image.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the
+    /// update cannot be staged.
+    fn update_row(&mut self, table: &str, old: &[u8], new: &[u8]) -> EngineResult {
+        let _ = (table, old, new);
+        Ok(())
+    }
+
+    /// Stage a row deletion in `table` as part of this transaction.
+    ///
+    /// `row` is the image of the row about to be removed. A
+    /// transactional engine receives each delete here so the change is
+    /// buffered until `commit` makes it visible or `rollback` discards
+    /// it. The default ignores the delete; an engine that stores data
+    /// overrides this to buffer the pre-image so rollback can restore
+    /// the row.
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the
+    /// delete cannot be staged.
+    fn delete_row(&mut self, table: &str, row: &[u8]) -> EngineResult {
+        let _ = (table, row);
+        Ok(())
+    }
+
     /// Prepare phase: flush the transaction so a following `commit` is durable.
     ///
     /// MySQL drives this whenever the engine takes part in two-phase commit —
