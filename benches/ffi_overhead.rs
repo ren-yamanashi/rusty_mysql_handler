@@ -28,12 +28,24 @@
 //! the MySQL server. This bench measures the cost of that wrapping by
 //! comparing each helper against the same closure invoked natively.
 //!
+//! `black_box` brackets every value that enters or leaves a closure so
+//! LLVM cannot fold the trivial bodies away — without that, the native
+//! baseline optimizes to zero and the wrapper looks like pure overhead.
+//!
 //! Run with `cargo bench --bench ffi_overhead`. Results land in
 //! `target/criterion/`.
 
 #![allow(missing_docs)]
+// `unit_arg` and `redundant_closure_call` fire on the very pattern that
+// makes this bench meaningful: passing `black_box(())` through `Ok` /
+// `Err` and invoking a single-call closure prevent LLVM from
+// constant-folding the body into the call site, which would erase the
+// FFI-boundary overhead the bench is supposed to measure.
+#![allow(clippy::unit_arg, clippy::redundant_closure_call)]
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
 
 use mysql_handler::engine::EngineError;
 use mysql_handler::panic_guard::FfiBoundary;
@@ -41,11 +53,11 @@ use mysql_handler::panic_guard::FfiBoundary;
 fn bench_run_ok(c: &mut Criterion) {
     let mut group = c.benchmark_group("run_ok");
     group.bench_function("via_ffi_boundary", |b| {
-        b.iter(|| black_box(FfiBoundary::run(|| Ok::<_, EngineError>(()))));
+        b.iter(|| black_box(FfiBoundary::run(|| Ok::<_, EngineError>(black_box(())))));
     });
     group.bench_function("native_call", |b| {
         b.iter(|| {
-            let r: Result<(), EngineError> = Ok(());
+            let r: Result<(), EngineError> = Ok(black_box(()));
             black_box(match r {
                 Ok(()) => 0i32,
                 Err(e) => e.to_mysql_errno(),
@@ -58,11 +70,15 @@ fn bench_run_ok(c: &mut Criterion) {
 fn bench_run_err(c: &mut Criterion) {
     let mut group = c.benchmark_group("run_err");
     group.bench_function("via_ffi_boundary", |b| {
-        b.iter(|| black_box(FfiBoundary::run(|| Err(EngineError::EndOfFile))));
+        b.iter(|| {
+            black_box(FfiBoundary::run(|| {
+                Err::<(), _>(black_box(EngineError::EndOfFile))
+            }))
+        });
     });
     group.bench_function("native_call", |b| {
         b.iter(|| {
-            let r: Result<(), EngineError> = Err(EngineError::EndOfFile);
+            let r: Result<(), EngineError> = Err(black_box(EngineError::EndOfFile));
             black_box(match r {
                 Ok(()) => 0i32,
                 Err(e) => e.to_mysql_errno(),
@@ -78,7 +94,7 @@ fn bench_run_void(c: &mut Criterion) {
         b.iter(|| FfiBoundary::run_void(|| black_box(())));
     });
     group.bench_function("native_call", |b| {
-        b.iter(|| black_box(()));
+        b.iter(|| (|| black_box(()))());
     });
     group.finish();
 }
@@ -86,10 +102,10 @@ fn bench_run_void(c: &mut Criterion) {
 fn bench_run_default(c: &mut Criterion) {
     let mut group = c.benchmark_group("run_default");
     group.bench_function("via_ffi_boundary", |b| {
-        b.iter(|| black_box(FfiBoundary::run_default(0u32, || 42u32)));
+        b.iter(|| black_box(FfiBoundary::run_default(0u32, || black_box(42u32))));
     });
     group.bench_function("native_call", |b| {
-        b.iter(|| black_box(42u32));
+        b.iter(|| black_box((|| black_box(42u32))()));
     });
     group.finish();
 }
