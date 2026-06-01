@@ -42,6 +42,13 @@ bindgen = "0.71.1"
 cmake = "0.1.58"
 flate2 = "1.1.9"
 
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "ffi_overhead"
+harness = false
+
 [lints]
 workspace = true
 
