@@ -30,7 +30,7 @@ deltas that are insensitive to execution speed) and are filled below.
 | Plugin tree dirty flag | clean (release build, no local edits) |
 | `rustc --version` | 1.95.0 (59807616e 2026-04-14) |
 | sysbench version | 1.0.20 (debian bookworm-slim apt) |
-| N (trials), warmup, run duration | L1: `cargo bench` defaults (100 samples / 5 s warmup / 3 s measurement window); callback profile: `SYSBENCH_TRIALS=1 SYSBENCH_WARMUP=10 SYSBENCH_TIME=30` |
+| N (trials), warmup, run duration | L1: `cargo bench` defaults (100 samples / 5 s warmup / 3 s measurement window); callback profile: `SYSBENCH_TRIALS=1 SYSBENCH_WARMUP=0 SYSBENCH_TIME=30` (warmup off so the `Handler_%` delta lines up with the measurement-run `tx` count) |
 
 ## Callback profile per scenario
 
@@ -43,17 +43,17 @@ numbers despite the Rosetta-emulated mysqld.
 
 | Callback | `oltp_point_select` | `oltp_read_only` | `oltp_read_write` |
 |---|---|---|---|
-| `index_read_map` (`Handler_read_key`) | 1.34 | 18.73 | 22.40 |
-| `index_next` (`Handler_read_next`) | 0.00 | 535.08 | 527.05 |
+| `index_read_map` (`Handler_read_key`) | 1.00 | 14.00 | 17.00 |
+| `index_next` (`Handler_read_next`) | 0.00 | 400.00 | 400.00 |
 | `rnd_pos` (`Handler_read_rnd`) | 0.00 | 0.00 | 0.00 |
-| `rnd_next` (`Handler_read_rnd_next`) | 0.00 | 135.13 | 133.11 |
-| `write_row` (`Handler_write`) | 0.00 | 133.77 | 133.08 |
-| `update_row` (`Handler_update`) | 0.00 | 0.00 | 2.60 |
-| `delete_row` (`Handler_delete`) | 0.00 | 0.00 | 1.32 |
-| `index_init` | 1.34 | 18.73 | 22.40 |
-| `index_end` | 1.34 | 18.73 | 22.40 |
+| `rnd_next` (`Handler_read_rnd_next`) | 0.00 | 101.02 | 101.03 |
+| `write_row` (`Handler_write`) | 0.00 | 100.00 | 101.00 |
+| `update_row` (`Handler_update`) | 0.00 | 0.00 | 2.00 |
+| `delete_row` (`Handler_delete`) | 0.00 | 0.00 | 1.00 |
+| `index_init` | 1.00 | 14.00 | 17.00 |
+| `index_end` | 1.00 | 14.00 | 17.00 |
 | `position` | 0.00 | 0.00 | 0.00 |
-| `info` | 1.34 | 20.07 | 31.59 |
+| `info` | 1.00 | 15.00 | 24.00 |
 
 Notes:
 

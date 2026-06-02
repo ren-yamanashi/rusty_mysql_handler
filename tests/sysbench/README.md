@@ -21,7 +21,7 @@ cells into the aggregation.
 
 `mysql:8.4.9` is built on Oracle Linux; the EPEL-9 sysbench package
 drifts and patch-level pins go stale within months. Debian bookworm's
-apt archive ships a long-term-stable sysbench (`1.0.20+ds-12`), and
+apt archive ships a long-term-stable sysbench (`1.0.20+ds-5`), and
 snapshot.debian.org preserves historical packages if a session needs
 to be reproduced after Debian rolls a new release. Splitting the
 client out of the server image keeps the canonical session
