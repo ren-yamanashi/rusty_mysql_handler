@@ -53,21 +53,7 @@ jobs:
 
       - name: Collect environment metadata
         if: always()
-        run: |
-          {
-            echo "=== runner ==="
-            uname -srm
-            grep 'model name' /proc/cpuinfo | head -1 || true
-            nproc
-            free -h | head -2
-            echo "=== docker ==="
-            docker version --format '{{.Server.Version}}'
-            echo "=== rust ==="
-            rustc --version 2>/dev/null || echo "(rustc not on host)"
-            echo "=== plugin sha ==="
-            git rev-parse HEAD
-          } > tests/sysbench/output/_env.txt
-          cat tests/sysbench/output/_env.txt
+        run: bash tests/sysbench/collect_env.sh
 
       - name: Upload session artifact
         if: always()
