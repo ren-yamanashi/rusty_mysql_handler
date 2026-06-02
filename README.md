@@ -23,12 +23,12 @@ mysql-handler = "0.1"
 Implement the `StorageEngine` trait in a `cdylib` crate, then `INSTALL
 PLUGIN` it into a running `mysql:8.4` server.
 
-### Prerequisites
+#### Prerequisites
 
 - Rust 1.85+
 - `mysql:8.4` (any install method — local, Homebrew, Docker, RDS)
 
-### 1. New cdylib crate
+#### 1. New cdylib crate
 
 ```toml
 [package]
@@ -42,7 +42,7 @@ crate-type = ["cdylib"]
 mysql-handler = "0.1"
 ```
 
-### 2. Implement StorageEngine
+#### 2. Implement StorageEngine
 
 ```rust
 use mysql_handler::engine::{EngineError, EngineResult, StorageEngine};
@@ -73,7 +73,7 @@ impl StorageEngine for MyEngine {
 Plugin manifest macro: copy from
 [`examples/engine/src/lib.rs`](./examples/engine/src/lib.rs).
 
-### 3. Build
+#### 3. Build
 
 ```bash
 MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release
@@ -81,7 +81,7 @@ MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release
 MYSQL_HANDLER_ARCHIVE=/path/to/libha_rusty_shim.a.gz cargo build --release
 ```
 
-### 4. Install
+#### 4. Install
 
 ```sql
 INSTALL PLUGIN my_engine SONAME 'libmy_engine.so';
