@@ -1,34 +1,43 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 ren-yamanashi
 #
-# (license trimmed; full text in tests/e2e/run.sh)
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
 #
-# Aggregate per-cell trial JSON into median, stddev, and variance
-# ratio per metric. Reads each per-cell file from argv, emits a single
-# `matrix.json` shape:
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation. The authors of this program hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
 #
-#   {
-#     "cells": [
-#       {"engine": "...", "scenario": "...", "threads": N, "dataset": N,
-#        "tps": {"median": ..., "stddev": ..., "ratio": ...},
-#        "latency_avg": {...}, "latency_p95": {...}, ...},
-#       ...
-#     ]
-#   }
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see <https://www.gnu.org/licenses/>.
+#
+# Aggregate per-cell trial JSON into median, sample stddev, and the
+# variance ratio per metric. Reads a JSON list of per-cell objects on
+# stdin (matrix.sh slurps the per-cell files via `jq -s '.'`) and
+# emits a single rollup on stdout.
 
 import json
-import os
 import statistics
 import sys
 
 
 def stats(values):
-    """Median, stddev, and stddev/median ratio. Skips None entries."""
+    """Median + sample stddev (`pstdev` would under-state spread at N=3)."""
     clean = [v for v in values if v is not None]
     if not clean:
         return {"median": None, "stddev": None, "ratio": None}
     median = statistics.median(clean)
-    stddev = statistics.pstdev(clean) if len(clean) > 1 else 0.0
+    stddev = statistics.stdev(clean) if len(clean) > 1 else 0.0
     ratio = (stddev / median) if median else None
     return {"median": median, "stddev": stddev, "ratio": ratio}
 
@@ -43,6 +52,7 @@ def aggregate_cell(cell):
         "threads": cell["threads"],
         "dataset": cell["dataset"],
         "trial_count": len(trials),
+        "failed_trials": sum(1 for t in trials if t.get("failed")),
     }
     for m in metrics:
         out[m] = stats([t.get(m) for t in trials])
@@ -50,13 +60,9 @@ def aggregate_cell(cell):
 
 
 def main():
-    paths = [p for p in sys.argv[1:] if os.path.basename(p) != "matrix.json"
-             and os.path.basename(p) != "phase0.json"]
-    cells = []
-    for p in paths:
-        with open(p) as f:
-            cells.append(aggregate_cell(json.load(f)))
-    json.dump({"cells": cells}, sys.stdout, indent=2)
+    cells_in = json.load(sys.stdin)
+    cells_out = [aggregate_cell(c) for c in cells_in]
+    json.dump({"cells": cells_out}, sys.stdout, indent=2)
     sys.stdout.write("\n")
 
 

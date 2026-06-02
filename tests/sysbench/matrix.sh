@@ -1,10 +1,28 @@
 #!/usr/bin/env bash
 # Copyright (C) 2026 ren-yamanashi
 #
-# (license trimmed; full text in tests/e2e/run.sh)
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is designed to work with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation. The authors of this program hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have either included with
+# the program or referenced in the documentation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-# L2 matrix — 36 cells × N trials, per-cell median + stddev via
-# aggregate.py.
+# Run the OLTP matrix: N trials per (engine, scenario, threads, dataset)
+# cell, write per-cell JSON, aggregate to matrix.json.
 
 set -euo pipefail
 
@@ -16,6 +34,10 @@ source tests/sysbench/lib/mysqld.sh
 source tests/sysbench/lib/sysbench.sh
 
 mkdir -p "$SYSBENCH_OUTPUT_DIR"
+# Drop stale cells so the aggregation glob does not pick up prior runs.
+find "$SYSBENCH_OUTPUT_DIR" -maxdepth 1 -name 'RUSTY-*.json' -delete
+find "$SYSBENCH_OUTPUT_DIR" -maxdepth 1 -name 'MEMORY-*.json' -delete
+rm -f "$SYSBENCH_OUTPUT_DIR/matrix.json"
 
 trap 'sysbench_stop_mysqld' EXIT
 sysbench_start_mysqld
@@ -46,7 +68,7 @@ for engine in "${engines[@]}"; do
 
         trials_json=()
         for trial in $(seq 1 "$SYSBENCH_TRIALS"); do
-          output="$(sysbench_run_one "$scenario" "$threads" "$dataset")"
+          output="$(sysbench_run_one "$scenario" "$threads" "$dataset" "$trial")"
           parsed="$(printf '%s' "$output" | sysbench_parse_run)"
           trials_json+=("$parsed")
         done
@@ -72,9 +94,9 @@ for engine in "${engines[@]}"; do
 done
 
 echo "matrix: wrote $cell_total cell files to $SYSBENCH_OUTPUT_DIR"
-docker exec -i "$SYSBENCH_CONTAINER" python3 \
-  < tests/sysbench/aggregate.py \
-  > "$SYSBENCH_OUTPUT_DIR/matrix.json" <<< "$(cat "$SYSBENCH_OUTPUT_DIR"/*.json | jq -s '.')" || \
-  python3 tests/sysbench/aggregate.py "$SYSBENCH_OUTPUT_DIR"/*.json \
-    > "$SYSBENCH_OUTPUT_DIR/matrix.json"
+
+cells_glob=("$SYSBENCH_OUTPUT_DIR"/RUSTY-*.json "$SYSBENCH_OUTPUT_DIR"/MEMORY-*.json)
+jq -s '.' "${cells_glob[@]}" \
+  | docker exec -i "$SYSBENCH_CONTAINER" python3 /usr/local/bin/aggregate.py \
+  > "$SYSBENCH_OUTPUT_DIR/matrix.json"
 echo "matrix: aggregated → $SYSBENCH_OUTPUT_DIR/matrix.json"

@@ -20,7 +20,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-.PHONY: setup rust-build clean lint fmt check test test_e2e perf-phase0 perf-matrix help
+.PHONY: setup rust-build clean lint fmt check test test_e2e perf-callback-profile perf-matrix help
 
 MYSQL_SOURCE_DIR ?= $(CURDIR)/mysql-server
 MYSQL_BUILD_DIR  ?= $(CURDIR)/build/mysql
@@ -68,11 +68,11 @@ test_e2e: ## E2E test via Docker (mysql:8.4 + plugin baked into image)
 	@bash tests/e2e/run.sh
 
 perf-build-images: ## Build the local Docker images the sysbench harness needs
-	@docker build --target builder -t rusty-plugin-build:local -f tests/e2e/Dockerfile .
-	@docker build -t rusty-sysbench:local tests/sysbench/
+	@DOCKER_BUILDKIT=1 docker build --target builder -t rusty-plugin-build:local -f tests/e2e/Dockerfile .
+	@DOCKER_BUILDKIT=1 docker build -t rusty-sysbench:local tests/sysbench/
 
-perf-phase0: perf-build-images ## Capture per-scenario callback profile
-	@bash tests/sysbench/run.sh phase0
+perf-callback-profile: perf-build-images ## Capture per-scenario callback profile
+	@bash tests/sysbench/run.sh callback-profile
 
 perf-matrix: perf-build-images ## Run sysbench matrix (rusty vs MEMORY)
 	@bash tests/sysbench/run.sh matrix

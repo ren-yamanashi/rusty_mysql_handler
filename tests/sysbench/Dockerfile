@@ -33,6 +33,13 @@ COPY --from=plugin \
      /workspace/target/release/libengine.so \
      /usr/lib64/mysql/plugin/ha_rusty.so
 
-RUN microdnf install -y oracle-epel-release-el9 \
-    && microdnf install -y sysbench python3 jq \
+# Pinned to the EPEL-9 snapshot at authorship; bump deliberately and
+# re-declare in the next canonical session's RESULTS.md Environment header.
+RUN microdnf install -y oracle-epel-release-el9-1.0-2.el9 \
+    && microdnf install -y \
+        sysbench-1.0.20-15.el9 \
+        python3-3.9.21-2.0.1.el9 \
+        jq-1.6-17.el9 \
     && microdnf clean all
+
+COPY aggregate.py /usr/local/bin/aggregate.py
