@@ -69,7 +69,8 @@ test_e2e: ## E2E test via Docker (mysql:8.4 + plugin baked into image)
 
 perf-build-images: ## Build the local Docker images the sysbench harness needs
 	@DOCKER_BUILDKIT=1 docker build --target builder -t rusty-plugin-build:local -f tests/e2e/Dockerfile .
-	@DOCKER_BUILDKIT=1 docker build -t rusty-sysbench:local tests/sysbench/
+	@DOCKER_BUILDKIT=1 docker build -t rusty-sysbench-mysqld:local -f tests/sysbench/Dockerfile.mysqld tests/sysbench/
+	@DOCKER_BUILDKIT=1 docker build -t rusty-sysbench-client:local -f tests/sysbench/Dockerfile.client tests/sysbench/
 
 perf-callback-profile: perf-build-images ## Capture per-scenario callback profile
 	@bash tests/sysbench/run.sh callback-profile

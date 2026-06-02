@@ -1,5 +1,4 @@
 # Copyright (C) 2026 ren-yamanashi
-# shellcheck shell=bash
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -21,21 +20,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-# Shared env for the sysbench harness. mysqld and the sysbench client
-# run in separate containers connected by a private bridge network.
+# sysbench client side of the harness. Debian bookworm-slim is picked
+# for its long support window and stable apt archive — pin drift is
+# rare and snapshot.debian.org carries historical packages if a
+# session needs to be reproduced after a Debian release rolls over.
 
-SYSBENCH_PLUGIN_IMAGE="${SYSBENCH_PLUGIN_IMAGE:-rusty-plugin-build:local}"
-SYSBENCH_MYSQLD_IMAGE="${SYSBENCH_MYSQLD_IMAGE:-rusty-sysbench-mysqld:local}"
-SYSBENCH_CLIENT_IMAGE="${SYSBENCH_CLIENT_IMAGE:-rusty-sysbench-client:local}"
-SYSBENCH_MYSQLD_CONTAINER="${SYSBENCH_MYSQLD_CONTAINER:-rusty-sysbench-mysqld-$$}"
-SYSBENCH_CLIENT_CONTAINER="${SYSBENCH_CLIENT_CONTAINER:-rusty-sysbench-client-$$}"
-SYSBENCH_NETWORK="${SYSBENCH_NETWORK:-rusty-sysbench-net-$$}"
-SYSBENCH_ROOT_PW="${SYSBENCH_ROOT_PW:-root}"
+FROM debian:bookworm-slim
 
-SYSBENCH_WARMUP="${SYSBENCH_WARMUP:-10}"
-SYSBENCH_TIME="${SYSBENCH_TIME:-30}"
-SYSBENCH_TRIALS="${SYSBENCH_TRIALS:-3}"
-SYSBENCH_CPUS="${SYSBENCH_CPUS:-4}"
-SYSBENCH_MEMORY="${SYSBENCH_MEMORY:-4g}"
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        sysbench=1.0.20+ds-5 \
+        default-mysql-client=1.1.0 \
+        python3=3.11.2-1+b1 \
+        jq=1.6-2.1+deb12u1 \
+    && rm -rf /var/lib/apt/lists/*
 
-SYSBENCH_OUTPUT_DIR="${SYSBENCH_OUTPUT_DIR:-tests/sysbench/output}"
+COPY aggregate.py /usr/local/bin/aggregate.py

@@ -9,12 +9,23 @@ subcommands:
   dataset), N trials per cell; output per-cell JSON plus a single
   `matrix.json` aggregating median / sample stddev / variance ratio.
 
-Both wrap a single mysql:8.4.9 container with the rusty plugin baked
-in and sysbench installed. The container is created, used, and torn
-down per invocation (`trap` cleans up on success or interrupt). The
-per-cell output dir is cleared at the start of each invocation so
-re-runs after parameter changes do not fold stale cells into the
-aggregation.
+The harness runs **two** containers connected by a private bridge
+network: a `mysql:8.4.9` image with the plugin baked in, and a
+`debian:bookworm-slim` client image with `sysbench`, `mysql-client`,
+`python3`, and `jq` installed from apt. Both containers (and the
+network) are torn down per invocation via `trap`. The output dir is
+cleared at the start of each subcommand so re-runs do not fold stale
+cells into the aggregation.
+
+## Why two containers
+
+`mysql:8.4.9` is built on Oracle Linux; the EPEL-9 sysbench package
+drifts and patch-level pins go stale within months. Debian bookworm's
+apt archive ships a long-term-stable sysbench (`1.0.20+ds-12`), and
+snapshot.debian.org preserves historical packages if a session needs
+to be reproduced after Debian rolls a new release. Splitting the
+client out of the server image keeps the canonical session
+reproducible without policing EPEL drift.
 
 ## What gets measured
 
@@ -36,11 +47,12 @@ make perf-callback-profile
 make perf-matrix
 ```
 
-The Makefile target builds the `rusty-plugin-build:local` stage from
-the e2e Dockerfile, then builds `rusty-sysbench:local` on top of
-mysql:8.4.9. Both builds use BuildKit (`DOCKER_BUILDKIT=1`) so the
-per-Dockerfile dockerignore works. Subsequent runs reuse the cached
-layers.
+The Makefile target builds three images in order:
+`rusty-plugin-build:local` (e2e `builder` stage), then
+`rusty-sysbench-mysqld:local` (plugin + mysql:8.4.9), then
+`rusty-sysbench-client:local` (debian:bookworm-slim + apt pins). All
+three use BuildKit (`DOCKER_BUILDKIT=1`). Subsequent runs reuse the
+cached layers.
 
 A full matrix session takes ≈ 72 minutes at `SYSBENCH_TIME=30`
 (default). For a smoke run, override the tunables:
@@ -48,10 +60,6 @@ A full matrix session takes ≈ 72 minutes at `SYSBENCH_TIME=30`
 ```bash
 SYSBENCH_TIME=5 SYSBENCH_WARMUP=2 SYSBENCH_TRIALS=1 make perf-matrix
 ```
-
-The `SYSBENCH_TRIALS=1` smoke variant is intended for harness
-verification (does sysbench actually drive the rusty engine
-end-to-end?) and not for publishable numbers.
 
 ## Output
 
@@ -74,19 +82,22 @@ table; `callback_profile.json` feeds the callback-profile table.
 | `SYSBENCH_TIME` | `30` | sysbench run duration (seconds) |
 | `SYSBENCH_WARMUP` | `10` | sysbench warmup time (seconds) |
 | `SYSBENCH_TRIALS` | `3` | per-cell trial count |
-| `SYSBENCH_CPUS` | `4` | container CPU budget |
-| `SYSBENCH_MEMORY` | `4g` | container memory budget |
+| `SYSBENCH_CPUS` | `4` | mysqld container CPU budget |
+| `SYSBENCH_MEMORY` | `4g` | mysqld container memory budget |
 | `SYSBENCH_OUTPUT_DIR` | `tests/sysbench/output` | where per-cell JSON lands |
 
 ## Files
 
-- `Dockerfile` — `FROM rusty-plugin-build:local`, installs pinned
-  sysbench / python3 / jq, COPYs `aggregate.py` into the image
-- `Dockerfile.dockerignore` — BuildKit-only allowlist that keeps the
-  per-image context to just `aggregate.py`
-- `prepare.sql` — `INSTALL PLUGIN rusty SONAME 'ha_rusty.so'`,
-  creates `sbtest` database
-- `lib/env.sh` — shared env vars
+- `Dockerfile.mysqld` — `FROM mysql:8.4.9` + plugin from
+  `rusty-plugin-build:local`
+- `Dockerfile.client` — `FROM debian:bookworm-slim`, apt-pinned
+  sysbench / mysql-client / python3 / jq, ships `aggregate.py` in
+  `/usr/local/bin`
+- `.dockerignore` — keeps the build context to `aggregate.py`
+- `prepare.sql` — piped to the mysqld container's `mysql` over the
+  client container's stdin: `INSTALL PLUGIN`, creates `sbtest`
+- `lib/env.sh` — shared env vars (image names, container names,
+  network name, tunables)
 - `lib/mysqld.sh` — container lifecycle, mysqld wait, handler counter
   capture
 - `lib/sysbench.sh` — sysbench prepare / run / cleanup wrappers + text
@@ -94,5 +105,5 @@ table; `callback_profile.json` feeds the callback-profile table.
 - `callback_profile.sh` — per-scenario `Handler_%` capture
 - `matrix.sh` — OLTP matrix
 - `run.sh` — dispatcher
-- `aggregate.py` — per-cell JSON list (stdin) → median / sample stddev
-  rollup (stdout). Runs inside the harness container.
+- `aggregate.py` — bind-mounted `/output` JSON list → median / sample
+  stddev rollup on stdout, runs inside the client container
