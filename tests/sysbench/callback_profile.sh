@@ -38,6 +38,11 @@ mkdir -p "$SYSBENCH_OUTPUT_DIR"
 rm -f "$SYSBENCH_OUTPUT_DIR/callback_profile.json"
 out="$SYSBENCH_OUTPUT_DIR/callback_profile.json"
 
+# Counts (`Yᵢ`) do not need cache warming, and a warmup pre-run would
+# inflate the `Handler_%` delta against the unchanged `tx` divisor.
+SYSBENCH_WARMUP=0
+export SYSBENCH_WARMUP
+
 trap 'sysbench_stop_mysqld' EXIT
 sysbench_start_mysqld
 sysbench_set_engine RUSTY

@@ -21,12 +21,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-# mysqld lifecycle helpers: container start, ready-wait, plugin install,
-# default-engine switching, Handler_% counter capture.
+# Two-container lifecycle: mysqld + sysbench client on a private bridge.
+# `mysql` and `sysbench` invocations go through the client container so
+# the mysqld image stays a clean `mysql:8.4.9` + plugin.
 
 mysql_exec() {
-  docker exec -i -e MYSQL_PWD="$SYSBENCH_ROOT_PW" "$SYSBENCH_CONTAINER" \
-    mysql -uroot --batch --skip-column-names "$@"
+  docker exec -i -e MYSQL_PWD="$SYSBENCH_ROOT_PW" "$SYSBENCH_CLIENT_CONTAINER" \
+    mysql -h "$SYSBENCH_MYSQLD_CONTAINER" -uroot --batch --skip-column-names "$@"
 }
 
 mysql_query() {
@@ -51,31 +52,43 @@ sysbench_wait_mysqld() {
     sleep 2
   done
   echo "sysbench: mysqld did not become ready within 120s" >&2
-  docker logs "$SYSBENCH_CONTAINER" 2>&1 | tail -50 >&2
+  docker logs "$SYSBENCH_MYSQLD_CONTAINER" 2>&1 | tail -50 >&2
   return 1
 }
 
 sysbench_start_mysqld() {
-  docker rm -f "$SYSBENCH_CONTAINER" >/dev/null 2>&1 || true
-  docker run -d --name "$SYSBENCH_CONTAINER" \
+  docker rm -f "$SYSBENCH_MYSQLD_CONTAINER" "$SYSBENCH_CLIENT_CONTAINER" \
+    >/dev/null 2>&1 || true
+  docker network rm "$SYSBENCH_NETWORK" >/dev/null 2>&1 || true
+  docker network create "$SYSBENCH_NETWORK" >/dev/null
+  mkdir -p "$SYSBENCH_OUTPUT_DIR"
+  local abs_output
+  abs_output="$(cd "$SYSBENCH_OUTPUT_DIR" && pwd)"
+  docker run -d --name "$SYSBENCH_MYSQLD_CONTAINER" \
+    --network "$SYSBENCH_NETWORK" \
     --cpus="$SYSBENCH_CPUS" \
     --memory="$SYSBENCH_MEMORY" \
     -e MYSQL_ROOT_PASSWORD="$SYSBENCH_ROOT_PW" \
-    "$SYSBENCH_IMAGE" \
+    "$SYSBENCH_MYSQLD_IMAGE" \
     --max-heap-table-size=4G \
     --innodb-buffer-pool-size=128M \
+    >/dev/null
+  docker run -d --name "$SYSBENCH_CLIENT_CONTAINER" \
+    --network "$SYSBENCH_NETWORK" \
+    -v "$abs_output:/output" \
+    "$SYSBENCH_CLIENT_IMAGE" \
+    sleep infinity \
     >/dev/null
   sysbench_wait_mysqld
   mysql_exec < tests/sysbench/prepare.sql
 }
 
 sysbench_stop_mysqld() {
-  docker rm -f "$SYSBENCH_CONTAINER" >/dev/null 2>&1 || true
+  docker rm -f "$SYSBENCH_MYSQLD_CONTAINER" "$SYSBENCH_CLIENT_CONTAINER" \
+    >/dev/null 2>&1 || true
+  docker network rm "$SYSBENCH_NETWORK" >/dev/null 2>&1 || true
 }
 
-# Set the default storage engine. New tables created without an explicit
-# ENGINE clause use this. Matrix script calls before each `sysbench
-# prepare` so the test tables land on the engine under measurement.
 sysbench_set_engine() {
   mysql_query "SET GLOBAL default_storage_engine = '$1';"
 }

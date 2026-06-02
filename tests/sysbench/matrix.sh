@@ -95,8 +95,7 @@ done
 
 echo "matrix: wrote $cell_total cell files to $SYSBENCH_OUTPUT_DIR"
 
-cells_glob=("$SYSBENCH_OUTPUT_DIR"/RUSTY-*.json "$SYSBENCH_OUTPUT_DIR"/MEMORY-*.json)
-jq -s '.' "${cells_glob[@]}" \
-  | docker exec -i "$SYSBENCH_CONTAINER" python3 /usr/local/bin/aggregate.py \
+docker exec "$SYSBENCH_CLIENT_CONTAINER" sh -c \
+  'jq -s "." /output/RUSTY-*.json /output/MEMORY-*.json | python3 /usr/local/bin/aggregate.py' \
   > "$SYSBENCH_OUTPUT_DIR/matrix.json"
 echo "matrix: aggregated → $SYSBENCH_OUTPUT_DIR/matrix.json"
