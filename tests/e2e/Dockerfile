@@ -70,11 +70,10 @@ RUN case "$TARGETARCH" in \
 ENV MYSQL_SOURCE_DIR=/workspace/mysql-server \
     MYSQL_BUILD_DIR=/workspace/build/mysql
 
-COPY . .
-
-RUN echo "=== /workspace ===" && ls -la /workspace && \
-    echo "=== /workspace/benches ===" && ls -la /workspace/benches 2>&1 || echo "benches not found" && \
-    echo "=== Cargo.toml [[bench]] ===" && grep -A 3 "\[\[bench" /workspace/Cargo.toml
+COPY Cargo.toml Cargo.lock build.rs rust-toolchain.toml ./
+COPY src ./src
+COPY shim ./shim
+COPY examples ./examples
 
 RUN MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release -p engine
 

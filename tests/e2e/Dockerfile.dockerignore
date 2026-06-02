@@ -7,6 +7,7 @@
 !src
 !shim
 !examples
+!benches
 !mysql-server
 
 mysql-server/.git

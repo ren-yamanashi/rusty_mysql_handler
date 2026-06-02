@@ -75,8 +75,8 @@ jobs:
           file: tests/e2e/Dockerfile
           tags: rusty-mysql-handler-e2e:latest
           load: true
-          cache-from: type=gha,scope=${{ matrix.arch }}-v2
-          cache-to: type=gha,scope=${{ matrix.arch }}-v2,mode=max
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
 
       - name: Run smoke
         if: steps.arm64_gate.outputs.skip != 'true'
