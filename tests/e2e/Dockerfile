@@ -70,15 +70,17 @@ RUN case "$TARGETARCH" in \
 ENV MYSQL_SOURCE_DIR=/workspace/mysql-server \
     MYSQL_BUILD_DIR=/workspace/build/mysql
 
+# Cargo parses every `[[bench]]` entry in the root manifest and requires
+# the source file to exist, even when `cargo build -p engine` itself
+# never compiles the bench. Copy `benches/` early so it lands in the
+# build context before any cached layers reference subsequent files;
+# placing it later was insufficient because gha-cache lineage from the
+# pre-benches era could not resolve `/benches` in the loaded context.
+COPY benches ./benches
 COPY Cargo.toml Cargo.lock build.rs rust-toolchain.toml ./
 COPY src ./src
 COPY shim ./shim
 COPY examples ./examples
-# Cargo parses every `[[bench]]` entry in the root manifest and requires
-# the source file to exist, even when `cargo build -p engine` itself
-# never compiles the bench. Copying `benches/` keeps the manifest valid
-# without dragging bench dev-deps into the plugin binary.
-COPY benches ./benches
 
 RUN MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release -p engine
 
