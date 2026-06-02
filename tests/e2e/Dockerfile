@@ -74,6 +74,7 @@ COPY Cargo.toml Cargo.lock build.rs rust-toolchain.toml ./
 COPY src ./src
 COPY shim ./shim
 COPY examples ./examples
+COPY benches ./benches
 
 RUN MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release -p engine
 
