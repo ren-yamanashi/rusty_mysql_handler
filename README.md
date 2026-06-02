@@ -1,9 +1,9 @@
 <h1 align="center">Rusty MySQL Handler</h1>
 <p align="center">Build MySQL storage engine plugins in Rust.</p>
 
-> **Experimental.** This project is currently experimental. APIs are
-> unstable, behaviour may change between releases, and it is not yet
-> ready for production use.
+
+> [!WARNING]
+> This project is currently experimental. APIs are unstable, behaviour may change between releases, and it is not yet ready for production use.
 
 ## 📦 Installation
 
@@ -20,8 +20,7 @@ mysql-handler = "0.1"
 
 ## 🚀 Usage
 
-Implement the `StorageEngine` trait in a `cdylib` crate, then `INSTALL
-PLUGIN` it into a running `mysql:8.4` server.
+Implement the `StorageEngine` trait in a `cdylib` crate, then `INSTALL PLUGIN` it into a running `mysql:8.4` server.
 
 #### Prerequisites
 
@@ -70,8 +69,7 @@ impl StorageEngine for MyEngine {
 }
 ```
 
-Plugin manifest macro: copy from
-[`examples/engine/src/lib.rs`](./examples/engine/src/lib.rs).
+Plugin manifest macro: copy from [`examples/engine/src/lib.rs`](./examples/engine/src/lib.rs).
 
 #### 3. Build
 
@@ -90,8 +88,7 @@ CREATE TABLE t (id INT) ENGINE=MY_ENGINE;
 
 ## ❗ Issue
 
-If you have any questions or suggestions, please open an
-[issue](https://github.com/ren-yamanashi/rusty_mysql_handler/issues).
+If you have any questions or suggestions, please open an [issue](https://github.com/ren-yamanashi/rusty_mysql_handler/issues).
 
 ## ©️ License
 
