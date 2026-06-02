@@ -44,6 +44,10 @@ impl FfiBoundary {
     /// - `Ok(Ok(()))` → `0`
     /// - `Ok(Err(e))` → `e.to_mysql_errno()`
     /// - `Err(_)` (panic) → `HA_ERR_INTERNAL_ERROR`
+    ///
+    /// `#[inline]` lets the per-callback wrapping fold into each
+    /// `rust__handler__*` site; see `benches/callback_overhead/` for
+    /// the per-call measurements that justify the hint.
     #[inline]
     pub fn run<F>(f: F) -> i32
     where
@@ -62,6 +66,10 @@ impl FfiBoundary {
     /// Variant for callbacks whose C++ signature returns void. Panics are
     /// swallowed (and logged) so the server stays alive; errors cannot be
     /// reported back to MySQL through a void return.
+    ///
+    /// `#[inline]` lets the per-callback wrapping fold into each
+    /// `rust__handler__*` site; see `benches/callback_overhead/` for
+    /// the per-call measurements that justify the hint.
     #[inline]
     pub fn run_void<F>(f: F)
     where
@@ -76,6 +84,10 @@ impl FfiBoundary {
     /// Variant for callbacks that return a non-`Result` value (pointer, flag
     /// bitfield, etc.). Returns `default` on panic so the C++ side always
     /// observes a well-defined value rather than an unwound stack.
+    ///
+    /// `#[inline]` lets the per-callback wrapping fold into each
+    /// `rust__handler__*` site; see `benches/callback_overhead/` for
+    /// the per-call measurements that justify the hint.
     #[inline]
     pub fn run_default<T, F>(default: T, f: F) -> T
     where

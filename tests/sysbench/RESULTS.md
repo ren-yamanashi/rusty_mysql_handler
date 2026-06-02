@@ -1,9 +1,8 @@
 # Performance Results
 
-Per [p6-05 design](../../.claude/tasks/p6-05-perf-design.md) and
-[implementation plan](../../.claude/tasks/p6-05-perf-implementation.md).
-This file is populated session-by-session; the headline table at the
-top is always the most recent canonical session.
+Results of the sysbench-driven plugin performance baseline. Populated
+session-by-session; the headline table at the top is always the most
+recent canonical session.
 
 ## Environment
 
@@ -23,10 +22,11 @@ top is always the most recent canonical session.
 | sysbench version | _placeholder_ |
 | N (trials), warmup, run duration | _placeholder_ |
 
-## Phase 0 — Captured callback profile per scenario
+## Callback profile per scenario
 
-Per-transaction `Yᵢ` values for each callback, captured per
-[implementation plan](../../.claude/tasks/p6-05-perf-implementation.md#phase-0-capture-method).
+Per-transaction `Yᵢ` values for each callback, captured from
+`SHOW SESSION STATUS LIKE 'Handler_%'` deltas (with per-scenario
+formulae for callbacks the `Handler_*` family does not cover).
 
 | Callback | `oltp_point_select` | `oltp_read_only` | `oltp_read_write` |
 |---|---|---|---|
@@ -43,10 +43,11 @@ Per-transaction `Yᵢ` values for each callback, captured per
 | `info` | _placeholder_ | _placeholder_ | _placeholder_ |
 
 (`rnd_init` / `rnd_end` hard-coded to 0 for `oltp_*` scenarios; an
-assertion in `phase0.sh` confirms `Handler_read_rnd_next` delta is 0.
-If non-zero, the cell shows the discovered value with a flag.)
+assertion in the capture script confirms `Handler_read_rnd_next`
+delta is 0. If non-zero, the cell shows the discovered value with
+a flag.)
 
-## L1 — Per-callback FFI overhead
+## Per-callback FFI overhead
 
 Measured by `cargo bench --bench callback_overhead`. Δ = `via_ffi −
 native`. `via_fn_ptr − native` is an indirect-call upper bound
@@ -65,7 +66,7 @@ native`. `via_fn_ptr − native` is an indirect-call upper bound
 | `delete_row` | _placeholder_ | _placeholder_ | _placeholder_ | _placeholder_ |
 | `info` | _placeholder_ | _placeholder_ | _placeholder_ | _placeholder_ |
 
-## L2 — OLTP throughput (rusty vs MEMORY)
+## OLTP throughput (rusty vs MEMORY)
 
 Measured by `make perf-matrix`. tps is the median across N trials;
 `stddev/median` is the variance ratio diagnostic. Cells with
@@ -110,26 +111,27 @@ Measured by `make perf-matrix`. tps is the median across N trials;
 | rusty | oltp_read_write | 16 | 100k | _placeholder_ | _placeholder_ | — | _placeholder_ |
 | MEMORY | oltp_read_write | 16 | 100k | _placeholder_ | _placeholder_ | — | _placeholder_ |
 
-## Composing the two
+## Composing per-callback and OLTP measurements
 
-PR 3 fills this section using the formulae from
-[design § Integrating L1 + L2](../../.claude/tasks/p6-05-perf-design.md#integrating-l1--l2):
+A canonical session fills this section using:
 
-- `FFI_tx = Σᵢ Yᵢ × Zᵢ` (ns), summed over callbacks present in the scenario per Phase 0
+- `FFI_tx = Σᵢ Yᵢ × Zᵢ` (ns), summed over callbacks present in the
+  scenario per the callback-profile table above
 - `Gap = T_rusty − T_memory` (ns)
 - `share = FFI_tx / Gap`
-- `residual = Gap − FFI_tx`, attributable to BTreeMap-vs-MEMORY-BTREE structural diff
+- `residual = Gap − FFI_tx`, attributable to the BTreeMap-vs-MEMORY-BTREE
+  structural difference
 
-A reconciliation paragraph relates the per-callback Δ (this file's
-L1 column) to PR #54's `FfiBoundary` wrapper bench: the per-callback
-Δ decomposes as `(FfiBoundary wrapper) + (EngineContext trait
-dispatch + opaque pointer cast)`. The two are overlapping measures
-of FFI cost from different angles, not independent quantities to
-sum.
+The per-callback Δ in the L1 table decomposes as
+`(FfiBoundary wrapper) + (EngineContext trait dispatch + opaque
+pointer cast)`. The wrapper component is also measured separately by
+the `ffi_overhead` bench in this repository; the two numbers are
+overlapping measures of FFI cost from different angles, not
+independent quantities to sum.
 
 ## Caveats
 
-- Per D4, the MEMORY-side index is `USING BTREE`. The residual after
+- The MEMORY-side index is `USING BTREE`. The residual after
   subtracting FFI cost is the constant-factor gap between
   `std::collections::BTreeMap` and MEMORY's B-tree implementation
   (node layout, allocator, cache behaviour) — not a HEAP-vs-tree gap.
@@ -138,9 +140,8 @@ sum.
   cost. Read it as an indirect-call upper bound, not a full PLT model.
 - Docker-on-macOS goes through a Linux VM. Primary results are taken
   on a Linux host with specs declared in the Environment header.
-- Variance > 10 % cells flagged and re-measured at higher N once
-  per [D2](../../.claude/tasks/p6-05-perf-design.md#d2-trial-count-n)
-  termination rule; if still > 10 %, reported as-is with the flag.
+- Variance > 10 % cells flagged and re-measured at higher N once;
+  if still > 10 %, reported as-is with the flag.
 - The reference engine is demo-grade; absolute numbers are not a
   claim about what a production engine built on this binding could
   achieve.
@@ -150,4 +151,4 @@ sum.
 | Session date | Plugin commit SHA | Headline (point_select 1t/10k rusty/MEMORY ratio) |
 |---|---|---|
 
-(empty until PR 3's canonical session lands)
+(empty until the first canonical session lands)
