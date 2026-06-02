@@ -1,0 +1,15 @@
+target/
+build/
+mysql-server/
+.git/
+.github/
+.claude/
+.cache/
+.ignore/
+.vscode/
+docs/
+tests/
+benches/common/snapshot/
+**/*.rs.bk
+.DS_Store
+compile_commands.json
