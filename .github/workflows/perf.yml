@@ -1,0 +1,79 @@
+name: Performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      sysbench_time:
+        description: Per-trial measurement window (seconds)
+        type: string
+        default: "30"
+      sysbench_warmup:
+        description: Per-trial warmup window (seconds)
+        type: string
+        default: "10"
+      sysbench_trials:
+        description: Trials per cell
+        type: string
+        default: "3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  canonical:
+    name: Canonical session (Linux x86_64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Build harness images
+        run: make perf-build-images
+
+      - name: Capture callback profile
+        env:
+          SYSBENCH_TIME: ${{ inputs.sysbench_time }}
+        run: make perf-callback-profile
+
+      - name: Run OLTP matrix
+        env:
+          SYSBENCH_TIME: ${{ inputs.sysbench_time }}
+          SYSBENCH_WARMUP: ${{ inputs.sysbench_warmup }}
+          SYSBENCH_TRIALS: ${{ inputs.sysbench_trials }}
+        run: make perf-matrix
+
+      - name: Collect environment metadata
+        if: always()
+        run: |
+          {
+            echo "=== runner ==="
+            uname -srm
+            grep 'model name' /proc/cpuinfo | head -1 || true
+            nproc
+            free -h | head -2
+            echo "=== docker ==="
+            docker version --format '{{.Server.Version}}'
+            echo "=== rust ==="
+            rustc --version 2>/dev/null || echo "(rustc not on host)"
+            echo "=== plugin sha ==="
+            git rev-parse HEAD
+          } > tests/sysbench/output/_env.txt
+          cat tests/sysbench/output/_env.txt
+
+      - name: Upload session artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perf-session-${{ github.run_id }}
+          path: tests/sysbench/output/
+          if-no-files-found: warn
+          retention-days: 90
