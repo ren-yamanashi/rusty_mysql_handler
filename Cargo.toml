@@ -16,15 +16,15 @@ links = "ha_rusty_shim"
 # Whitelist what ships to crates.io; excludes mysql-server submodule,
 # examples, tests, docs, and dev infra.
 include = [
-  "src/**/*.rs",
-  "shim/**/*.cc",
-  "shim/**/*.hpp",
-  "shim/**/*.h",
-  "shim/CMakeLists.txt",
-  "build.rs",
-  "Cargo.toml",
-  "README.md",
-  "LICENSE",
+  "/src/**/*.rs",
+  "/shim/**/*.cc",
+  "/shim/**/*.hpp",
+  "/shim/**/*.h",
+  "/shim/CMakeLists.txt",
+  "/build.rs",
+  "/Cargo.toml",
+  "/README.md",
+  "/LICENSE",
 ]
 
 [package.metadata.docs.rs]
