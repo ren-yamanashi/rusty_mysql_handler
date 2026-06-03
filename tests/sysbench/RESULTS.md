@@ -2,15 +2,16 @@
 
 Results of the sysbench-driven plugin performance baseline. Populated
 session-by-session; the headline table at the top is always the most
-recent canonical session.
+recent session.
 
-All sections — Callback profile, per-callback FFI overhead, OLTP
-throughput, and Composing — are filled below. The OLTP section was
-measured on macOS Docker Desktop with Rosetta amd64 emulation; both
-engines see the same emulation overhead so the **ratio** (rusty / MEMORY)
-is the load-bearing column, not the absolute tps. L1 per-callback FFI
-overhead is native arm64 (`cargo bench`); callback-profile `Yᵢ` are
-integer counter deltas insensitive to execution speed.
+All four tables — Callback profile, Per-callback FFI overhead, OLTP
+throughput, and the per-transaction FFI share analysis — are
+populated below. The OLTP table was measured on macOS Docker Desktop
+with Rosetta amd64 emulation; both engines see the same emulation
+overhead so the **ratio** (rusty / MEMORY) is the load-bearing
+column, not the absolute tps. Per-callback FFI overhead is native
+arm64 (`cargo bench`); callback-profile `Yᵢ` are integer counter
+deltas insensitive to execution speed.
 
 ## Environment
 
@@ -28,7 +29,7 @@ integer counter deltas insensitive to execution speed.
 | Plugin tree dirty flag | clean (release build, no local edits) |
 | `rustc --version` | 1.95.0 (59807616e 2026-04-14) |
 | sysbench version | 1.0.20 (debian bookworm-slim apt) |
-| N (trials), warmup, run duration | L1: `cargo bench` defaults (100 samples / 5 s warmup / 3 s measurement window); callback profile: `SYSBENCH_TRIALS=1 SYSBENCH_WARMUP=0 SYSBENCH_TIME=30` (warmup off so the `Handler_%` delta lines up with the measurement-run `tx` count) |
+| N (trials), warmup, run duration | Per-callback bench: `cargo bench` defaults (100 samples / 5 s warmup / 3 s measurement window); callback profile: `SYSBENCH_TRIALS=1 SYSBENCH_WARMUP=0 SYSBENCH_TIME=30` (warmup off so the `Handler_%` delta lines up with the measurement-run `tx` count) |
 
 ## Callback profile per scenario
 
@@ -156,7 +157,7 @@ The headline: rusty is within ±10 % of MEMORY across most cells and
 10k = 0.81×) are the same 1-thread cells where variance is highest;
 that asymmetry stays inside the noise band.
 
-## Composing per-callback and OLTP measurements
+## Per-transaction FFI share
 
 Take `oltp_point_select` at 1 thread / 10k rows as a worked example
 (the other cells follow the same shape):
@@ -170,7 +171,7 @@ From the callback-profile table for `oltp_point_select`:
 - `index_read_map`, `index_init`, `index_end`, `info`: `Yᵢ` = 1.0 each
 - Other callbacks: `Yᵢ` ≈ 0
 
-From the L1 table the per-callback Δ averages 0.54 ns, with
+From the per-callback overhead table, Δ averages 0.54 ns, with
 `index_read_map` at 0.63 ns. Plugging in:
 
 - `FFI_tx` = (1 × 0.63) + (1 × 0.54) + (1 × 0.55) + (1 × 0.54) ≈ **2.3 ns/tx**
@@ -200,7 +201,7 @@ either scenario.
 
 ## Caveats
 
-- L1 per-callback Δ was measured on Apple Silicon native arm64.
+- Per-callback Δ was measured on Apple Silicon native arm64.
   Absolute ns figures will differ on a Linux x86_64 host; the *shape*
   (consistent ~0.5–0.6 ns FFI delta independent of callback type)
   is the load-bearing finding.
@@ -220,5 +221,5 @@ either scenario.
 
 | Session date | Plugin commit SHA | Sections filled | Notes |
 |---|---|---|---|
-| 2026-06-02 | 78f5e9f | Environment, Callback profile, L1 | macOS arm64 (L1) + Rosetta-emulated mysqld (callback profile). L2 / Composing deferred at this point. |
-| 2026-06-03 | 4c2dc27 | + L2, Composing | macOS Rosetta amd64 emulation for the OLTP matrix; rusty / MEMORY ratio is the load-bearing column. |
+| 2026-06-02 | 78f5e9f | Environment, Callback profile, Per-callback FFI overhead | macOS arm64 (per-callback bench) + Rosetta-emulated mysqld (callback profile). OLTP throughput and the per-transaction FFI share analysis added in the next session. |
+| 2026-06-03 | 4c2dc27 | + OLTP throughput, Per-transaction FFI share | macOS Rosetta amd64 emulation for the OLTP matrix; rusty / MEMORY ratio is the load-bearing column. |

@@ -22,8 +22,8 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 # Dispatcher: `callback-profile` captures per-scenario callback counts,
-# `matrix` runs the L2 matrix. Build the harness image with the Makefile
-# target before invoking either subcommand.
+# `matrix` runs the OLTP throughput matrix. Build the harness image
+# with the Makefile target before invoking either subcommand.
 
 set -euo pipefail
 cd "$(dirname "$0")/../.."
