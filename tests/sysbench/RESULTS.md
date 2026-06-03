@@ -4,19 +4,17 @@
 
 - **Comparison**: rusty reference engine (this binding) vs MySQL
   built-in MEMORY engine, sysbench OLTP scenarios.
-- **OLTP throughput**: rusty / MEMORY = **0.81–1.18× across the
-  full 36-cell matrix**; **0.86–1.07× at 4 / 16 threads** where
-  per-trial variance settles.
+- **OLTP throughput**: rusty / MEMORY = **0.81–1.18× across 18
+  ratio cells** (3 scenarios × 3 thread counts × 2 datasets);
+  **0.86–1.07× at 4 / 16 threads** where per-trial variance settles.
 - **Per-callback FFI overhead**: ~**0.54 ns** per callback
   (Δ = FFI call − native direct call).
 - **Share of an OLTP transaction**: ≈ **0.004 %** at
   `oltp_point_select`, ≈ **0.03 %** at `oltp_read_only`.
 - **Verdict**: FFI cost is not where this binding pays the toll.
 
-Detailed tables follow. The OLTP measurement uses Rosetta amd64
-emulation on macOS, so absolute tps are not directly comparable to
-a Linux x86_64 host; both engines see the same overhead, so the
-ratio column is what's load-bearing.
+Detailed tables follow. OLTP numbers come from Rosetta amd64
+emulation on macOS, so read the ratio column, not absolute tps.
 
 ## Environment
 
@@ -129,12 +127,10 @@ the headline: FFI cost as a fraction of the full transaction.
 | `oltp_point_select` | ~2.3 ns | 56.4 µs | **0.004 %** |
 | `oltp_read_only` | ~358 ns | 1.3 ms | **0.03 %** |
 
-The per-callback Δ also decomposes as
-`(FfiBoundary wrapper) + (EngineContext trait dispatch + opaque
-pointer cast)`. The wrapper component is also measured separately
-by the `ffi_overhead` bench in this repository; the two numbers are
-overlapping measures of FFI cost from different angles, not
-independent quantities to sum.
+Per-callback Δ decomposes as `FfiBoundary wrapper +
+EngineContext trait dispatch + opaque pointer cast`. The wrapper
+component is also measured by the `ffi_overhead` bench; the two
+are overlapping views of the same cost, not additive.
 
 ## Caveats
 
