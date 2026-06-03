@@ -1,17 +1,22 @@
 # Performance Results
 
-Results of the sysbench-driven plugin performance baseline. Populated
-session-by-session; the headline table at the top is always the most
-recent session.
+## TL;DR
 
-All four tables — Callback profile, Per-callback FFI overhead, OLTP
-throughput, and the per-transaction FFI share analysis — are
-populated below. The OLTP table was measured on macOS Docker Desktop
-with Rosetta amd64 emulation; both engines see the same emulation
-overhead so the **ratio** (rusty / MEMORY) is the load-bearing
-column, not the absolute tps. Per-callback FFI overhead is native
-arm64 (`cargo bench`); callback-profile `Yᵢ` are integer counter
-deltas insensitive to execution speed.
+- **Comparison**: rusty reference engine (this binding) vs MySQL
+  built-in MEMORY engine, sysbench OLTP scenarios.
+- **OLTP throughput**: rusty / MEMORY = **0.81–1.18× across the
+  full 36-cell matrix**; **0.86–1.07× at 4 / 16 threads** where
+  per-trial variance settles.
+- **Per-callback FFI overhead**: ~**0.54 ns** per callback
+  (`via_ffi − native`).
+- **Share of an OLTP transaction**: ≈ **0.004 %** at
+  `oltp_point_select`, ≈ **0.03 %** at `oltp_read_only`.
+- **Verdict**: FFI cost is not where this binding pays the toll.
+
+Detailed tables follow. The OLTP measurement uses Rosetta amd64
+emulation on macOS, so absolute tps are not directly comparable to
+a Linux x86_64 host; both engines see the same overhead, so the
+ratio column is what's load-bearing.
 
 ## Environment
 
@@ -33,12 +38,8 @@ deltas insensitive to execution speed.
 
 ## Callback profile per scenario
 
-Per-transaction `Yᵢ` values, captured by
-`make perf-callback-profile`. `Handler_%` counters straddle a 30 s
-sysbench run per scenario; the count divided by the total transaction
-count gives `Yᵢ`. Counts are integer deltas reported by mysqld and do
-not depend on execution speed, so they are usable as canonical
-numbers despite the Rosetta-emulated mysqld.
+Per-transaction `Yᵢ` values from `make perf-callback-profile`:
+`Handler_%` counter delta / total tx count.
 
 | Callback | `oltp_point_select` | `oltp_read_only` | `oltp_read_write` |
 |---|---|---|---|
@@ -56,24 +57,18 @@ numbers despite the Rosetta-emulated mysqld.
 
 Notes:
 
-- `oltp_read_only` and `oltp_read_write` report non-zero `Handler_write`
-  / `Handler_read_rnd_next` even though `oltp_read_only` issues only
-  SELECTs. The reason is the `order_range` / `distinct_range` queries
-  in sysbench's standard OLTP mix that trigger internal temp tables
-  for ORDER BY / DISTINCT; the temp tables use the session default
-  storage engine (RUSTY in this capture) and the writes / sequential
-  reads are real per-tx work that the binding's FFI path absorbs.
-- `index_init` / `index_end` / `info` Yᵢ are inferred per the
-  scenario formula in the implementation plan (one per index-scan
-  statement / one per statement respectively). `position` is paired
-  with `rnd_pos`, both 0 for these scenarios.
+- `oltp_read_only` writes / sequential reads come from sysbench's
+  `order_range` / `distinct_range` queries materialising internal
+  temp tables on the session default engine.
+- `index_init` / `index_end` / `info` Yᵢ are inferred (one per
+  index-scan statement / one per statement); `position` is paired
+  with `rnd_pos`.
 
 ## Per-callback FFI overhead
 
-Measured by `cargo bench --bench callback_overhead` on Apple Silicon
-native arm64 (no Rosetta). Δ = `via_ffi − native`. `via_fn_ptr` is
-the indirect-call upper bound (function-pointer dispatch with the
-pointer fenced through `black_box`).
+`cargo bench --bench callback_overhead`, Apple Silicon arm64
+native. Δ = `via_ffi − native`. `via_fn_ptr` = indirect-call upper
+bound (pointer fenced through `black_box`).
 
 | Callback | via_ffi (ns) | native (ns) | Δ (ns) | via_fn_ptr (ns) |
 |---|---|---|---|---|
@@ -88,24 +83,15 @@ pointer fenced through `black_box`).
 | `delete_row` | 1.339 | 0.802 | 0.538 | 1.344 |
 | `info` | 1.341 | 0.801 | 0.540 | 1.372 |
 
-The per-callback FFI overhead is consistent at ~0.54 ns across the
-nine simpler callbacks; `index_read_map` runs slightly heavier
-(~0.63 ns) because the FFI body decodes both a write buffer and a
-read key plus a `RKeyFunction` flag, where the others touch one
-buffer at most. `via_fn_ptr` matches `via_ffi` within noise for most
-callbacks; `index_read_map`, `rnd_pos`, and `update_row` are the
-exceptions where the wider signature (more `extern "C"` arguments
-passed through a register-loaded function pointer) shows ~0.15 ns
-of register-pressure overhead on top of the FFI dispatch.
+Δ ≈ 0.54 ns across nine callbacks; `index_read_map` is heavier
+(~0.63 ns) due to its wider signature. `via_fn_ptr` ≈ `via_ffi`
+except for `index_read_map` / `rnd_pos` / `update_row` where wider
+argument lists add ~0.15 ns of register pressure.
 
 ## OLTP throughput (rusty vs MEMORY)
 
-Measured by `make perf-matrix` on macOS Docker Desktop with Rosetta
-amd64 emulation (the same caveat as the callback profile applies).
-`SYSBENCH_TIME=30, SYSBENCH_WARMUP=10, SYSBENCH_TRIALS=3`. tps is
-the median across 3 trials; `stddev/median` (the variance ratio
-listed under "tps σ/m") is the diagnostic. Cells with
-`stddev/median > 10 %` are flagged in the right column.
+`make perf-matrix`. tps is the median across 3 trials, σ/m is
+`stddev/median`, cells with σ/m > 10 % carry ⚠ in the flag column.
 
 | Engine | Scenario | Threads | Dataset | tps (median) | tps σ/m | p50 / p95 (ms) | rusty/MEM | Flag |
 |---|---|---|---|---|---|---|---|---|
@@ -146,58 +132,27 @@ listed under "tps σ/m") is the diagnostic. Cells with
 | rusty | oltp_read_write | 16 | 100k | 1 847.88 | 1.0 % | 8.65 / 38.25 | 1.01 | |
 | MEMORY | oltp_read_write | 16 | 100k | 1 831.37 | 0.7 % | 8.72 / 37.56 | — | |
 
-5 cells (3 rusty + 2 MEMORY) flag `stddev/median > 10 %`; all are at
-1 or 4 threads where low concurrency makes per-trial variance
-genuinely large rather than indicating a harness problem. Higher-
-thread cells settle.
-
-The headline: rusty is within ±10 % of MEMORY across most cells and
-0.86–1.07× at higher concurrency (4 / 16 threads). The few cells where rusty trails
-(`oltp_read_only` at 1t / 100k = 0.82×, `oltp_read_write` at 1t /
-10k = 0.81×) are the same 1-thread cells where variance is highest;
-that asymmetry stays inside the noise band.
+5 flagged cells are all at 1 or 4 threads; high-thread cells
+settle. Rusty trails most where variance is highest
+(`oltp_read_only` 1t/100k = 0.82×, `oltp_read_write` 1t/10k =
+0.81×); the 4 / 16 thread range is 0.86–1.07×.
 
 ## Per-transaction FFI share
 
-Take `oltp_point_select` at 1 thread / 10k rows as a worked example
-(the other cells follow the same shape):
+`FFI_tx` = `Σ Yᵢ × Δᵢ` (callbacks per tx × per-callback overhead).
+Tx wall time `T` = 1 / tps. Two scenarios, 1 thread / 10k rows:
 
-- `T_rusty` = 1 / 17 731.62 tps = 56.4 µs/tx
-- `T_memory` = 1 / 16 249.46 tps = 61.5 µs/tx
-- `Gap` = `T_rusty − T_memory` = **−5.1 µs/tx** (rusty is faster)
+| Scenario | FFI_tx | T (rusty) | FFI share |
+|---|---|---|---|
+| `oltp_point_select` | ~2.3 ns | 56.4 µs | **0.004 %** |
+| `oltp_read_only` | ~358 ns | 1.3 ms | **0.03 %** |
 
-From the callback-profile table for `oltp_point_select`:
-
-- `index_read_map`, `index_init`, `index_end`, `info`: `Yᵢ` = 1.0 each
-- Other callbacks: `Yᵢ` ≈ 0
-
-From the per-callback overhead table, Δ averages 0.54 ns, with
-`index_read_map` at 0.63 ns. Plugging in:
-
-- `FFI_tx` = (1 × 0.63) + (1 × 0.54) + (1 × 0.55) + (1 × 0.54) ≈ **2.3 ns/tx**
-
-So the binding adds ~2.3 ns of FFI cost on top of every
-`oltp_point_select` transaction whose wall time is ~56 µs. The FFI
-share of that 56 µs is **2.3 ns / 56 400 ns ≈ 0.004 %** — effectively
-zero. The rusty-vs-MEMORY gap (negative here: rusty is faster) is
-dominated by the structural difference between `BTreeMap` and
-MEMORY's BTREE plus measurement noise, not by FFI overhead.
-
-The per-callback Δ table above decomposes as
+The per-callback Δ also decomposes as
 `(FfiBoundary wrapper) + (EngineContext trait dispatch + opaque
 pointer cast)`. The wrapper component is also measured separately
 by the `ffi_overhead` bench in this repository; the two numbers are
 overlapping measures of FFI cost from different angles, not
 independent quantities to sum.
-
-The same arithmetic for `oltp_read_only` (14 read_keys + 400
-read_nexts + 101 rnd_nexts + 100 write_rows + 14 index_init /
-index_end + 15 info per tx) yields
-`FFI_tx` ≈ (14 × 0.63) + (400 × 0.54) + (101 × 0.55) + (100 × 0.54) +
-(28 × 0.54) + (15 × 0.54) ≈ 358 ns/tx; against a ~1.3 ms transaction
-(`T_rusty` = 1 / 766 tps ≈ 1.3 ms = 1 300 000 ns) that is still
-**~0.03 %**. FFI cost is not where this binding pays the toll, for
-either scenario.
 
 ## Caveats
 
