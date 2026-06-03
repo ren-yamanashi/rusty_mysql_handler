@@ -39,29 +39,10 @@ target arch is unset or does not match the downloaded asset. After the
 first arm64 base publish, the arm64 SHA pin needs to be set or the
 arm64 `Smoke` job will fail.
 
-## Releasing
-
-Driven by [`release-plz`](https://release-plz.dev/): every main push
-updates a rolling "Release" PR with the version bump (from Conventional
-Commits) and changelog. Merging that PR tags, publishes to crates.io,
-and creates the matching GitHub Release. The repo carries no
-`CHANGELOG.md` — GitHub Releases is the canonical history.
-
-The publish job runs in the **crates-io** GitHub environment. Configure
-under **Settings → Environments**:
-
-- Required reviewers (at least one maintainer)
-- Deployment branch restriction = `main`
-- Auth: trusted publishing (default; OIDC via
-  `rust-lang/crates-io-auth-action`), or `CARGO_REGISTRY_TOKEN` as a
-  fallback for the first publish
-
-`pr-title-lint.yml` enforces Conventional Commits on PR titles so
-release-plz can rely on them.
-
 ## Coding Conventions
 
 - Rust edition 2024; `rustfmt` + `clippy` (lints in `Cargo.toml`)
 - Every `extern "C"` callback wraps its body in `catch_unwind`
 - FFI naming: `rust__handler__method` (C++ → Rust),
   `mysql__Class__method` (Rust → C++)
+- PR titles follow Conventional Commits (enforced by `pr-title-lint.yml`)
