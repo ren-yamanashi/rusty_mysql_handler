@@ -13,18 +13,21 @@ keywords = ["mysql", "ffi", "plugin", "storage-engine", "handler"]
 categories = ["api-bindings", "database", "external-ffi-bindings"]
 rust-version = "1.85"
 links = "ha_rusty_shim"
-# Whitelist what ships to crates.io; excludes mysql-server submodule,
-# examples, tests, docs, and dev infra.
+# Whitelist what ships to crates.io. Leading "/" anchors each pattern
+# to the package root (gitignore syntax); without it "README.md" /
+# "LICENSE" would also match docs/api/README.md, tests/sysbench/README.md,
+# .claude/tasks/README.md, and every README.md / LICENSE inside the
+# mysql-server submodule.
 include = [
-  "src/**/*.rs",
-  "shim/**/*.cc",
-  "shim/**/*.hpp",
-  "shim/**/*.h",
-  "shim/CMakeLists.txt",
-  "build.rs",
-  "Cargo.toml",
-  "README.md",
-  "LICENSE",
+  "/src/**/*.rs",
+  "/shim/**/*.cc",
+  "/shim/**/*.hpp",
+  "/shim/**/*.h",
+  "/shim/CMakeLists.txt",
+  "/build.rs",
+  "/Cargo.toml",
+  "/README.md",
+  "/LICENSE",
 ]
 
 [package.metadata.docs.rs]
