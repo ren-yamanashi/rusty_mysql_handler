@@ -24,7 +24,7 @@
 # Dockerfile's `builder` stage (Makefile builds and tags
 # `rusty-plugin-build:local` first). sysbench / jq / python3 live in
 # the sibling `Dockerfile.client` so the EPEL drift problem of the
-# Oracle Linux base stays out of the canonical session.
+# Oracle Linux base stays out of the published measurements.
 
 FROM rusty-plugin-build:local AS plugin
 

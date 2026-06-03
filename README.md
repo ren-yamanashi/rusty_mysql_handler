@@ -86,6 +86,10 @@ INSTALL PLUGIN my_engine SONAME 'libmy_engine.so';
 CREATE TABLE t (id INT) ENGINE=MY_ENGINE;
 ```
 
+## 📊 Performance
+
+Per-callback FFI overhead, callback profile, and OLTP throughput live in [`tests/sysbench/RESULTS.md`](./tests/sysbench/RESULTS.md).
+
 ## ❗ Issue
 
 If you have any questions or suggestions, please open an [issue](https://github.com/ren-yamanashi/rusty_mysql_handler/issues).

@@ -24,7 +24,7 @@ drifts and patch-level pins go stale within months. Debian bookworm's
 apt archive ships a long-term-stable sysbench (`1.0.20+ds-5`), and
 snapshot.debian.org preserves historical packages if a session needs
 to be reproduced after Debian rolls a new release. Splitting the
-client out of the server image keeps the canonical session
+client out of the server image keeps the published numbers
 reproducible without policing EPEL drift.
 
 ## What gets measured
@@ -73,7 +73,8 @@ tests/sysbench/output/
 
 The aggregated `matrix.json` feeds `RESULTS.md`'s OLTP throughput
 table; `callback_profile.json` feeds the callback-profile table.
-`RESULTS.md` itself is filled by a separate canonical session.
+`RESULTS.md` is updated by hand from these outputs when a new
+measurement session is recorded.
 
 ## Tunables
 
