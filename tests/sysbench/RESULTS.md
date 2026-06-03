@@ -151,7 +151,7 @@ genuinely large rather than indicating a harness problem. Higher-
 thread cells settle.
 
 The headline: rusty is within ±10 % of MEMORY across most cells and
-0.99–1.18× at higher concurrency. The few cells where rusty trails
+0.86–1.07× at higher concurrency (4 / 16 threads). The few cells where rusty trails
 (`oltp_read_only` at 1t / 100k = 0.82×, `oltp_read_write` at 1t /
 10k = 0.81×) are the same 1-thread cells where variance is highest;
 that asymmetry stays inside the noise band.
@@ -190,11 +190,12 @@ overlapping measures of FFI cost from different angles, not
 independent quantities to sum.
 
 The same arithmetic for `oltp_read_only` (14 read_keys + 400
-read_nexts + 14 index_init / index_end + 15 info per tx) yields
-`FFI_tx` ≈ (14 × 0.63) + (400 × 0.54) + (28 × 0.54) + (15 × 0.54) +
-(100 × 0.54) ≈ 305 ns/tx; against a ~1.3 ms transaction
+read_nexts + 101 rnd_nexts + 100 write_rows + 14 index_init /
+index_end + 15 info per tx) yields
+`FFI_tx` ≈ (14 × 0.63) + (400 × 0.54) + (101 × 0.55) + (100 × 0.54) +
+(28 × 0.54) + (15 × 0.54) ≈ 358 ns/tx; against a ~1.3 ms transaction
 (`T_rusty` = 1 / 766 tps ≈ 1.3 ms = 1 300 000 ns) that is still
-**~0.02 %**. FFI cost is not where this binding pays the toll, for
+**~0.03 %**. FFI cost is not where this binding pays the toll, for
 either scenario.
 
 ## Caveats
@@ -220,4 +221,4 @@ either scenario.
 | Session date | Plugin commit SHA | Sections filled | Notes |
 |---|---|---|---|
 | 2026-06-02 | 78f5e9f | Environment, Callback profile, L1 | macOS arm64 (L1) + Rosetta-emulated mysqld (callback profile). L2 / Composing deferred at this point. |
-| 2026-06-03 | (this PR) | + L2, Composing | macOS Rosetta amd64 emulation for the OLTP matrix; rusty / MEMORY ratio is the load-bearing column. |
+| 2026-06-03 | 4c2dc27 | + L2, Composing | macOS Rosetta amd64 emulation for the OLTP matrix; rusty / MEMORY ratio is the load-bearing column. |

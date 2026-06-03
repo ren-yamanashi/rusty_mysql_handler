@@ -88,7 +88,7 @@ CREATE TABLE t (id INT) ENGINE=MY_ENGINE;
 
 ## 📊 Performance
 
-Per-callback FFI overhead, callback profile, and (when filled) OLTP throughput live in [`tests/sysbench/RESULTS.md`](./tests/sysbench/RESULTS.md).
+Per-callback FFI overhead, callback profile, and OLTP throughput live in [`tests/sysbench/RESULTS.md`](./tests/sysbench/RESULTS.md).
 
 ## ❗ Issue
 
