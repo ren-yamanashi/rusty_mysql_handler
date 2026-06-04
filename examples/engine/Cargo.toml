@@ -16,3 +16,6 @@ workspace = true
 
 [dependencies]
 mysql-handler = { path = "../..", version = "0.1.0" }
+
+[build-dependencies]
+mysql-handler-build = { path = "../../mysql-handler-build", version = "0.1.0" }
