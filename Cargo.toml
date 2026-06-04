@@ -32,7 +32,7 @@ include = [
 rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace]
-members = ["examples/engine"]
+members = ["examples/engine", "mysql-handler-build"]
 
 [dependencies]
 tracing = "0.1.41"

@@ -254,6 +254,7 @@ name = "engine"
 version = "0.1.0"
 dependencies = [
  "mysql-handler",
+ "mysql-handler-build",
 ]
 
 [[package]]
@@ -394,6 +395,10 @@ dependencies = [
  "flate2",
  "tracing",
 ]
+
+[[package]]
+name = "mysql-handler-build"
+version = "0.1.0"
 
 [[package]]
 name = "nom"

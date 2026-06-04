@@ -1,0 +1,23 @@
+[package]
+name = "mysql-handler-build"
+version = "0.1.0"
+description = "Build-script helper for mysql-handler downstream engine cdylibs"
+readme = "README.md"
+authors = ["ren-yamanashi"]
+license = "GPL-2.0-only"
+edition = "2024"
+repository = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+homepage = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+documentation = "https://docs.rs/mysql-handler-build"
+keywords = ["mysql", "ffi", "plugin", "storage-engine", "build-helper"]
+categories = ["development-tools::build-utils"]
+rust-version = "1.85"
+include = [
+  "/src/**/*.rs",
+  "/Cargo.toml",
+  "/README.md",
+  "/LICENSE",
+]
+
+[lints]
+workspace = true
