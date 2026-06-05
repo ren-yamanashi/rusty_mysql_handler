@@ -20,40 +20,36 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Code generation for `#[plugin(...)]`.
-//!
-//! **Line-limit note.** This file slightly exceeds the 250-line ceiling
-//! because its single responsibility is emitting the `#[plugin]`
-//! expansion (manifest module, `pub static` triple, `EngineCapabilities`
-//! impl, and `rust__plugin_init`). The four pieces share token-stream
-//! plumbing; splitting them into sibling files would force each helper
-//! to take the same set of `PluginArgs` borrows through additional
-//! `pub(crate)` plumbing without simplifying the layout.
+//! Top-level orchestrator for `#[plugin(...)]` expansion. Each emitted
+//! fragment lives in its own submodule so this file just composes them.
 
 use std::ffi::CString;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Expr, ItemStruct, LitCStr, LitStr, TypePath};
+use syn::{ItemStruct, LitCStr, LitStr};
 
 use crate::args::PluginArgs;
-use crate::capability::Capability;
+
+mod capabilities_impl;
+mod manifest;
+mod plugin_init;
 
 pub(crate) fn plugin(args: &PluginArgs, target: &ItemStruct) -> syn::Result<TokenStream2> {
     let ty = &target.ident;
     let name_lit = cstr_lit(&args.name)?;
     let descr_lit = cstr_lit(&args.description)?;
     let author_lit = cstr_lit(&args.author)?;
-    let manifest_module = manifest_module();
-    let manifest_statics = manifest_statics(
+    let manifest_module = manifest::manifest_module();
+    let manifest_statics = manifest::manifest_statics(
         &name_lit,
         &descr_lit,
         &author_lit,
         &args.version,
         &args.license,
     );
-    let capabilities_impl = capabilities_impl(ty, &args.capabilities);
-    let plugin_init = plugin_init(ty, args.handlerton.as_ref());
+    let capabilities_impl = capabilities_impl::capabilities_impl(ty, &args.capabilities);
+    let plugin_init = plugin_init::plugin_init(ty, args.handlerton.as_ref());
 
     Ok(quote! {
         #target
@@ -62,199 +58,6 @@ pub(crate) fn plugin(args: &PluginArgs, target: &ItemStruct) -> syn::Result<Toke
         #capabilities_impl
         #plugin_init
     })
-}
-
-fn manifest_module() -> TokenStream2 {
-    quote! {
-        #[doc(hidden)]
-        #[allow(non_upper_case_globals, missing_docs, missing_debug_implementations)]
-        pub mod __mysql_handler_plugin {
-            use ::core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
-
-            #[repr(C)]
-            pub struct StMysqlPlugin {
-                pub type_: c_int,
-                pub info: *mut c_void,
-                pub name: *const c_char,
-                pub author: *const c_char,
-                pub descr: *const c_char,
-                pub license: c_int,
-                pub init: ::core::option::Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-                pub check_uninstall:
-                    ::core::option::Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-                pub deinit: ::core::option::Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-                pub version: c_uint,
-                pub status_vars: *mut c_void,
-                pub system_vars: *mut c_void,
-                pub reserved1: *mut c_void,
-                pub flags: c_ulong,
-            }
-
-            // SAFETY: fields are Copy POD or pointers to 'static
-            // linker-owned symbols; the struct is never mutated.
-            unsafe impl ::core::marker::Sync for StMysqlPlugin {}
-
-            unsafe extern "C" {
-                pub static rusty_storage_engine: [u8; 0];
-                pub fn rusty_init_func(p: *mut c_void) -> c_int;
-                pub fn rusty_deinit_func(p: *mut c_void) -> c_int;
-            }
-
-            pub const STORAGE_ENGINE_TYPE: c_int = 1;
-            pub const INTERFACE_VERSION: c_int = 0x010B;
-        }
-    }
-}
-
-fn manifest_statics(
-    name_lit: &LitCStr,
-    descr_lit: &LitCStr,
-    author_lit: &LitCStr,
-    version: &Expr,
-    license: &Expr,
-) -> TokenStream2 {
-    quote! {
-        #[unsafe(no_mangle)]
-        #[doc(hidden)]
-        pub static _mysql_plugin_interface_version_: ::core::ffi::c_int =
-            self::__mysql_handler_plugin::INTERFACE_VERSION;
-
-        // Routed through a `const` so the `pub static` carries a plain value;
-        // otherwise macOS LTO drops the symbol from the export trie.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        const __MYSQL_HANDLER_SIZEOF_ST_PLUGIN: ::core::ffi::c_int =
-            ::core::mem::size_of::<self::__mysql_handler_plugin::StMysqlPlugin>()
-                as ::core::ffi::c_int;
-
-        // Forced into __DATA on macOS so the Mach-O export trie keeps both
-        // 4-byte c_int statics distinct; Linux ELF does not need this.
-        #[unsafe(no_mangle)]
-        #[doc(hidden)]
-        #[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__data"))]
-        pub static _mysql_sizeof_struct_st_plugin_: ::core::ffi::c_int =
-            __MYSQL_HANDLER_SIZEOF_ST_PLUGIN;
-
-        #[unsafe(no_mangle)]
-        #[doc(hidden)]
-        pub static _mysql_plugin_declarations_:
-            [self::__mysql_handler_plugin::StMysqlPlugin; 2] = [
-            self::__mysql_handler_plugin::StMysqlPlugin {
-                type_: self::__mysql_handler_plugin::STORAGE_ENGINE_TYPE,
-                info: &raw const self::__mysql_handler_plugin::rusty_storage_engine
-                    as *mut ::core::ffi::c_void,
-                name: #name_lit.as_ptr(),
-                author: #author_lit.as_ptr(),
-                descr: #descr_lit.as_ptr(),
-                license: (#license).code(),
-                init: ::core::option::Option::Some(
-                    self::__mysql_handler_plugin::rusty_init_func,
-                ),
-                check_uninstall: ::core::option::Option::None,
-                deinit: ::core::option::Option::Some(
-                    self::__mysql_handler_plugin::rusty_deinit_func,
-                ),
-                version: #version,
-                status_vars: ::core::ptr::null_mut(),
-                system_vars: ::core::ptr::null_mut(),
-                reserved1: ::core::ptr::null_mut(),
-                flags: 0,
-            },
-            self::__mysql_handler_plugin::StMysqlPlugin {
-                type_: 0,
-                info: ::core::ptr::null_mut(),
-                name: ::core::ptr::null(),
-                author: ::core::ptr::null(),
-                descr: ::core::ptr::null(),
-                license: 0,
-                init: ::core::option::Option::None,
-                check_uninstall: ::core::option::Option::None,
-                deinit: ::core::option::Option::None,
-                version: 0,
-                status_vars: ::core::ptr::null_mut(),
-                system_vars: ::core::ptr::null_mut(),
-                reserved1: ::core::ptr::null_mut(),
-                flags: 0,
-            },
-        ];
-    }
-}
-
-fn plugin_init(ty: &syn::Ident, handlerton: Option<&TypePath>) -> TokenStream2 {
-    let handlerton_init = match handlerton {
-        Some(path) => quote! {
-            ::mysql_handler::runtime::register_handlerton(::std::boxed::Box::new(
-                <#path as ::core::default::Default>::default(),
-            ));
-        },
-        None => quote! {},
-    };
-    quote! {
-        /// Plugin entry point; the shim calls this once at `INSTALL PLUGIN`.
-        ///
-        /// # Safety
-        /// Called once on the mysqld thread running `INSTALL PLUGIN`;
-        /// panic-safe via the `FfiBoundary` wrapper.
-        #[unsafe(no_mangle)]
-        #[doc(hidden)]
-        pub unsafe extern "C" fn rust__plugin_init() {
-            ::mysql_handler::panic_guard::FfiBoundary::run_void(|| {
-                ::mysql_handler::runtime::register_engine_factory(|| {
-                    let engine: ::std::boxed::Box<
-                        dyn ::mysql_handler::engine::EngineCapabilities,
-                    > = ::std::boxed::Box::new(
-                        <#ty as ::core::default::Default>::default(),
-                    );
-                    engine
-                });
-                #handlerton_init
-            });
-        }
-    }
-}
-
-fn capabilities_impl(ty: &syn::Ident, caps: &[Capability]) -> TokenStream2 {
-    let mut overrides = TokenStream2::new();
-    for cap in caps {
-        overrides.extend(capability_override(*cap));
-    }
-    quote! {
-        impl ::mysql_handler::engine::EngineCapabilities for #ty {
-            #overrides
-        }
-    }
-}
-
-fn capability_override(cap: Capability) -> TokenStream2 {
-    match cap {
-        Capability::Indexed => quote! {
-            fn as_indexed(
-                &mut self,
-            ) -> ::core::option::Option<&mut dyn ::mysql_handler::engine::IndexedEngine> {
-                ::core::option::Option::Some(self)
-            }
-        },
-        Capability::Transactional => quote! {
-            fn as_transactional(
-                &mut self,
-            ) -> ::core::option::Option<&mut dyn ::mysql_handler::engine::TransactionalEngine> {
-                ::core::option::Option::Some(self)
-            }
-        },
-        Capability::BulkLoad => quote! {
-            fn as_bulk_load(
-                &mut self,
-            ) -> ::core::option::Option<&mut dyn ::mysql_handler::engine::BulkLoadEngine> {
-                ::core::option::Option::Some(self)
-            }
-        },
-        Capability::Secondary => quote! {
-            fn as_secondary(
-                &mut self,
-            ) -> ::core::option::Option<&mut dyn ::mysql_handler::engine::SecondaryEngine> {
-                ::core::option::Option::Some(self)
-            }
-        },
-    }
 }
 
 fn cstr_lit(lit: &LitStr) -> syn::Result<LitCStr> {

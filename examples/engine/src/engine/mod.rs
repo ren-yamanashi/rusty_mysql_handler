@@ -20,16 +20,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `TrivialEngine`: the reference `StorageEngine` + `IndexedEngine`
-//! implementation.
-//!
-//! Storage is a sorted [`TableStore`](crate::store::TableStore) per
-//! table (a `BTreeMap<Key, Vec<u8>>`). The two impl blocks here
-//! dispatch each trait method into a thin helper on a sibling module:
+//! `TrivialEngine`: the reference `StorageEngine` implementation.
+//! The `IndexedEngine` impl lives next door in [`indexed_impl`]; both
+//! impl blocks dispatch into the same helpers under `engine/`:
 //!
 //! - [`scan`] — cursor / snapshot / range / index lookup machinery.
 //! - [`crud`] — non-transactional `update_row` / `delete_row`.
 //! - [`stats`] — `index_flags`, `records_in_range`, auto-increment.
+//!
+//! Storage is a sorted [`TableStore`](crate::store::TableStore) per
+//! table (a `BTreeMap<Key, Vec<u8>>`).
 //!
 //! `update_row` / `delete_row` route through the per-connection
 //! [`TrivialTxn`](crate::trivial_txn::TrivialTxn) op log whenever the
@@ -39,12 +39,11 @@
 //! context is attached.
 //!
 //! **Line-limit note.** This file exceeds the 250-line ceiling because
-//! its single responsibility is the `impl StorageEngine` /
-//! `impl IndexedEngine` pair for `TrivialEngine` (one trait impl per
-//! type for each of the two sub-traits, per the coding-style
-//! exemption). Splitting either impl into a sibling module would force
-//! the helper layer in `scan` / `crud` / `stats` to grow a public
-//! re-export across the boundary purely to keep the line count down.
+//! its single responsibility is the `impl StorageEngine for
+//! TrivialEngine` block (one `impl Trait for Type` per the
+//! coding-style exemption). Splitting the block by method group would
+//! force every virtual to grow a public re-export across two modules
+//! purely to keep the line count down.
 
 use std::ffi::CStr;
 
@@ -55,6 +54,7 @@ use crate::store::{self, Key, TableMeta};
 use scan::ScanDir;
 
 mod crud;
+mod indexed_impl;
 mod lookup;
 mod scan;
 mod stats;
@@ -259,87 +259,5 @@ impl StorageEngine for TrivialEngine {
         self.scan_pos = None;
         self.last_search_key = None;
         Ok(())
-    }
-}
-
-impl IndexedEngine for TrivialEngine {
-    fn index_flags(&self, idx: u32, _part: u32, _all_parts: bool) -> u32 {
-        self.index_flags_for(idx)
-    }
-
-    fn index_init(&mut self, idx: u32, _sorted: bool) -> EngineResult {
-        self.active_idx = idx as usize;
-        self.refresh_snapshot();
-        Ok(())
-    }
-
-    fn index_end(&mut self) -> EngineResult {
-        self.snapshot.clear();
-        self.scan_pos = None;
-        self.last_search_key = None;
-        Ok(())
-    }
-
-    fn index_read_map(
-        &mut self,
-        buf: &mut [u8],
-        key: &[u8],
-        find_flag: RKeyFunction,
-    ) -> EngineResult {
-        self.index_read_at(buf, key, find_flag)
-    }
-
-    fn index_next(&mut self, buf: &mut [u8]) -> EngineResult {
-        self.scan_dir = ScanDir::Forward;
-        self.yield_and_advance(buf)
-    }
-
-    fn index_prev(&mut self, buf: &mut [u8]) -> EngineResult {
-        self.scan_dir = ScanDir::Backward;
-        self.last_search_key = None;
-        self.yield_and_advance(buf)
-    }
-
-    fn index_first(&mut self, buf: &mut [u8]) -> EngineResult {
-        self.scan_pos = (!self.snapshot.is_empty()).then_some(0);
-        self.scan_dir = ScanDir::Forward;
-        self.last_search_key = None;
-        self.yield_and_advance(buf)
-    }
-
-    fn index_last(&mut self, buf: &mut [u8]) -> EngineResult {
-        self.scan_pos = self.snapshot.len().checked_sub(1);
-        self.scan_dir = ScanDir::Backward;
-        self.last_search_key = None;
-        self.yield_and_advance(buf)
-    }
-
-    fn index_next_same(&mut self, buf: &mut [u8], key: &[u8]) -> EngineResult {
-        self.index_next_same_at(buf, key)
-    }
-
-    fn records_in_range(
-        &mut self,
-        inx: u32,
-        min: Option<RangeKey<'_>>,
-        max: Option<RangeKey<'_>>,
-    ) -> Option<u64> {
-        self.records_in_range_for(inx, min, max)
-    }
-
-    fn read_range_first(
-        &mut self,
-        buf: &mut [u8],
-        start: Option<RangeKey<'_>>,
-        end: Option<RangeKey<'_>>,
-        _eq_range: bool,
-        _sorted: bool,
-    ) -> EngineResult {
-        self.read_range_first_at(buf, start, end)
-    }
-
-    fn read_range_next(&mut self, buf: &mut [u8]) -> EngineResult {
-        self.scan_dir = ScanDir::Forward;
-        self.yield_and_advance(buf)
     }
 }

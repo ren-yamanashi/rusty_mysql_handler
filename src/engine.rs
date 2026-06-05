@@ -28,7 +28,6 @@ use std::ffi::CStr;
 use crate::sys;
 
 mod bulk_access;
-mod bulk_load;
 mod capabilities;
 mod cost_estimate;
 mod error;
@@ -38,11 +37,8 @@ mod range_key;
 mod reset_cached_state;
 mod rkey_function;
 mod sampling_method;
-mod secondary;
-mod transactional;
 
 pub use bulk_access::BulkAccess;
-pub use bulk_load::BulkLoadEngine;
 pub use capabilities::EngineCapabilities;
 pub use cost_estimate::CostEstimate;
 pub use error::{EngineError, EngineResult};
@@ -52,8 +48,6 @@ pub use range_key::RangeKey;
 pub use reset_cached_state::ResetCachedState;
 pub use rkey_function::RKeyFunction;
 pub use sampling_method::SamplingMethod;
-pub use secondary::SecondaryEngine;
-pub use transactional::TransactionalEngine;
 
 /// The safe interface every storage engine implements.
 ///

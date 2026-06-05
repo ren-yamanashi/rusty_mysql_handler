@@ -20,19 +20,33 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Capability sub-trait reserved for secondary-engine handler callbacks.
+//! `EngineCapabilities` impl emitted from the `capabilities = [...]` list.
 
-use super::StorageEngine;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
 
-/// Opt-in sub-trait reserved for secondary-engine `load_table` /
-/// `unload_table` and the handlerton-level secondary-engine callbacks.
-///
-/// The trait is intentionally empty in this revision: the relevant methods
-/// stay on [`StorageEngine`] and the handlerton today, with the migration
-/// scheduled for a follow-up cycle. The marker exists so
-/// [`EngineCapabilities`] can advertise secondary-engine intent and the
-/// `#[plugin]` macro can accept `capabilities = [Secondary]` without rewiring
-/// the underlying callback dispatch.
-///
-/// [`EngineCapabilities`]: crate::engine::EngineCapabilities
-pub trait SecondaryEngine: StorageEngine {}
+use crate::capability::Capability;
+
+pub(super) fn capabilities_impl(ty: &syn::Ident, caps: &[Capability]) -> TokenStream2 {
+    let mut overrides = TokenStream2::new();
+    for cap in caps {
+        overrides.extend(capability_override(*cap));
+    }
+    quote! {
+        impl ::mysql_handler::engine::EngineCapabilities for #ty {
+            #overrides
+        }
+    }
+}
+
+fn capability_override(cap: Capability) -> TokenStream2 {
+    match cap {
+        Capability::Indexed => quote! {
+            fn as_indexed(
+                &mut self,
+            ) -> ::core::option::Option<&mut dyn ::mysql_handler::engine::IndexedEngine> {
+                ::core::option::Option::Some(self)
+            }
+        },
+    }
+}

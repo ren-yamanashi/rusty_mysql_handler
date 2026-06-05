@@ -23,15 +23,12 @@
 //! Capability dispatcher super-trait used to advertise optional sub-traits.
 
 use super::StorageEngine;
-use super::bulk_load::BulkLoadEngine;
 use super::indexed::IndexedEngine;
-use super::secondary::SecondaryEngine;
-use super::transactional::TransactionalEngine;
 
 /// Capability dispatcher every engine implements alongside [`StorageEngine`].
 ///
-/// The four `as_*` accessors return `Some(self)` when the engine opts into the
-/// corresponding sub-trait; the default returns `None` so the FFI boundary can
+/// [`as_indexed`](Self::as_indexed) returns `Some(self)` when the engine opts
+/// into [`IndexedEngine`]; the default returns `None` so the FFI boundary can
 /// fall back to `HA_ERR_WRONG_COMMAND` (or each callback's documented base
 /// behaviour) without dragging the unsupported callback set into every
 /// implementation.
@@ -47,24 +44,6 @@ pub trait EngineCapabilities: StorageEngine {
     /// Engine-supplied [`IndexedEngine`] view when index callbacks are wired,
     /// or `None` to leave them at the base behaviour.
     fn as_indexed(&mut self) -> Option<&mut dyn IndexedEngine> {
-        None
-    }
-
-    /// Engine-supplied [`TransactionalEngine`] view when transaction hooks are
-    /// wired, or `None` to leave them at the base behaviour.
-    fn as_transactional(&mut self) -> Option<&mut dyn TransactionalEngine> {
-        None
-    }
-
-    /// Engine-supplied [`BulkLoadEngine`] view when bulk-load callbacks are
-    /// wired, or `None` to leave them at the base behaviour.
-    fn as_bulk_load(&mut self) -> Option<&mut dyn BulkLoadEngine> {
-        None
-    }
-
-    /// Engine-supplied [`SecondaryEngine`] view when secondary-engine
-    /// callbacks are wired, or `None` to leave them at the base behaviour.
-    fn as_secondary(&mut self) -> Option<&mut dyn SecondaryEngine> {
         None
     }
 }

@@ -21,13 +21,6 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 //! Parser for `#[plugin(name = "...", ...)]` argument lists.
-//!
-//! **Line-limit note.** This file slightly exceeds the 250-line ceiling
-//! because its single responsibility is `PluginArgs` — the macro's
-//! parsed shape, validation, and unit tests for both. Splitting tests
-//! off would require promoting `pub(crate)` items to `pub` purely to
-//! expose them to a sibling module, broadening the macro-internal
-//! surface area for no gain.
 
 use syn::{
     Expr, Ident, LitStr, Token, TypePath, bracketed,
@@ -167,99 +160,4 @@ fn validate_name(name: &LitStr) -> syn::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{MAX_PLUGIN_NAME_LEN, PluginArgs, validate_name};
-    use crate::capability::Capability;
-    use proc_macro2::Span;
-    use syn::LitStr;
-    use syn::parse_quote;
-
-    fn lit(value: &str) -> LitStr {
-        LitStr::new(value, Span::call_site())
-    }
-
-    #[test]
-    fn empty_name_rejected() {
-        let err = validate_name(&lit("")).unwrap_err();
-        assert!(err.to_string().contains("non-empty"));
-    }
-
-    #[test]
-    fn nul_byte_in_name_rejected() {
-        let err = validate_name(&lit("rust\0engine")).unwrap_err();
-        assert!(err.to_string().contains("NUL byte"));
-    }
-
-    #[test]
-    fn overlong_name_rejected() {
-        let too_long = "a".repeat(MAX_PLUGIN_NAME_LEN + 1);
-        let err = validate_name(&lit(&too_long)).unwrap_err();
-        assert!(err.to_string().contains("at most"));
-    }
-
-    #[test]
-    fn name_at_limit_accepted() {
-        let at_limit = "a".repeat(MAX_PLUGIN_NAME_LEN);
-        validate_name(&lit(&at_limit)).unwrap();
-    }
-
-    #[test]
-    fn typical_name_accepted() {
-        validate_name(&lit("my_engine")).unwrap();
-    }
-
-    #[test]
-    fn capabilities_default_to_empty_when_omitted() {
-        let args: PluginArgs = parse_quote! {
-            name = "ex",
-            description = "ex",
-            version = 1u32,
-            license = License::Gpl,
-            author = "me",
-        };
-        assert!(args.capabilities.is_empty());
-    }
-
-    #[test]
-    fn capabilities_parse_all_four_variants() {
-        let args: PluginArgs = parse_quote! {
-            name = "ex",
-            description = "ex",
-            version = 1u32,
-            license = License::Gpl,
-            author = "me",
-            capabilities = [Indexed, Transactional, BulkLoad, Secondary],
-        };
-        assert_eq!(
-            args.capabilities,
-            vec![
-                Capability::Indexed,
-                Capability::Transactional,
-                Capability::BulkLoad,
-                Capability::Secondary,
-            ]
-        );
-    }
-
-    #[test]
-    fn unknown_capability_is_rejected() {
-        let err = match syn::parse_str::<PluginArgs>(
-            r#"name = "ex", description = "ex", version = 1u32, license = License::Gpl, author = "me", capabilities = [Unknown]"#,
-        ) {
-            Ok(_) => panic!("expected an unknown-capability error"),
-            Err(err) => err,
-        };
-        assert!(err.to_string().contains("unknown capability"));
-    }
-
-    #[test]
-    fn duplicate_capability_is_rejected() {
-        let err = match syn::parse_str::<PluginArgs>(
-            r#"name = "ex", description = "ex", version = 1u32, license = License::Gpl, author = "me", capabilities = [Indexed, Indexed]"#,
-        ) {
-            Ok(_) => panic!("expected a duplicate-capability error"),
-            Err(err) => err,
-        };
-        assert!(err.to_string().contains("listed more than once"));
-    }
-}
+mod tests;

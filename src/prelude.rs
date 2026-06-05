@@ -25,13 +25,13 @@
 //! `use mysql_handler::prelude::*;` brings the items most engine
 //! implementations reach for: the [`License`] tag for the plugin
 //! manifest, the [`plugin`] attribute macro that generates it, and the
-//! engine trait family ([`StorageEngine`], [`EngineCapabilities`] and the
-//! four capability sub-traits) plus the [`EngineError`] /
-//! [`EngineResult`] types.
+//! engine trait family ([`StorageEngine`], [`EngineCapabilities`],
+//! [`IndexedEngine`]) plus the [`EngineError`] / [`EngineResult`]
+//! types.
 
 pub use crate::engine::{
-    BulkLoadEngine, EngineCapabilities, EngineError, EngineResult, IndexedEngine, RKeyFunction,
-    RangeKey, SecondaryEngine, StorageEngine, TransactionalEngine,
+    EngineCapabilities, EngineError, EngineResult, IndexedEngine, RKeyFunction, RangeKey,
+    StorageEngine,
 };
 pub use crate::license::License;
 pub use mysql_handler_macros::plugin;

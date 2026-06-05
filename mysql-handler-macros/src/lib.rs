@@ -56,12 +56,12 @@ use crate::args::PluginArgs;
 ///   into the static initialiser at compile time.
 /// - `author`: author or organisation name (string literal).
 /// - `capabilities` (optional): bracketed list of sub-trait
-///   discriminants the engine opts into. Accepted values: `Indexed`,
-///   `Transactional`, `BulkLoad`, `Secondary`. Each entry emits an
-///   `as_*` override on the generated `EngineCapabilities` impl, so
-///   the engine must also `impl <SubTrait> for MyEngine` for every
-///   listed discriminant. Defaults to `[]` (engine declares no
-///   capabilities).
+///   discriminants the engine opts into. Accepted values: `Indexed`.
+///   Each entry emits an `as_*` override on the generated
+///   `EngineCapabilities` impl, so the engine must also implement the
+///   matching sub-trait. Defaults to `[]` (engine declares no
+///   capabilities). Additional capability identifiers are added when
+///   their sub-traits ship with non-empty method sets.
 /// - `handlerton` (optional): path to a `Default`-constructible
 ///   handlerton struct (typically a unit struct) implementing
 ///   [`mysql_handler::hton::Handlerton`]. When supplied the generated

@@ -30,23 +30,15 @@ use syn::Ident;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Capability {
     Indexed,
-    Transactional,
-    BulkLoad,
-    Secondary,
 }
 
 impl Capability {
     pub(crate) fn from_ident(ident: &Ident) -> syn::Result<Self> {
         match ident.to_string().as_str() {
             "Indexed" => Ok(Self::Indexed),
-            "Transactional" => Ok(Self::Transactional),
-            "BulkLoad" => Ok(Self::BulkLoad),
-            "Secondary" => Ok(Self::Secondary),
             other => Err(syn::Error::new(
                 ident.span(),
-                format!(
-                    "unknown capability `{other}` (expected one of: Indexed, Transactional, BulkLoad, Secondary)"
-                ),
+                format!("unknown capability `{other}` (expected one of: Indexed)"),
             )),
         }
     }
