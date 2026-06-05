@@ -9,10 +9,10 @@
 
 ```toml
 [dependencies]
-mysql-handler = "0.2"
+mysql-handler = "0.1"
 
 [build-dependencies]
-mysql-handler-build = "0.2"
+mysql-handler-build = "0.1"
 ```
 
 ## 🚀 Usage
@@ -35,10 +35,10 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-mysql-handler = "0.2"
+mysql-handler = "0.1"
 
 [build-dependencies]
-mysql-handler-build = "0.2"
+mysql-handler-build = "0.1"
 ```
 
 ```rust
