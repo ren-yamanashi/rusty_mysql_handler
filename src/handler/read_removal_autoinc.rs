@@ -136,8 +136,8 @@ mod tests {
     fn report_auto_increment_writes_block_and_signals_handled() {
         let (mut first, mut reserved) = (0, 0);
         assert!(report_auto_increment(
-            &mut first,
-            &mut reserved,
+            &raw mut first,
+            &raw mut reserved,
             Some((10, 5))
         ));
         assert_eq!((first, reserved), (10, 5));
@@ -146,7 +146,11 @@ mod tests {
     #[test]
     fn report_auto_increment_none_leaves_buffers_and_signals_unhandled() {
         let (mut first, mut reserved) = (7, 9);
-        assert!(!report_auto_increment(&mut first, &mut reserved, None));
+        assert!(!report_auto_increment(
+            &raw mut first,
+            &raw mut reserved,
+            None
+        ));
         assert_eq!((first, reserved), (7, 9));
     }
 

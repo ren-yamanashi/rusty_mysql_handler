@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn write_empty_string_view_writes_null_and_zero() {
-        let mut p: *const u8 = 0x1 as *const u8;
+        let mut p: *const u8 = std::ptr::dangling::<u8>();
         let mut l: usize = 7;
         write_empty_string_view(&raw mut p, &raw mut l);
         assert!(p.is_null());

@@ -86,57 +86,57 @@ mod tests {
     #[test]
     fn report_bool_writes_and_signals_handled() {
         let mut out = false;
-        assert!(report_bool(&mut out, Some(true)));
+        assert!(report_bool(&raw mut out, Some(true)));
         assert!(out);
     }
 
     #[test]
     fn report_bool_none_leaves_buffer_and_signals_unhandled() {
         let mut out = true;
-        assert!(!report_bool(&mut out, None));
+        assert!(!report_bool(&raw mut out, None));
         assert!(out);
     }
 
     #[test]
     fn report_i32_writes_and_signals_handled() {
         let mut out = 0;
-        assert!(report_i32(&mut out, Some(-5)));
+        assert!(report_i32(&raw mut out, Some(-5)));
         assert_eq!(out, -5);
     }
 
     #[test]
     fn report_i32_none_leaves_buffer_and_signals_unhandled() {
         let mut out = 9;
-        assert!(!report_i32(&mut out, None));
+        assert!(!report_i32(&raw mut out, None));
         assert_eq!(out, 9);
     }
 
     #[test]
     fn report_u64_writes_and_signals_handled() {
         let mut out = 0;
-        assert!(report_u64(&mut out, Some(42)));
+        assert!(report_u64(&raw mut out, Some(42)));
         assert_eq!(out, 42);
     }
 
     #[test]
     fn report_u64_none_leaves_buffer_and_signals_unhandled() {
         let mut out = 7;
-        assert!(!report_u64(&mut out, None));
+        assert!(!report_u64(&raw mut out, None));
         assert_eq!(out, 7);
     }
 
     #[test]
     fn report_f64_writes_and_signals_handled() {
-        let mut out = 0.0;
-        assert!(report_f64(&mut out, Some(2.5)));
-        assert_eq!(out, 2.5);
+        let mut out = 0.0_f64;
+        assert!(report_f64(&raw mut out, Some(2.5)));
+        assert_eq!(out.to_bits(), 2.5_f64.to_bits());
     }
 
     #[test]
     fn report_f64_none_leaves_buffer_and_signals_unhandled() {
-        let mut out = 9.0;
-        assert!(!report_f64(&mut out, None));
-        assert_eq!(out, 9.0);
+        let mut out = 9.0_f64;
+        assert!(!report_f64(&raw mut out, None));
+        assert_eq!(out.to_bits(), 9.0_f64.to_bits());
     }
 
     #[test]

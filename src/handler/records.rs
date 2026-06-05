@@ -163,7 +163,7 @@ mod tests {
     fn report_records_none_signals_unhandled_with_code_zero() {
         let mut num_rows = 7;
         let mut handled = true;
-        let code = report_records(&mut num_rows, &mut handled, None);
+        let code = report_records(&raw mut num_rows, &raw mut handled, None);
         assert_eq!(code, 0);
         assert!(!handled);
         assert_eq!(num_rows, 7);
@@ -173,7 +173,7 @@ mod tests {
     fn report_records_ok_writes_count_and_signals_handled() {
         let mut num_rows = 0;
         let mut handled = false;
-        let code = report_records(&mut num_rows, &mut handled, Some(Ok(42)));
+        let code = report_records(&raw mut num_rows, &raw mut handled, Some(Ok(42)));
         assert_eq!(code, 0);
         assert!(handled);
         assert_eq!(num_rows, 42);
@@ -184,8 +184,8 @@ mod tests {
         let mut num_rows = 5;
         let mut handled = false;
         let code = report_records(
-            &mut num_rows,
-            &mut handled,
+            &raw mut num_rows,
+            &raw mut handled,
             Some(Err(EngineError::Internal)),
         );
         assert_eq!(code, sys::HA_ERR_INTERNAL_ERROR);

@@ -216,14 +216,14 @@ mod tests {
     #[test]
     fn report_u32_writes_value_and_signals_handled() {
         let mut out: u32 = 0;
-        assert!(report_u32(&mut out, Some(42)));
+        assert!(report_u32(&raw mut out, Some(42)));
         assert_eq!(out, 42);
     }
 
     #[test]
     fn report_u32_none_leaves_buffer_untouched_and_signals_unhandled() {
         let mut out: u32 = 7;
-        assert!(!report_u32(&mut out, None));
+        assert!(!report_u32(&raw mut out, None));
         assert_eq!(out, 7);
     }
 
