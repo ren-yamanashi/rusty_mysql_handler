@@ -28,6 +28,7 @@ use std::hint::black_box;
 
 use criterion::Criterion;
 
+use mysql_handler::engine::StorageEngine;
 use mysql_handler::handler::row_operations::{
     rust__handler__delete_row, rust__handler__update_row, rust__handler__write_row,
 };

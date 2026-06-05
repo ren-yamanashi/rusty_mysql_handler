@@ -24,21 +24,21 @@
 
 use std::fmt;
 
-use crate::engine::StorageEngine;
+use crate::engine::EngineCapabilities;
 
 /// Per-handler Rust-side state owned through `Box::into_raw`. The C++
 /// `RustHandlerBase` keeps a `void*` to one of these.
 #[non_exhaustive]
 pub struct EngineContext {
-    engine: Box<dyn StorageEngine>,
+    engine: Box<dyn EngineCapabilities>,
 }
 
 impl EngineContext {
-    pub(crate) fn new(engine: Box<dyn StorageEngine>) -> Self {
+    pub(crate) fn new(engine: Box<dyn EngineCapabilities>) -> Self {
         Self { engine }
     }
 
-    pub(crate) fn engine_mut(&mut self) -> &mut dyn StorageEngine {
+    pub(crate) fn engine_mut(&mut self) -> &mut dyn EngineCapabilities {
         &mut *self.engine
     }
 }

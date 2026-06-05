@@ -135,9 +135,10 @@ pub unsafe extern "C" fn rust__handler__indexes_are_disabled(
 ) -> bool {
     FfiBoundary::run_default(false, || {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        report_i32(
-            out,
-            unsafe { &mut *ctx }.engine_mut().indexes_are_disabled(),
-        )
+        let value = match unsafe { &mut *ctx }.engine_mut().as_indexed() {
+            Some(indexed) => indexed.indexes_are_disabled(),
+            None => None,
+        };
+        report_i32(out, value)
     })
 }

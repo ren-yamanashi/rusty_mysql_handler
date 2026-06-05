@@ -20,18 +20,33 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Aggregated re-exports for downstream engine crates.
-//!
-//! `use mysql_handler::prelude::*;` brings the items most engine
-//! implementations reach for: the [`License`] tag for the plugin
-//! manifest, the [`plugin`] attribute macro that generates it, and the
-//! engine trait family ([`StorageEngine`], [`EngineCapabilities`],
-//! [`IndexedEngine`]) plus the [`EngineError`] / [`EngineResult`]
-//! types.
+//! `EngineCapabilities` impl emitted from the `capabilities = [...]` list.
 
-pub use crate::engine::{
-    EngineCapabilities, EngineError, EngineResult, IndexedEngine, RKeyFunction, RangeKey,
-    StorageEngine,
-};
-pub use crate::license::License;
-pub use mysql_handler_macros::plugin;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
+
+use crate::capability::Capability;
+
+pub(super) fn capabilities_impl(ty: &syn::Ident, caps: &[Capability]) -> TokenStream2 {
+    let mut overrides = TokenStream2::new();
+    for cap in caps {
+        overrides.extend(capability_override(*cap));
+    }
+    quote! {
+        impl ::mysql_handler::engine::EngineCapabilities for #ty {
+            #overrides
+        }
+    }
+}
+
+fn capability_override(cap: Capability) -> TokenStream2 {
+    match cap {
+        Capability::Indexed => quote! {
+            fn as_indexed(
+                &mut self,
+            ) -> ::core::option::Option<&mut dyn ::mysql_handler::engine::IndexedEngine> {
+                ::core::option::Option::Some(self)
+            }
+        },
+    }
+}

@@ -73,7 +73,13 @@ ENV MYSQL_SOURCE_DIR=/workspace/mysql-server \
 COPY Cargo.toml Cargo.lock build.rs rust-toolchain.toml ./
 COPY src ./src
 COPY shim ./shim
-COPY mysql-handler-* ./
+# Each mysql-handler-* crate is copied to its own subdirectory because
+# `COPY <glob> ./` flattens matched directories' contents into one
+# destination, colliding the per-crate Cargo.toml files. The auto-
+# extending side of the contract lives in `Dockerfile.dockerignore`'s
+# `!mysql-handler-*` glob; the cost here is one extra line per crate.
+COPY mysql-handler-build ./mysql-handler-build
+COPY mysql-handler-macros ./mysql-handler-macros
 COPY examples ./examples
 COPY benches ./benches
 

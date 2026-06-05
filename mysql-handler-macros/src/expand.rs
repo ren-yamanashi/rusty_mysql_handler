@@ -20,7 +20,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Code generation for `#[plugin(...)]`.
+//! Top-level orchestrator for `#[plugin(...)]` expansion. Each emitted
+//! fragment lives in its own submodule so this file just composes them.
 
 use std::ffi::CString;
 
@@ -30,128 +31,32 @@ use syn::{ItemStruct, LitCStr, LitStr};
 
 use crate::args::PluginArgs;
 
+mod capabilities_impl;
+mod manifest;
+mod plugin_init;
+
 pub(crate) fn plugin(args: &PluginArgs, target: &ItemStruct) -> syn::Result<TokenStream2> {
     let ty = &target.ident;
     let name_lit = cstr_lit(&args.name)?;
     let descr_lit = cstr_lit(&args.description)?;
     let author_lit = cstr_lit(&args.author)?;
-    let version = &args.version;
-    let license = &args.license;
+    let manifest_module = manifest::manifest_module();
+    let manifest_statics = manifest::manifest_statics(
+        &name_lit,
+        &descr_lit,
+        &author_lit,
+        &args.version,
+        &args.license,
+    );
+    let capabilities_impl = capabilities_impl::capabilities_impl(ty, &args.capabilities);
+    let plugin_init = plugin_init::plugin_init(ty, args.handlerton.as_ref());
 
     Ok(quote! {
         #target
-
-        #[doc(hidden)]
-        #[allow(non_upper_case_globals, missing_docs, missing_debug_implementations)]
-        pub mod __mysql_handler_plugin {
-            use ::core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
-
-            #[repr(C)]
-            pub struct StMysqlPlugin {
-                pub type_: c_int,
-                pub info: *mut c_void,
-                pub name: *const c_char,
-                pub author: *const c_char,
-                pub descr: *const c_char,
-                pub license: c_int,
-                pub init: ::core::option::Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-                pub check_uninstall:
-                    ::core::option::Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-                pub deinit: ::core::option::Option<unsafe extern "C" fn(*mut c_void) -> c_int>,
-                pub version: c_uint,
-                pub status_vars: *mut c_void,
-                pub system_vars: *mut c_void,
-                pub reserved1: *mut c_void,
-                pub flags: c_ulong,
-            }
-
-            // SAFETY: fields are Copy POD or pointers to 'static
-            // linker-owned symbols; the struct is never mutated.
-            unsafe impl ::core::marker::Sync for StMysqlPlugin {}
-
-            unsafe extern "C" {
-                pub static rusty_storage_engine: [u8; 0];
-                pub fn rusty_init_func(p: *mut c_void) -> c_int;
-                pub fn rusty_deinit_func(p: *mut c_void) -> c_int;
-            }
-
-            pub const STORAGE_ENGINE_TYPE: c_int = 1;
-            pub const INTERFACE_VERSION: c_int = 0x010B;
-        }
-
-        #[unsafe(no_mangle)]
-        pub static _mysql_plugin_interface_version_: ::core::ffi::c_int =
-            self::__mysql_handler_plugin::INTERFACE_VERSION;
-
-        // Routed through a `const` so the `pub static` carries a plain value;
-        // otherwise macOS LTO drops the symbol from the export trie.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        const __MYSQL_HANDLER_SIZEOF_ST_PLUGIN: ::core::ffi::c_int =
-            ::core::mem::size_of::<self::__mysql_handler_plugin::StMysqlPlugin>()
-                as ::core::ffi::c_int;
-
-        // Forced into __DATA on macOS so the Mach-O export trie keeps both
-        // 4-byte c_int statics distinct; Linux ELF does not need this.
-        #[unsafe(no_mangle)]
-        #[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__data"))]
-        pub static _mysql_sizeof_struct_st_plugin_: ::core::ffi::c_int =
-            __MYSQL_HANDLER_SIZEOF_ST_PLUGIN;
-
-        #[unsafe(no_mangle)]
-        pub static _mysql_plugin_declarations_:
-            [self::__mysql_handler_plugin::StMysqlPlugin; 2] = [
-            self::__mysql_handler_plugin::StMysqlPlugin {
-                type_: self::__mysql_handler_plugin::STORAGE_ENGINE_TYPE,
-                info: &raw const self::__mysql_handler_plugin::rusty_storage_engine
-                    as *mut ::core::ffi::c_void,
-                name: #name_lit.as_ptr(),
-                author: #author_lit.as_ptr(),
-                descr: #descr_lit.as_ptr(),
-                license: (#license).code(),
-                init: ::core::option::Option::Some(
-                    self::__mysql_handler_plugin::rusty_init_func,
-                ),
-                check_uninstall: ::core::option::Option::None,
-                deinit: ::core::option::Option::Some(
-                    self::__mysql_handler_plugin::rusty_deinit_func,
-                ),
-                version: #version,
-                status_vars: ::core::ptr::null_mut(),
-                system_vars: ::core::ptr::null_mut(),
-                reserved1: ::core::ptr::null_mut(),
-                flags: 0,
-            },
-            self::__mysql_handler_plugin::StMysqlPlugin {
-                type_: 0,
-                info: ::core::ptr::null_mut(),
-                name: ::core::ptr::null(),
-                author: ::core::ptr::null(),
-                descr: ::core::ptr::null(),
-                license: 0,
-                init: ::core::option::Option::None,
-                check_uninstall: ::core::option::Option::None,
-                deinit: ::core::option::Option::None,
-                version: 0,
-                status_vars: ::core::ptr::null_mut(),
-                system_vars: ::core::ptr::null_mut(),
-                reserved1: ::core::ptr::null_mut(),
-                flags: 0,
-            },
-        ];
-
-        /// Plugin entry point; the shim calls this once at `INSTALL PLUGIN`.
-        ///
-        /// # Safety
-        /// Called once on the mysqld thread running `INSTALL PLUGIN`;
-        /// panic-safe via the `FfiBoundary` wrapper.
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn rust__plugin_init() {
-            ::mysql_handler::panic_guard::FfiBoundary::run_void(|| {
-                ::mysql_handler::runtime::register_engine_factory(|| {
-                    ::std::boxed::Box::new(<#ty as ::core::default::Default>::default())
-                });
-            });
-        }
+        #manifest_module
+        #manifest_statics
+        #capabilities_impl
+        #plugin_init
     })
 }
 

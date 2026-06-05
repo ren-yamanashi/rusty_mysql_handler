@@ -32,6 +32,7 @@
 #![allow(clippy::redundant_pub_crate)]
 
 mod args;
+mod capability;
 mod expand;
 
 use proc_macro::TokenStream;
@@ -54,13 +55,20 @@ use crate::args::PluginArgs;
 ///   [`mysql_handler::license::License`]. The discriminant is folded
 ///   into the static initialiser at compile time.
 /// - `author`: author or organisation name (string literal).
-///
-/// # Caveats
-///
-/// The generated `rust__plugin_init` only registers the engine
-/// factory. Engines that also need a custom `Handlerton` must
-/// register it from a separate `#[unsafe(no_mangle)] extern "C"`
-/// hook for now; the attribute does not take a handlerton type.
+/// - `capabilities` (optional): bracketed list of sub-trait
+///   discriminants the engine opts into. Accepted values: `Indexed`.
+///   Each entry emits an `as_*` override on the generated
+///   `EngineCapabilities` impl, so the engine must also implement the
+///   matching sub-trait. Defaults to `[]` (engine declares no
+///   capabilities). Additional capability identifiers are added when
+///   their sub-traits ship with non-empty method sets.
+/// - `handlerton` (optional): path to a `Default`-constructible
+///   handlerton struct (typically a unit struct) implementing
+///   [`mysql_handler::hton::Handlerton`]. When supplied the generated
+///   `rust__plugin_init` additionally registers the handlerton so
+///   engine-level callbacks (transactions, savepoints, discovery)
+///   route through it. Omit when the engine only needs the per-handler
+///   surface.
 ///
 /// # Example
 ///
@@ -73,11 +81,13 @@ use crate::args::PluginArgs;
 ///     version = 0x0001,
 ///     license = License::Gpl,
 ///     author = "me",
+///     capabilities = [Indexed],
 /// )]
 /// #[derive(Default)]
 /// pub struct MyEngine;
 ///
 /// impl mysql_handler::engine::StorageEngine for MyEngine {}
+/// impl mysql_handler::engine::IndexedEngine for MyEngine {}
 /// ```
 #[proc_macro_attribute]
 pub fn plugin(args: TokenStream, item: TokenStream) -> TokenStream {

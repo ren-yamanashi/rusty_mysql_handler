@@ -20,22 +20,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Plugin bootstrap: registers the engine factory MySQL calls at load time.
+//! `capabilities = [...]` discriminants accepted by `#[plugin]`.
 
-use mysql_handler::panic_guard::FfiBoundary;
-use mysql_handler::runtime::{register_engine_factory, register_handlerton};
+use syn::Ident;
 
-use crate::{TrivialEngine, TrivialHandlerton};
+/// Identifiers accepted inside `capabilities = [...]`. Each one maps to a
+/// sub-trait the engine has opted into; the `#[plugin]` macro emits an
+/// `as_*` override on the generated `EngineCapabilities` impl per entry.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Capability {
+    Indexed,
+}
 
-/// Plugin entry point; the shim calls this once at `INSTALL PLUGIN`.
-///
-/// # Safety
-/// Called once from `rusty_init_func` on the mysqld thread running
-/// `INSTALL PLUGIN`. Panic-safe via [`FfiBoundary::run_void`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__plugin_init() {
-    FfiBoundary::run_void(|| {
-        register_engine_factory(|| Box::new(TrivialEngine::default()));
-        register_handlerton(Box::new(TrivialHandlerton));
-    });
+impl Capability {
+    pub(crate) fn from_ident(ident: &Ident) -> syn::Result<Self> {
+        match ident.to_string().as_str() {
+            "Indexed" => Ok(Self::Indexed),
+            other => Err(syn::Error::new(
+                ident.span(),
+                format!("unknown capability `{other}` (expected one of: Indexed)"),
+            )),
+        }
+    }
 }

@@ -85,12 +85,11 @@ pub unsafe extern "C" fn rust__handler__index_only_read_time(
 ) -> bool {
     FfiBoundary::run_default(false, || {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        report_f64(
-            out,
-            unsafe { &mut *ctx }
-                .engine_mut()
-                .index_only_read_time(keynr, records),
-        )
+        let value = match unsafe { &mut *ctx }.engine_mut().as_indexed() {
+            Some(indexed) => indexed.index_only_read_time(keynr, records),
+            None => None,
+        };
+        report_f64(out, value)
     })
 }
 

@@ -21,20 +21,15 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 //! Reference storage engine for `mysql-handler`. [`TrivialEngine`] is the
-//! `StorageEngine` impl orchestrator under `engine/`, `trivial_handlerton`
-//! holds the engine-level [`TrivialHandlerton`], and `registration` is
-//! the plugin entry point.
+//! `StorageEngine` impl orchestrator under `engine/`,
+//! [`trivial_handlerton`] holds the engine-level [`TrivialHandlerton`],
+//! and the [`mysql_handler::plugin`] macro on [`TrivialEngine`] supplies
+//! the plugin manifest plus the `rust__plugin_init` that registers both
+//! the engine factory and the handlerton.
 
 #![allow(unsafe_code)]
 
-#[cfg(not(test))]
-#[doc(hidden)]
-#[allow(missing_docs, missing_debug_implementations)]
-pub mod plugin_manifest;
-
 pub mod engine;
-#[doc(hidden)]
-pub mod registration;
 pub mod store;
 pub mod trivial_handlerton;
 pub mod trivial_txn;

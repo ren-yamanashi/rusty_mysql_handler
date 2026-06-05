@@ -23,9 +23,12 @@
 //! Parser for `#[plugin(name = "...", ...)]` argument lists.
 
 use syn::{
-    Expr, LitStr, Token,
+    Expr, Ident, LitStr, Token, TypePath, bracketed,
     parse::{Parse, ParseStream},
+    punctuated::Punctuated,
 };
+
+use crate::capability::Capability;
 
 /// MySQL plugin name is bounded to 64 bytes; the manifest layout
 /// stores it as a `*const c_char` and mysqld compares it against the
@@ -38,6 +41,12 @@ pub(crate) struct PluginArgs {
     pub version: Expr,
     pub license: Expr,
     pub author: LitStr,
+    pub capabilities: Vec<Capability>,
+    /// Optional handlerton type registered alongside the engine factory.
+    /// Engines that opt in must provide a `Default`-constructible handlerton
+    /// (typically a unit struct) implementing
+    /// [`mysql_handler::hton::Handlerton`].
+    pub handlerton: Option<TypePath>,
 }
 
 impl Parse for PluginArgs {
@@ -47,8 +56,10 @@ impl Parse for PluginArgs {
         let mut version: Option<Expr> = None;
         let mut license: Option<Expr> = None;
         let mut author: Option<LitStr> = None;
+        let mut capabilities: Option<Vec<Capability>> = None;
+        let mut handlerton: Option<TypePath> = None;
         while !input.is_empty() {
-            let key: syn::Ident = input.parse()?;
+            let key: Ident = input.parse()?;
             input.parse::<Token![=]>()?;
             match key.to_string().as_str() {
                 "name" => set_once(&mut name, input.parse()?, &key)?,
@@ -56,11 +67,13 @@ impl Parse for PluginArgs {
                 "version" => set_once(&mut version, input.parse()?, &key)?,
                 "license" => set_once(&mut license, input.parse()?, &key)?,
                 "author" => set_once(&mut author, input.parse()?, &key)?,
+                "capabilities" => set_once(&mut capabilities, parse_capabilities(input)?, &key)?,
+                "handlerton" => set_once(&mut handlerton, input.parse()?, &key)?,
                 other => {
                     return Err(syn::Error::new(
                         key.span(),
                         format!(
-                            "unknown #[plugin] argument `{other}` (expected one of: name, description, version, license, author)"
+                            "unknown #[plugin] argument `{other}` (expected one of: name, description, version, license, author, capabilities, handlerton)"
                         ),
                     ));
                 }
@@ -86,11 +99,31 @@ impl Parse for PluginArgs {
             author: author.ok_or_else(|| {
                 syn::Error::new(input.span(), "#[plugin] missing `author = \"...\"`")
             })?,
+            capabilities: capabilities.unwrap_or_default(),
+            handlerton,
         })
     }
 }
 
-fn set_once<T>(slot: &mut Option<T>, value: T, key: &syn::Ident) -> syn::Result<()> {
+fn parse_capabilities(input: ParseStream) -> syn::Result<Vec<Capability>> {
+    let content;
+    bracketed!(content in input);
+    let idents: Punctuated<Ident, Token![,]> = Punctuated::parse_terminated(&content)?;
+    let mut out: Vec<Capability> = Vec::with_capacity(idents.len());
+    for ident in &idents {
+        let cap = Capability::from_ident(ident)?;
+        if out.contains(&cap) {
+            return Err(syn::Error::new(
+                ident.span(),
+                format!("capability `{ident}` listed more than once"),
+            ));
+        }
+        out.push(cap);
+    }
+    Ok(out)
+}
+
+fn set_once<T>(slot: &mut Option<T>, value: T, key: &Ident) -> syn::Result<()> {
     if slot.is_some() {
         return Err(syn::Error::new(
             key.span(),
@@ -127,42 +160,4 @@ fn validate_name(name: &LitStr) -> syn::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{MAX_PLUGIN_NAME_LEN, validate_name};
-    use proc_macro2::Span;
-    use syn::LitStr;
-
-    fn lit(value: &str) -> LitStr {
-        LitStr::new(value, Span::call_site())
-    }
-
-    #[test]
-    fn empty_name_rejected() {
-        let err = validate_name(&lit("")).unwrap_err();
-        assert!(err.to_string().contains("non-empty"));
-    }
-
-    #[test]
-    fn nul_byte_in_name_rejected() {
-        let err = validate_name(&lit("rust\0engine")).unwrap_err();
-        assert!(err.to_string().contains("NUL byte"));
-    }
-
-    #[test]
-    fn overlong_name_rejected() {
-        let too_long = "a".repeat(MAX_PLUGIN_NAME_LEN + 1);
-        let err = validate_name(&lit(&too_long)).unwrap_err();
-        assert!(err.to_string().contains("at most"));
-    }
-
-    #[test]
-    fn name_at_limit_accepted() {
-        let at_limit = "a".repeat(MAX_PLUGIN_NAME_LEN);
-        validate_name(&lit(&at_limit)).unwrap();
-    }
-
-    #[test]
-    fn typical_name_accepted() {
-        validate_name(&lit("my_engine")).unwrap();
-    }
-}
+mod tests;

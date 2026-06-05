@@ -26,7 +26,7 @@
 
 #![allow(unreachable_pub)]
 
-use mysql_handler::engine::StorageEngine;
+use mysql_handler::engine::EngineCapabilities;
 use mysql_handler::runtime::{
     EngineContext, register_engine_factory, rust__create_engine, rust__destroy_engine,
 };
@@ -45,7 +45,10 @@ impl CtxGuard {
     /// `bench_*` function; criterion runs the closures sequentially
     /// so no two `b.iter` calls share the pointer concurrently.
     pub fn new() -> Self {
-        register_engine_factory(|| Box::new(NoopEngine::new()));
+        register_engine_factory(|| {
+            let engine: Box<dyn EngineCapabilities> = Box::new(NoopEngine::new());
+            engine
+        });
         // SAFETY: `rust__create_engine` is safe after
         // `register_engine_factory`; the returned pointer is null only
         // when no factory is registered or the factory panics, neither
@@ -69,8 +72,14 @@ impl Drop for CtxGuard {
     }
 }
 
-/// Standalone `Box<dyn StorageEngine>` for the `native` arm. Calls
-/// the trait method directly with no FFI layer.
-pub fn native_engine() -> Box<dyn StorageEngine> {
+/// Standalone `Box<NoopEngine>` for the `native` arm. Calls the trait
+/// methods (across both [`StorageEngine`] and [`IndexedEngine`])
+/// directly with no FFI layer; the concrete type is returned so each
+/// benchmark can pick the relevant sub-trait without first going
+/// through [`EngineCapabilities::as_indexed`].
+///
+/// [`StorageEngine`]: mysql_handler::engine::StorageEngine
+/// [`IndexedEngine`]: mysql_handler::engine::IndexedEngine
+pub fn native_engine() -> Box<NoopEngine> {
     Box::new(NoopEngine::new())
 }
