@@ -15,16 +15,22 @@ mysql-handler = "0.2"
 mysql-handler-build = "0.2"
 ```
 
-## 🚀 Quick start
+## 🚀 Usage
+
+Decorate an engine struct with `#[plugin(..)]` in a `cdylib` crate, then `INSTALL PLUGIN` it into a running `mysql:8.4` server.
 
 #### Prerequisites
 
 - Rust 1.85+
 - `mysql:8.4`
 
-#### 1. `Cargo.toml`
+#### 1. New cdylib crate
 
 ```toml
+[package]
+name = "my-engine"
+edition = "2024"
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -35,15 +41,14 @@ mysql-handler = "0.2"
 mysql-handler-build = "0.2"
 ```
 
-#### 2. `build.rs`
-
 ```rust
+// build.rs
 fn main() {
     mysql_handler_build::configure();
 }
 ```
 
-#### 3. `src/lib.rs`
+#### 2. Implement StorageEngine
 
 ```rust
 use mysql_handler::prelude::*;
@@ -79,7 +84,7 @@ impl StorageEngine for MyEngine {
 
 A full reference engine lives in [`examples/engine/`](./examples/engine/).
 
-#### 4. Build
+#### 3. Build
 
 `build.rs` needs the C++ shim staticlib (`libha_rusty_shim.a`):
 
@@ -88,7 +93,7 @@ MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release   # cmake from mysql-server/ s
 MYSQL_HANDLER_ARCHIVE=<path> cargo build --release  # prebuilt .a.gz
 ```
 
-#### 5. Install
+#### 4. Install
 
 ```sql
 INSTALL PLUGIN my_engine SONAME 'libmy_engine.so';
