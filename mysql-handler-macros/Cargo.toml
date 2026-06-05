@@ -1,0 +1,31 @@
+[package]
+name = "mysql-handler-macros"
+version = "0.1.0"
+description = "Procedural macros for mysql-handler engine cdylibs"
+readme = "README.md"
+authors = ["ren-yamanashi"]
+license = "GPL-2.0-only"
+edition = "2024"
+repository = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+homepage = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+documentation = "https://docs.rs/mysql-handler-macros"
+keywords = ["mysql", "ffi", "plugin", "storage-engine", "proc-macro"]
+categories = ["development-tools::procedural-macro-helpers"]
+rust-version = "1.85"
+include = [
+  "/src/**/*.rs",
+  "/Cargo.toml",
+  "/README.md",
+  "/LICENSE",
+]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+
+[lints]
+workspace = true

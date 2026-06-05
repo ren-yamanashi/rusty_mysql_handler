@@ -393,12 +393,22 @@ dependencies = [
  "cmake",
  "criterion",
  "flate2",
+ "mysql-handler-macros",
  "tracing",
 ]
 
 [[package]]
 name = "mysql-handler-build"
 version = "0.1.0"
+
+[[package]]
+name = "mysql-handler-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "nom"

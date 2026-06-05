@@ -7,6 +7,7 @@
 !src
 !shim
 !mysql-handler-build
+!mysql-handler-macros
 !examples
 !benches
 !mysql-server
