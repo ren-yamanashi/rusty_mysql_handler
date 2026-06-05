@@ -6,8 +6,7 @@
 !rust-toolchain.toml
 !src
 !shim
-!mysql-handler-build
-!mysql-handler-macros
+!mysql-handler-*
 !examples
 !benches
 !mysql-server

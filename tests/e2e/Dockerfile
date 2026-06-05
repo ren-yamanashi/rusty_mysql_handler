@@ -73,8 +73,7 @@ ENV MYSQL_SOURCE_DIR=/workspace/mysql-server \
 COPY Cargo.toml Cargo.lock build.rs rust-toolchain.toml ./
 COPY src ./src
 COPY shim ./shim
-COPY mysql-handler-build ./mysql-handler-build
-COPY mysql-handler-macros ./mysql-handler-macros
+COPY mysql-handler-* ./
 COPY examples ./examples
 COPY benches ./benches
 

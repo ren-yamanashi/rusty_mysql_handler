@@ -20,7 +20,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-.PHONY: setup rust-build clean lint fmt check test test_e2e perf-callback-profile perf-matrix help
+.PHONY: setup rust-build clean lint fmt check test perf-callback-profile perf-matrix help
 
 MYSQL_SOURCE_DIR ?= $(CURDIR)/mysql-server
 MYSQL_BUILD_DIR  ?= $(CURDIR)/build/mysql
@@ -63,9 +63,6 @@ check: lint ## Run lint + cargo check (full local pre-PR sweep)
 
 test: ## Run tests
 	@cargo test --workspace
-
-test_e2e: ## E2E test via Docker (mysql:8.4 + plugin baked into image)
-	@bash tests/e2e/run.sh
 
 perf-build-images: ## Build the local Docker images the sysbench harness needs
 	@DOCKER_BUILDKIT=1 docker build --target builder -t rusty-plugin-build:local -f tests/e2e/Dockerfile .

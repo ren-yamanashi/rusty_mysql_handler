@@ -92,7 +92,7 @@ selection is env-driven:
 
 ## E2E smoke
 
-`make test_e2e` runs a two-stage Docker build. The builder produces
+The Smoke CI job runs a two-stage Docker build. The builder produces
 `libengine.so` against a prebuilt MySQL 8.4 source tree; the runtime is
 `mysql:8.4.9` with the plugin staged into `plugin_dir`. The end-to-end
 SQL exercises the full plugin load path, schema creation, row CRUD with
