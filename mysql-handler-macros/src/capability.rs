@@ -20,20 +20,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] is the
-//! `StorageEngine` impl orchestrator under `engine/`,
-//! [`trivial_handlerton`] holds the engine-level [`TrivialHandlerton`],
-//! and the [`mysql_handler::plugin`] macro on [`TrivialEngine`] supplies
-//! the plugin manifest plus the `rust__plugin_init` that registers both
-//! the engine factory and the handlerton.
+//! `capabilities = [...]` discriminants accepted by `#[plugin]`.
 
-#![allow(unsafe_code)]
+use syn::Ident;
 
-pub mod engine;
-pub mod store;
-pub mod trivial_handlerton;
-pub mod trivial_txn;
+/// Identifiers accepted inside `capabilities = [...]`. Each one maps to a
+/// sub-trait the engine has opted into; the `#[plugin]` macro emits an
+/// `as_*` override on the generated `EngineCapabilities` impl per entry.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Capability {
+    Indexed,
+    Transactional,
+    BulkLoad,
+    Secondary,
+}
 
-pub use engine::TrivialEngine;
-pub use trivial_handlerton::TrivialHandlerton;
-pub use trivial_txn::TrivialTxn;
+impl Capability {
+    pub(crate) fn from_ident(ident: &Ident) -> syn::Result<Self> {
+        match ident.to_string().as_str() {
+            "Indexed" => Ok(Self::Indexed),
+            "Transactional" => Ok(Self::Transactional),
+            "BulkLoad" => Ok(Self::BulkLoad),
+            "Secondary" => Ok(Self::Secondary),
+            other => Err(syn::Error::new(
+                ident.span(),
+                format!(
+                    "unknown capability `{other}` (expected one of: Indexed, Transactional, BulkLoad, Secondary)"
+                ),
+            )),
+        }
+    }
+}

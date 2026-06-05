@@ -20,22 +20,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Plugin bootstrap: registers the engine factory MySQL calls at load time.
+//! Capability sub-trait reserved for secondary-engine handler callbacks.
 
-use mysql_handler::panic_guard::FfiBoundary;
-use mysql_handler::runtime::{register_engine_factory, register_handlerton};
+use super::StorageEngine;
 
-use crate::{TrivialEngine, TrivialHandlerton};
-
-/// Plugin entry point; the shim calls this once at `INSTALL PLUGIN`.
+/// Opt-in sub-trait reserved for secondary-engine `load_table` /
+/// `unload_table` and the handlerton-level secondary-engine callbacks.
 ///
-/// # Safety
-/// Called once from `rusty_init_func` on the mysqld thread running
-/// `INSTALL PLUGIN`. Panic-safe via [`FfiBoundary::run_void`].
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__plugin_init() {
-    FfiBoundary::run_void(|| {
-        register_engine_factory(|| Box::new(TrivialEngine::default()));
-        register_handlerton(Box::new(TrivialHandlerton));
-    });
-}
+/// The trait is intentionally empty in this revision: the relevant methods
+/// stay on [`StorageEngine`] and the handlerton today, with the migration
+/// scheduled for a follow-up cycle. The marker exists so
+/// [`EngineCapabilities`] can advertise secondary-engine intent and the
+/// `#[plugin]` macro can accept `capabilities = [Secondary]` without rewiring
+/// the underlying callback dispatch.
+///
+/// [`EngineCapabilities`]: crate::engine::EngineCapabilities
+pub trait SecondaryEngine: StorageEngine {}

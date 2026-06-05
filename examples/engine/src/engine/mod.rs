@@ -20,12 +20,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! `TrivialEngine`: the reference `StorageEngine` implementation.
+//! `TrivialEngine`: the reference `StorageEngine` + `IndexedEngine`
+//! implementation.
 //!
 //! Storage is a sorted [`TableStore`](crate::store::TableStore) per
-//! table (a `BTreeMap<Key, Vec<u8>>`). The single `impl StorageEngine
-//! for TrivialEngine` in this file dispatches each trait method into
-//! a thin helper on a sibling module:
+//! table (a `BTreeMap<Key, Vec<u8>>`). The two impl blocks here
+//! dispatch each trait method into a thin helper on a sibling module:
 //!
 //! - [`scan`] — cursor / snapshot / range / index lookup machinery.
 //! - [`crud`] — non-transactional `update_row` / `delete_row`.
@@ -39,15 +39,16 @@
 //! context is attached.
 //!
 //! **Line-limit note.** This file exceeds the 250-line ceiling because
-//! its single responsibility is the `impl StorageEngine for
-//! TrivialEngine` block (one `impl Trait for Type` per the coding-style
-//! exemption). Helper code lives in [`scan`], [`crud`], and [`stats`];
-//! splitting the trait impl itself by method group would force every
-//! virtual to grow a public re-export across two modules.
+//! its single responsibility is the `impl StorageEngine` /
+//! `impl IndexedEngine` pair for `TrivialEngine` (one trait impl per
+//! type for each of the two sub-traits, per the coding-style
+//! exemption). Splitting either impl into a sibling module would force
+//! the helper layer in `scan` / `crud` / `stats` to grow a public
+//! re-export across the boundary purely to keep the line count down.
 
 use std::ffi::CStr;
 
-use mysql_handler::engine::{EngineResult, RKeyFunction, RangeKey, StorageEngine};
+use mysql_handler::prelude::*;
 use mysql_handler::sys::{self, HA_BINLOG_ROW_CAPABLE, HA_BINLOG_STMT_CAPABLE};
 
 use crate::store::{self, Key, TableMeta};
@@ -66,6 +67,15 @@ fn table_key(name: &str) -> String {
 }
 
 /// Reference engine backed by [`crate::store::TableStore`].
+#[plugin(
+    name = "RUSTY",
+    description = "Rusty storage engine",
+    version = 0x0001,
+    license = License::Gpl,
+    author = "ren-yamanashi",
+    handlerton = crate::TrivialHandlerton,
+    capabilities = [Indexed],
+)]
 #[derive(Debug)]
 pub struct TrivialEngine {
     pub(in crate::engine) table: String,
@@ -120,10 +130,6 @@ impl StorageEngine for TrivialEngine {
 
     fn table_flags(&self) -> u64 {
         HA_BINLOG_STMT_CAPABLE | HA_BINLOG_ROW_CAPABLE
-    }
-
-    fn index_flags(&self, idx: u32, _part: u32, _all_parts: bool) -> u32 {
-        self.index_flags_for(idx)
     }
 
     fn create(&mut self, name: &str, table_def: Option<&sys::DdTable>) -> EngineResult {
@@ -218,6 +224,49 @@ impl StorageEngine for TrivialEngine {
         Ok(())
     }
 
+    fn max_supported_keys(&self) -> Option<u32> {
+        Some(8)
+    }
+
+    fn max_supported_key_parts(&self) -> Option<u32> {
+        Some(8)
+    }
+
+    fn scan_time(&mut self) -> Option<f64> {
+        let rows = u32::try_from(store::row_count(&self.table)).unwrap_or(u32::MAX);
+        Some(f64::from(rows))
+    }
+
+    fn records(&mut self) -> Option<EngineResult<u64>> {
+        Some(Ok(store::row_count(&self.table)))
+    }
+
+    fn estimate_rows_upper_bound(&mut self) -> Option<u64> {
+        Some(store::row_count(&self.table))
+    }
+
+    fn get_auto_increment(
+        &mut self,
+        _offset: u64,
+        increment: u64,
+        nb_desired: u64,
+    ) -> Option<(u64, u64)> {
+        Some(self.reserve_auto_increment(increment, nb_desired))
+    }
+
+    fn reset(&mut self) -> EngineResult {
+        self.snapshot.clear();
+        self.scan_pos = None;
+        self.last_search_key = None;
+        Ok(())
+    }
+}
+
+impl IndexedEngine for TrivialEngine {
+    fn index_flags(&self, idx: u32, _part: u32, _all_parts: bool) -> u32 {
+        self.index_flags_for(idx)
+    }
+
     fn index_init(&mut self, idx: u32, _sorted: bool) -> EngineResult {
         self.active_idx = idx as usize;
         self.refresh_snapshot();
@@ -292,42 +341,5 @@ impl StorageEngine for TrivialEngine {
     fn read_range_next(&mut self, buf: &mut [u8]) -> EngineResult {
         self.scan_dir = ScanDir::Forward;
         self.yield_and_advance(buf)
-    }
-
-    fn max_supported_keys(&self) -> Option<u32> {
-        Some(8)
-    }
-
-    fn max_supported_key_parts(&self) -> Option<u32> {
-        Some(8)
-    }
-
-    fn scan_time(&mut self) -> Option<f64> {
-        let rows = u32::try_from(store::row_count(&self.table)).unwrap_or(u32::MAX);
-        Some(f64::from(rows))
-    }
-
-    fn records(&mut self) -> Option<EngineResult<u64>> {
-        Some(Ok(store::row_count(&self.table)))
-    }
-
-    fn estimate_rows_upper_bound(&mut self) -> Option<u64> {
-        Some(store::row_count(&self.table))
-    }
-
-    fn get_auto_increment(
-        &mut self,
-        _offset: u64,
-        increment: u64,
-        nb_desired: u64,
-    ) -> Option<(u64, u64)> {
-        Some(self.reserve_auto_increment(increment, nb_desired))
-    }
-
-    fn reset(&mut self) -> EngineResult {
-        self.snapshot.clear();
-        self.scan_pos = None;
-        self.last_search_key = None;
-        Ok(())
     }
 }

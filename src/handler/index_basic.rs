@@ -26,7 +26,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::engine::RKeyFunction;
+use crate::engine::{EngineError, RKeyFunction};
 use crate::panic_guard::FfiBoundary;
 use crate::runtime::{EngineContext, FfiPtr};
 
@@ -43,7 +43,10 @@ pub unsafe extern "C" fn rust__handler__index_init(
 ) -> i32 {
     FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        unsafe { &mut *ctx }.engine_mut().index_init(idx, sorted)
+        match unsafe { &mut *ctx }.engine_mut().as_indexed() {
+            Some(indexed) => indexed.index_init(idx, sorted),
+            None => Err(EngineError::WrongCommand),
+        }
     })
 }
 
@@ -56,7 +59,10 @@ pub unsafe extern "C" fn rust__handler__index_init(
 pub unsafe extern "C" fn rust__handler__index_end(ctx: *mut EngineContext) -> i32 {
     FfiBoundary::run(|| {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        unsafe { &mut *ctx }.engine_mut().index_end()
+        match unsafe { &mut *ctx }.engine_mut().as_indexed() {
+            Some(indexed) => indexed.index_end(),
+            None => Err(EngineError::WrongCommand),
+        }
     })
 }
 
@@ -87,7 +93,10 @@ pub unsafe extern "C" fn rust__handler__index_read_map(
             // SAFETY: caller guarantees key covers key_len readable bytes.
             unsafe { FfiPtr::slice_const(key, key_len) }
         };
-        engine.index_read_map(buf, key, RKeyFunction::from_raw(find_flag))
+        match engine.as_indexed() {
+            Some(indexed) => indexed.index_read_map(buf, key, RKeyFunction::from_raw(find_flag)),
+            None => Err(EngineError::WrongCommand),
+        }
     })
 }
 
@@ -106,7 +115,11 @@ pub unsafe extern "C" fn rust__handler__index_next(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees buf covers buf_len writable bytes.
-        engine.index_next(unsafe { FfiPtr::slice_mut(buf, buf_len) })
+        let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
+        match engine.as_indexed() {
+            Some(indexed) => indexed.index_next(buf),
+            None => Err(EngineError::WrongCommand),
+        }
     })
 }
 
@@ -125,7 +138,11 @@ pub unsafe extern "C" fn rust__handler__index_prev(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees buf covers buf_len writable bytes.
-        engine.index_prev(unsafe { FfiPtr::slice_mut(buf, buf_len) })
+        let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
+        match engine.as_indexed() {
+            Some(indexed) => indexed.index_prev(buf),
+            None => Err(EngineError::WrongCommand),
+        }
     })
 }
 
@@ -144,7 +161,11 @@ pub unsafe extern "C" fn rust__handler__index_first(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees buf covers buf_len writable bytes.
-        engine.index_first(unsafe { FfiPtr::slice_mut(buf, buf_len) })
+        let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
+        match engine.as_indexed() {
+            Some(indexed) => indexed.index_first(buf),
+            None => Err(EngineError::WrongCommand),
+        }
     })
 }
 
@@ -163,7 +184,11 @@ pub unsafe extern "C" fn rust__handler__index_last(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees buf covers buf_len writable bytes.
-        engine.index_last(unsafe { FfiPtr::slice_mut(buf, buf_len) })
+        let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
+        match engine.as_indexed() {
+            Some(indexed) => indexed.index_last(buf),
+            None => Err(EngineError::WrongCommand),
+        }
     })
 }
 
@@ -187,6 +212,9 @@ pub unsafe extern "C" fn rust__handler__index_next_same(
         let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
         // SAFETY: caller guarantees key covers key_len readable bytes.
         let key = unsafe { FfiPtr::slice_const(key, key_len) };
-        engine.index_next_same(buf, key)
+        match engine.as_indexed() {
+            Some(indexed) => indexed.index_next_same(buf, key),
+            None => Err(EngineError::WrongCommand),
+        }
     })
 }

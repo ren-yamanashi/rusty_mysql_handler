@@ -20,20 +20,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] is the
-//! `StorageEngine` impl orchestrator under `engine/`,
-//! [`trivial_handlerton`] holds the engine-level [`TrivialHandlerton`],
-//! and the [`mysql_handler::plugin`] macro on [`TrivialEngine`] supplies
-//! the plugin manifest plus the `rust__plugin_init` that registers both
-//! the engine factory and the handlerton.
+//! Capability sub-trait reserved for handlerton-level transaction hooks.
 
-#![allow(unsafe_code)]
+use super::StorageEngine;
 
-pub mod engine;
-pub mod store;
-pub mod trivial_handlerton;
-pub mod trivial_txn;
-
-pub use engine::TrivialEngine;
-pub use trivial_handlerton::TrivialHandlerton;
-pub use trivial_txn::TrivialTxn;
+/// Opt-in sub-trait that exposes the engine's transaction-driving surface to
+/// the FFI boundary.
+///
+/// The trait is intentionally empty in this revision: handler-level methods
+/// stay on [`StorageEngine`], and the matching handlerton txn / savepoint /
+/// XA hooks still live on [`Handlerton`](crate::hton::Handlerton) until a
+/// later cycle folds them in. The marker exists so [`EngineCapabilities`]
+/// can advertise transactional intent and the `#[plugin]` macro can wire
+/// `capabilities = [Transactional]` today without breaking churn when the
+/// methods migrate.
+///
+/// [`EngineCapabilities`]: crate::engine::EngineCapabilities
+pub trait TransactionalEngine: StorageEngine {}

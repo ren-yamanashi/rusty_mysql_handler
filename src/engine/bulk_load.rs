@@ -20,20 +20,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Reference storage engine for `mysql-handler`. [`TrivialEngine`] is the
-//! `StorageEngine` impl orchestrator under `engine/`,
-//! [`trivial_handlerton`] holds the engine-level [`TrivialHandlerton`],
-//! and the [`mysql_handler::plugin`] macro on [`TrivialEngine`] supplies
-//! the plugin manifest plus the `rust__plugin_init` that registers both
-//! the engine factory and the handlerton.
+//! Capability sub-trait reserved for bulk-load handler callbacks.
 
-#![allow(unsafe_code)]
+use super::StorageEngine;
 
-pub mod engine;
-pub mod store;
-pub mod trivial_handlerton;
-pub mod trivial_txn;
-
-pub use engine::TrivialEngine;
-pub use trivial_handlerton::TrivialHandlerton;
-pub use trivial_txn::TrivialTxn;
+/// Opt-in sub-trait reserved for the engine's bulk-insert / bulk-update /
+/// bulk-delete and parallel-load callbacks.
+///
+/// The trait is intentionally empty in this revision: the bulk methods stay
+/// on [`StorageEngine`] until a follow-up cycle migrates them. The marker
+/// exists today so [`EngineCapabilities`] can carry a `BulkLoad` discriminant
+/// and downstream `#[plugin(capabilities = [BulkLoad])]` invocations compile
+/// without breaking churn when the methods move.
+///
+/// [`EngineCapabilities`]: crate::engine::EngineCapabilities
+pub trait BulkLoadEngine: StorageEngine {}
