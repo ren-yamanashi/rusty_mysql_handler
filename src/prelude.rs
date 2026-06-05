@@ -20,14 +20,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-//! Rust bindings for the MySQL 8.4 storage engine handler API
+//! Aggregated re-exports for downstream engine crates.
+//!
+//! `use mysql_handler::prelude::*;` brings the items most engine
+//! implementations reach for: the [`License`] tag for the plugin
+//! manifest and the [`plugin`] attribute macro that generates it.
+//! Further trait imports are added here as the surface stabilises.
 
-pub mod dd;
-pub mod engine;
-pub mod handler;
-pub mod hton;
-pub mod license;
-pub mod panic_guard;
-pub mod prelude;
-pub mod runtime;
-pub mod sys;
+pub use crate::license::License;
+pub use mysql_handler_macros::plugin;
