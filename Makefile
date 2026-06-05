@@ -52,14 +52,14 @@ rust-build: ## Build all Rust crates (release)
 
 lint: ## Run fmt-check + clippy + license check (deterministic, one platform)
 	@cargo fmt --all --check
-	@cargo clippy --workspace -- -D warnings
+	@cargo clippy --workspace --all-targets -- -D warnings
 	@bash scripts/check-license.sh
 
 fmt: ## Format Rust code
 	@cargo fmt --all
 
 check: lint ## Run lint + cargo check (full local pre-PR sweep)
-	@cargo check --workspace
+	@cargo check --workspace --all-targets
 
 test: ## Run tests
 	@cargo test --workspace
