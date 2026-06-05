@@ -70,7 +70,12 @@ RUN case "$TARGETARCH" in \
 ENV MYSQL_SOURCE_DIR=/workspace/mysql-server \
     MYSQL_BUILD_DIR=/workspace/build/mysql
 
-COPY . .
+COPY Cargo.toml Cargo.lock build.rs rust-toolchain.toml ./
+COPY src ./src
+COPY shim ./shim
+COPY mysql-handler-* ./
+COPY examples ./examples
+COPY benches ./benches
 
 RUN MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release -p engine
 
