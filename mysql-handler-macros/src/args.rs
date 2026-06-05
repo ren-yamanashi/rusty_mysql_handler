@@ -40,27 +40,22 @@ pub(crate) struct PluginArgs {
     pub author: LitStr,
 }
 
-#[derive(Default)]
-struct Builder {
-    name: Option<LitStr>,
-    description: Option<LitStr>,
-    version: Option<Expr>,
-    license: Option<Expr>,
-    author: Option<LitStr>,
-}
-
 impl Parse for PluginArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut b = Builder::default();
+        let mut name: Option<LitStr> = None;
+        let mut description: Option<LitStr> = None;
+        let mut version: Option<Expr> = None;
+        let mut license: Option<Expr> = None;
+        let mut author: Option<LitStr> = None;
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
             input.parse::<Token![=]>()?;
             match key.to_string().as_str() {
-                "name" => set_once(&mut b.name, input.parse()?, &key)?,
-                "description" => set_once(&mut b.description, input.parse()?, &key)?,
-                "version" => set_once(&mut b.version, input.parse()?, &key)?,
-                "license" => set_once(&mut b.license, input.parse()?, &key)?,
-                "author" => set_once(&mut b.author, input.parse()?, &key)?,
+                "name" => set_once(&mut name, input.parse()?, &key)?,
+                "description" => set_once(&mut description, input.parse()?, &key)?,
+                "version" => set_once(&mut version, input.parse()?, &key)?,
+                "license" => set_once(&mut license, input.parse()?, &key)?,
+                "author" => set_once(&mut author, input.parse()?, &key)?,
                 other => {
                     return Err(syn::Error::new(
                         key.span(),
@@ -74,22 +69,21 @@ impl Parse for PluginArgs {
                 input.parse::<Token![,]>()?;
             }
         }
-        let name = b
-            .name
+        let name = name
             .ok_or_else(|| syn::Error::new(input.span(), "#[plugin] missing `name = \"...\"`"))?;
         validate_name(&name)?;
         Ok(PluginArgs {
             name,
-            description: b.description.ok_or_else(|| {
+            description: description.ok_or_else(|| {
                 syn::Error::new(input.span(), "#[plugin] missing `description = \"...\"`")
             })?,
-            version: b.version.ok_or_else(|| {
+            version: version.ok_or_else(|| {
                 syn::Error::new(input.span(), "#[plugin] missing `version = ...`")
             })?,
-            license: b.license.ok_or_else(|| {
+            license: license.ok_or_else(|| {
                 syn::Error::new(input.span(), "#[plugin] missing `license = ...`")
             })?,
-            author: b.author.ok_or_else(|| {
+            author: author.ok_or_else(|| {
                 syn::Error::new(input.span(), "#[plugin] missing `author = \"...\"`")
             })?,
         })

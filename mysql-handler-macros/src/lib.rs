@@ -27,10 +27,8 @@
 //! `INSTALL PLUGIN` time, plus the panic-safe init wrapper that
 //! registers the engine factory.
 
-// The crate exposes nothing besides the `#[proc_macro_attribute]`
-// entry point below, so `pub(crate)` items inside child modules are
-// the right visibility — the redundant_pub_crate hint is a false
-// positive here and would conflict with unreachable_pub.
+// `pub(crate)` on internal items is required for `unreachable_pub`;
+// the resulting `redundant_pub_crate` lint is a false positive here.
 #![allow(clippy::redundant_pub_crate)]
 
 mod args;
@@ -56,6 +54,13 @@ use crate::args::PluginArgs;
 ///   [`mysql_handler::license::License`]. The discriminant is folded
 ///   into the static initialiser at compile time.
 /// - `author`: author or organisation name (string literal).
+///
+/// # Caveats
+///
+/// The generated `rust__plugin_init` only registers the engine
+/// factory. Engines that also need a custom `Handlerton` must
+/// register it from a separate `#[unsafe(no_mangle)] extern "C"`
+/// hook for now; the attribute does not take a handlerton type.
 ///
 /// # Example
 ///
