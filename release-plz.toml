@@ -4,21 +4,3 @@
 [workspace]
 # Skip CHANGELOG.md; the GitHub Release body carries the changelog.
 changelog_update = false
-
-# Force a minor bump for the upcoming 0.2.0 cut: cargo-semver-checks reports
-# the net public surface since 0.1.0 as compatible (the index callbacks were
-# removed then restored), but the macro-based plugin manifest and the
-# capability-trait churn warrant a 0.x minor bump regardless. Remove these
-# overrides once 0.2.0 has shipped so subsequent releases go back to
-# semver-detected bumping.
-[[package]]
-name = "mysql-handler"
-version_increment = "minor"
-
-[[package]]
-name = "mysql-handler-build"
-version_increment = "minor"
-
-[[package]]
-name = "mysql-handler-macros"
-version_increment = "minor"
