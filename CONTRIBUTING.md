@@ -20,23 +20,11 @@ End-to-end plugin-load coverage runs in CI (Smoke job in
 
 ## Workspace layout
 
-Three crates ship out of this repository:
-
-- `mysql-handler` (`src/`) — the runtime crate. Hosts the
-  `StorageEngine` / `IndexedEngine` / `EngineCapabilities` traits, the
-  `ffi_boundary()` `catch_unwind` wrappers, one Rust callback per
-  handler / handlerton virtual, and the bindgen output (`sys.rs`).
-- `mysql-handler-build` (`mysql-handler-build/`) — a zero-dependency
-  build-script helper downstream cdylibs invoke from their `build.rs`.
-- `mysql-handler-macros` (`mysql-handler-macros/`) — the `#[plugin]`
-  proc-macro crate. Re-exported through `mysql_handler::prelude` so
-  downstream depends on it transitively.
-
-`shim/` is the C++ staticlib (`libha_rusty_shim.a`) that subclasses
-`handler` and forwards each virtual to a `rust__handler__*` callback.
-`examples/engine/` is a downstream cdylib used as a reference engine and
-as the e2e smoke target; it consumes all three workspace crates exactly
-the way an external user would.
+- `mysql-handler` (`src/`) — runtime: traits, FFI callbacks, bindgen output.
+- `mysql-handler-build` (`mysql-handler-build/`) — `build.rs` helper for downstream cdylibs.
+- `mysql-handler-macros` (`mysql-handler-macros/`) — `#[plugin]` proc macro, re-exported through `mysql_handler::prelude`.
+- `shim/` — C++ staticlib that subclasses `handler` and forwards to `rust__handler__*`.
+- `examples/engine/` — reference cdylib + e2e smoke target.
 
 ## Updating the E2E build base
 
