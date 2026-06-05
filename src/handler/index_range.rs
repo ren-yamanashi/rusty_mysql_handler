@@ -21,15 +21,16 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 //! `rust__handler__*` callbacks for index read and range-scan methods
-//! (handler.h #20, #22–#24, #30, #31). `records_in_range` (#32) lives in
-//! [`crate::handler::index_records`]. Shares the FFI safety contract
+//! (handler.h #20, #22–#24, #30–#32). Shares the FFI safety contract
 //! documented at [`crate::handler`].
 
 #![allow(unsafe_code)]
 
-use crate::engine::{EngineError, RKeyFunction, RangeKey};
+use crate::engine::{RKeyFunction, RangeKey};
 use crate::panic_guard::FfiBoundary;
 use crate::runtime::{EngineContext, FfiPtr};
+
+const HA_POS_ERROR: u64 = u64::MAX;
 
 /// Resolve a possibly-null key pointer to the slice the trait expects; a null
 /// pointer ("begin at the first key") becomes an empty slice
@@ -82,10 +83,7 @@ pub unsafe extern "C" fn rust__handler__index_read(
         let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
         // SAFETY: caller guarantees key covers key_len readable bytes.
         let key = unsafe { key_slice(key, key_len) };
-        match engine.as_indexed() {
-            Some(indexed) => indexed.index_read(buf, key, RKeyFunction::from_raw(find_flag)),
-            None => Err(EngineError::WrongCommand),
-        }
+        engine.index_read(buf, key, RKeyFunction::from_raw(find_flag))
     })
 }
 
@@ -112,12 +110,7 @@ pub unsafe extern "C" fn rust__handler__index_read_idx_map(
         let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
         // SAFETY: caller guarantees key covers key_len readable bytes.
         let key = unsafe { key_slice(key, key_len) };
-        match engine.as_indexed() {
-            Some(indexed) => {
-                indexed.index_read_idx_map(buf, index, key, RKeyFunction::from_raw(find_flag))
-            }
-            None => Err(EngineError::WrongCommand),
-        }
+        engine.index_read_idx_map(buf, index, key, RKeyFunction::from_raw(find_flag))
     })
 }
 
@@ -142,10 +135,7 @@ pub unsafe extern "C" fn rust__handler__index_read_last(
         let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
         // SAFETY: caller guarantees key covers key_len readable bytes.
         let key = unsafe { key_slice(key, key_len) };
-        match engine.as_indexed() {
-            Some(indexed) => indexed.index_read_last(buf, key),
-            None => Err(EngineError::WrongCommand),
-        }
+        engine.index_read_last(buf, key)
     })
 }
 
@@ -170,10 +160,7 @@ pub unsafe extern "C" fn rust__handler__index_read_last_map(
         let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
         // SAFETY: caller guarantees key covers key_len readable bytes.
         let key = unsafe { key_slice(key, key_len) };
-        match engine.as_indexed() {
-            Some(indexed) => indexed.index_read_last_map(buf, key),
-            None => Err(EngineError::WrongCommand),
-        }
+        engine.index_read_last_map(buf, key)
     })
 }
 
@@ -207,10 +194,7 @@ pub unsafe extern "C" fn rust__handler__read_range_first(
         let start = unsafe { range_key(start_key, start_len, start_flag) };
         // SAFETY: caller guarantees end_key covers end_len readable bytes.
         let end = unsafe { range_key(end_key, end_len, end_flag) };
-        match engine.as_indexed() {
-            Some(indexed) => indexed.read_range_first(buf, start, end, eq_range, sorted),
-            None => Err(EngineError::WrongCommand),
-        }
+        engine.read_range_first(buf, start, end, eq_range, sorted)
     })
 }
 
@@ -229,10 +213,37 @@ pub unsafe extern "C" fn rust__handler__read_range_next(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees buf covers buf_len writable bytes.
-        let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
-        match engine.as_indexed() {
-            Some(indexed) => indexed.read_range_next(buf),
-            None => Err(EngineError::WrongCommand),
+        engine.read_range_next(unsafe { FfiPtr::slice_mut(buf, buf_len) })
+    })
+}
+
+/// Estimate the row count on index `inx`; returns `HA_POS_ERROR` when unknown
+///
+/// # Safety
+/// `ctx` non-null; each non-null range key readable for its length.
+#[doc(hidden)]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rust__handler__records_in_range(
+    ctx: *mut EngineContext,
+    inx: u32,
+    min_key: *const u8,
+    min_len: usize,
+    min_flag: i32,
+    max_key: *const u8,
+    max_len: usize,
+    max_flag: i32,
+) -> u64 {
+    FfiBoundary::run_default(HA_POS_ERROR, || {
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
+        let engine = unsafe { &mut *ctx }.engine_mut();
+        // SAFETY: caller guarantees min_key covers min_len readable bytes.
+        let min = unsafe { range_key(min_key, min_len, min_flag) };
+        // SAFETY: caller guarantees max_key covers max_len readable bytes.
+        let max = unsafe { range_key(max_key, max_len, max_flag) };
+        match engine.records_in_range(inx, min, max) {
+            Some(rows) => rows,
+            None => HA_POS_ERROR,
         }
     })
 }

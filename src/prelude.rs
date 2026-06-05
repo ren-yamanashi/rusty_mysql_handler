@@ -23,15 +23,11 @@
 //! Aggregated re-exports for downstream engine crates.
 //!
 //! `use mysql_handler::prelude::*;` brings the items most engine
-//! implementations reach for: the [`License`] tag for the plugin
-//! manifest, the [`plugin`] attribute macro that generates it, and the
-//! engine trait family ([`StorageEngine`], [`EngineCapabilities`],
-//! [`IndexedEngine`]) plus the [`EngineError`] / [`EngineResult`]
-//! types.
+//! implementations reach for: the [`StorageEngine`] trait and its
+//! [`EngineError`] / [`EngineResult`] types, the [`License`] tag for
+//! the plugin manifest, and the [`plugin`] attribute macro that
+//! generates it.
 
-pub use crate::engine::{
-    EngineCapabilities, EngineError, EngineResult, IndexedEngine, RKeyFunction, RangeKey,
-    StorageEngine,
-};
+pub use crate::engine::{EngineError, EngineResult, RKeyFunction, RangeKey, StorageEngine};
 pub use crate::license::License;
 pub use mysql_handler_macros::plugin;

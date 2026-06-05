@@ -47,7 +47,7 @@ pub(super) fn plugin_init(ty: &syn::Ident, handlerton: Option<&TypePath>) -> Tok
             ::mysql_handler::panic_guard::FfiBoundary::run_void(|| {
                 ::mysql_handler::runtime::register_engine_factory(|| {
                     let engine: ::std::boxed::Box<
-                        dyn ::mysql_handler::engine::EngineCapabilities,
+                        dyn ::mysql_handler::engine::StorageEngine,
                     > = ::std::boxed::Box::new(
                         <#ty as ::core::default::Default>::default(),
                     );

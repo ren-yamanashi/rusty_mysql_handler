@@ -61,8 +61,6 @@ pub mod index_pushed;
 #[doc(hidden)]
 pub mod index_range;
 #[doc(hidden)]
-pub mod index_records;
-#[doc(hidden)]
 pub mod inplace_alter;
 #[doc(hidden)]
 pub mod limits;

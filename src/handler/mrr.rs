@@ -69,13 +69,7 @@ pub unsafe extern "C" fn rust__handler__multi_range_read_info_const(
         let seq = unsafe { seq.as_ref() };
         // SAFETY: cost is null or valid for read for the call's duration.
         let cost = unsafe { cost.as_ref() };
-        let outcome = match engine.as_indexed() {
-            Some(indexed) => {
-                indexed.multi_range_read_info_const(keyno, seq, seq_init_param, n_ranges, cost)
-            }
-            None => None,
-        };
-        match outcome {
+        match engine.multi_range_read_info_const(keyno, seq, seq_init_param, n_ranges, cost) {
             Some(rows) => {
                 if !out_rows.is_null() {
                     // SAFETY: out_rows is writable for one u64 when non-null.
@@ -108,11 +102,7 @@ pub unsafe extern "C" fn rust__handler__multi_range_read_info(
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: cost is null or valid for read for the call's duration.
         let cost = unsafe { cost.as_ref() };
-        let outcome = match engine.as_indexed() {
-            Some(indexed) => indexed.multi_range_read_info(keyno, n_ranges, keys, cost),
-            None => None,
-        };
-        match outcome {
+        match engine.multi_range_read_info(keyno, n_ranges, keys, cost) {
             Some(rows) => {
                 if !out_rows.is_null() {
                     // SAFETY: out_rows is writable for one u64 when non-null.
@@ -149,13 +139,7 @@ pub unsafe extern "C" fn rust__handler__multi_range_read_init(
         let seq = unsafe { seq.as_ref() };
         // SAFETY: buf is null or valid for read for the call's duration.
         let buf = unsafe { buf.as_ref() };
-        let outcome = match engine.as_indexed() {
-            Some(indexed) => {
-                indexed.multi_range_read_init(seq, seq_init_param, n_ranges, mode, buf)
-            }
-            None => None,
-        };
-        match outcome {
+        match engine.multi_range_read_init(seq, seq_init_param, n_ranges, mode, buf) {
             Some(result) => {
                 if !out_result.is_null() {
                     // SAFETY: out_result is writable for one i32 when non-null.
@@ -187,11 +171,7 @@ pub unsafe extern "C" fn rust__handler__multi_range_read_next(
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees buf covers buf_len writable bytes.
         let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
-        let outcome = match engine.as_indexed() {
-            Some(indexed) => indexed.multi_range_read_next(buf, range_info),
-            None => None,
-        };
-        match outcome {
+        match engine.multi_range_read_next(buf, range_info) {
             Some(result) => {
                 if !out_result.is_null() {
                     // SAFETY: out_result is writable for one i32 when non-null.

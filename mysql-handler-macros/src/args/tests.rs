@@ -25,10 +25,8 @@
 
 use proc_macro2::Span;
 use syn::LitStr;
-use syn::parse_quote;
 
-use super::{MAX_PLUGIN_NAME_LEN, PluginArgs, validate_name};
-use crate::capability::Capability;
+use super::{MAX_PLUGIN_NAME_LEN, validate_name};
 
 fn lit(value: &str) -> LitStr {
     LitStr::new(value, Span::call_site())
@@ -62,51 +60,4 @@ fn name_at_limit_accepted() {
 #[test]
 fn typical_name_accepted() {
     validate_name(&lit("my_engine")).unwrap();
-}
-
-#[test]
-fn capabilities_default_to_empty_when_omitted() {
-    let args: PluginArgs = parse_quote! {
-        name = "ex",
-        description = "ex",
-        version = 1u32,
-        license = License::Gpl,
-        author = "me",
-    };
-    assert!(args.capabilities.is_empty());
-}
-
-#[test]
-fn capabilities_parse_indexed() {
-    let args: PluginArgs = parse_quote! {
-        name = "ex",
-        description = "ex",
-        version = 1u32,
-        license = License::Gpl,
-        author = "me",
-        capabilities = [Indexed],
-    };
-    assert_eq!(args.capabilities, vec![Capability::Indexed]);
-}
-
-#[test]
-fn unknown_capability_is_rejected() {
-    let err = match syn::parse_str::<PluginArgs>(
-        r#"name = "ex", description = "ex", version = 1u32, license = License::Gpl, author = "me", capabilities = [Unknown]"#,
-    ) {
-        Ok(_) => panic!("expected an unknown-capability error"),
-        Err(err) => err,
-    };
-    assert!(err.to_string().contains("unknown capability"));
-}
-
-#[test]
-fn duplicate_capability_is_rejected() {
-    let err = match syn::parse_str::<PluginArgs>(
-        r#"name = "ex", description = "ex", version = 1u32, license = License::Gpl, author = "me", capabilities = [Indexed, Indexed]"#,
-    ) {
-        Ok(_) => panic!("expected a duplicate-capability error"),
-        Err(err) => err,
-    };
-    assert!(err.to_string().contains("listed more than once"));
 }
