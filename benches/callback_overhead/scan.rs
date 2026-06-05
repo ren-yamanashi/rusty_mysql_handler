@@ -28,7 +28,6 @@ use std::hint::black_box;
 
 use criterion::Criterion;
 
-use mysql_handler::engine::StorageEngine;
 use mysql_handler::handler::scan::{rust__handler__rnd_next, rust__handler__rnd_pos};
 use mysql_handler::runtime::EngineContext;
 

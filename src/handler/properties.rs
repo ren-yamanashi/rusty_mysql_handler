@@ -71,9 +71,8 @@ pub unsafe extern "C" fn rust__handler__index_flags(
 ) -> u32 {
     FfiBoundary::run_default(0, || {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        match unsafe { &mut *ctx }.engine_mut().as_indexed() {
-            Some(indexed) => indexed.index_flags(idx, part, all_parts),
-            None => 0,
-        }
+        unsafe { &mut *ctx }
+            .engine_mut()
+            .index_flags(idx, part, all_parts)
     })
 }

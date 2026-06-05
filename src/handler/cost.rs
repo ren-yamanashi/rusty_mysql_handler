@@ -105,10 +105,9 @@ pub unsafe extern "C" fn rust__handler__index_scan_cost(
 ) -> bool {
     FfiBoundary::run_default(false, || {
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
-        let value = match unsafe { &mut *ctx }.engine_mut().as_indexed() {
-            Some(indexed) => indexed.index_scan_cost(index, ranges, rows),
-            None => None,
-        };
+        let value = unsafe { &mut *ctx }
+            .engine_mut()
+            .index_scan_cost(index, ranges, rows);
         report_cost(io, cpu, import, mem, value)
     })
 }

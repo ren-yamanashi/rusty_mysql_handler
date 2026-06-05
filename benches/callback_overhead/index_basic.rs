@@ -28,7 +28,7 @@ use std::hint::black_box;
 
 use criterion::Criterion;
 
-use mysql_handler::engine::{IndexedEngine, RKeyFunction};
+use mysql_handler::engine::RKeyFunction;
 use mysql_handler::handler::index_basic::{
     rust__handler__index_end, rust__handler__index_init, rust__handler__index_next,
     rust__handler__index_read_map,

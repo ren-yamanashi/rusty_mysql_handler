@@ -25,10 +25,10 @@
 use std::sync::OnceLock;
 
 use super::context::EngineContext;
-use crate::engine::EngineCapabilities;
+use crate::engine::StorageEngine;
 
 /// Factory closure that produces a fresh engine instance per opened table
-pub type EngineFactory = fn() -> Box<dyn EngineCapabilities>;
+pub type EngineFactory = fn() -> Box<dyn StorageEngine>;
 
 /// Process-wide singleton holding the engine factory. The plugin's
 /// `rust__plugin_init` registers the factory once at startup;
@@ -75,7 +75,7 @@ mod tests {
     use std::ffi::CStr;
 
     use super::*;
-    use crate::engine::{EngineCapabilities, EngineError, EngineResult, StorageEngine};
+    use crate::engine::{EngineError, EngineResult};
 
     struct MockEngine;
 
@@ -84,6 +84,9 @@ mod tests {
             c"MOCK"
         }
         fn table_flags(&self) -> u64 {
+            0
+        }
+        fn index_flags(&self, _idx: u32, _part: u32, _all_parts: bool) -> u32 {
             0
         }
         fn create(
@@ -118,8 +121,6 @@ mod tests {
             Ok(())
         }
     }
-
-    impl EngineCapabilities for MockEngine {}
 
     #[test]
     fn create_context_is_none_before_register() {

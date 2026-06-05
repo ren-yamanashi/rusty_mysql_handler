@@ -31,7 +31,6 @@ use syn::{ItemStruct, LitCStr, LitStr};
 
 use crate::args::PluginArgs;
 
-mod capabilities_impl;
 mod manifest;
 mod plugin_init;
 
@@ -48,14 +47,12 @@ pub(crate) fn plugin(args: &PluginArgs, target: &ItemStruct) -> syn::Result<Toke
         &args.version,
         &args.license,
     );
-    let capabilities_impl = capabilities_impl::capabilities_impl(ty, &args.capabilities);
     let plugin_init = plugin_init::plugin_init(ty, args.handlerton.as_ref());
 
     Ok(quote! {
         #target
         #manifest_module
         #manifest_statics
-        #capabilities_impl
         #plugin_init
     })
 }

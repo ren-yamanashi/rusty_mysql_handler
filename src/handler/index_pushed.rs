@@ -25,7 +25,6 @@
 
 #![allow(unsafe_code)]
 
-use crate::engine::EngineError;
 use crate::panic_guard::FfiBoundary;
 use crate::runtime::{EngineContext, FfiPtr};
 
@@ -55,10 +54,7 @@ pub unsafe extern "C" fn rust__handler__index_read_pushed(
             // SAFETY: caller guarantees key covers key_len readable bytes.
             unsafe { FfiPtr::slice_const(key, key_len) }
         };
-        match engine.as_indexed() {
-            Some(indexed) => indexed.index_read_pushed(buf, key),
-            None => Err(EngineError::WrongCommand),
-        }
+        engine.index_read_pushed(buf, key)
     })
 }
 
@@ -77,10 +73,6 @@ pub unsafe extern "C" fn rust__handler__index_next_pushed(
         // SAFETY: caller guarantees ctx is non-null and exclusively owned.
         let engine = unsafe { &mut *ctx }.engine_mut();
         // SAFETY: caller guarantees buf covers buf_len writable bytes.
-        let buf = unsafe { FfiPtr::slice_mut(buf, buf_len) };
-        match engine.as_indexed() {
-            Some(indexed) => indexed.index_next_pushed(buf),
-            None => Err(EngineError::WrongCommand),
-        }
+        engine.index_next_pushed(unsafe { FfiPtr::slice_mut(buf, buf_len) })
     })
 }

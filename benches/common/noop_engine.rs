@@ -31,9 +31,7 @@
 
 use std::ffi::CStr;
 
-use mysql_handler::engine::{
-    EngineCapabilities, EngineResult, IndexedEngine, RKeyFunction, StorageEngine,
-};
+use mysql_handler::engine::{EngineResult, RKeyFunction, StorageEngine};
 use mysql_handler::sys;
 
 #[derive(Debug, Default)]
@@ -51,6 +49,10 @@ impl StorageEngine for NoopEngine {
     }
 
     fn table_flags(&self) -> u64 {
+        0
+    }
+
+    fn index_flags(&self, _idx: u32, _part: u32, _all_parts: bool) -> u32 {
         0
     }
 
@@ -105,12 +107,6 @@ impl StorageEngine for NoopEngine {
     fn delete_row(&mut self, _buf: &[u8]) -> EngineResult {
         Ok(())
     }
-}
-
-impl IndexedEngine for NoopEngine {
-    fn index_flags(&self, _idx: u32, _part: u32, _all_parts: bool) -> u32 {
-        0
-    }
 
     fn index_init(&mut self, _idx: u32, _sorted: bool) -> EngineResult {
         Ok(())
@@ -133,11 +129,5 @@ impl IndexedEngine for NoopEngine {
             *first = 0;
         }
         Ok(())
-    }
-}
-
-impl EngineCapabilities for NoopEngine {
-    fn as_indexed(&mut self) -> Option<&mut dyn IndexedEngine> {
-        Some(self)
     }
 }
