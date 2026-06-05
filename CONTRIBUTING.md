@@ -18,6 +18,14 @@ make setup
 End-to-end plugin-load coverage runs in CI (Smoke job in
 `.github/workflows/e2e.yml`); there is no local Make wrapper for it.
 
+## Workspace layout
+
+- `mysql-handler` (`src/`) — runtime: `StorageEngine` trait, FFI callbacks, bindgen output.
+- `mysql-handler-build` (`mysql-handler-build/`) — `build.rs` helper for downstream cdylibs.
+- `mysql-handler-macros` (`mysql-handler-macros/`) — `#[plugin]` proc macro, re-exported through `mysql_handler::prelude`.
+- `shim/` — C++ staticlib that subclasses `handler` and forwards to `rust__handler__*`.
+- `examples/engine/` — reference cdylib + e2e smoke target.
+
 ## Updating the E2E build base
 
 The Smoke CI job compiles the plugin in Docker against a prebuilt
