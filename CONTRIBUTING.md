@@ -14,12 +14,13 @@ Fork and clone the repo, then:
 make setup
 ```
 
-`make help` lists every target. Typical PR loop: `make check` → `make test`
-→ `make test_e2e`.
+`make help` lists every target. Typical PR loop: `make check` → `make test`.
+End-to-end plugin-load coverage runs in CI (Smoke job in
+`.github/workflows/e2e.yml`); there is no local Make wrapper for it.
 
 ## Updating the E2E build base
 
-`make test_e2e` compiles the plugin in Docker against a prebuilt
+The Smoke CI job compiles the plugin in Docker against a prebuilt
 `mysql-server` tree published as GitHub Release assets
 (`mysql-base-<version>`), one per supported arch (x86_64, arm64). Recipe:
 `tests/e2e/Dockerfile.base`. Publisher: `.github/workflows/publish-mysql-base.yml`.
