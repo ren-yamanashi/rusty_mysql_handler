@@ -6,50 +6,37 @@
 graph TD
   Server["mysqld (C++)"]
   subgraph cdylib["libengine cdylib"]
-    Manifest["plugin manifest<br/>(3 pub no_mangle Rust statics)"]
+    Manifest["plugin manifest<br/>(3 pub no_mangle Rust statics)<br/>emitted by #[plugin] macro"]
     Engine["examples/engine<br/>StorageEngine impl"]
-    Rlib["mysql-handler rlib<br/>trait, runtime, ffi, sys"]
-    Shim["ha_rusty_shim (C++ staticlib)<br/>RustHandlerBase, thr_lock"]
+    Macros["mysql-handler-macros (proc-macro)"]
+    Build["mysql-handler-build (build-dep)"]
+    Rlib["mysql-handler rlib"]
+    Shim["ha_rusty_shim (C++ staticlib)"]
   end
   Server -->|"INSTALL PLUGIN<br/>(dlopen + dlsym)"| Manifest
   Manifest --> Engine --> Rlib --> Shim
+  Macros -. "emits manifest + init" .-> Manifest
+  Build -. "wires link flags" .-> Shim
   Shim -. "unresolved C++ symbols" .-> Server
 ```
 
-- **`shim/`** is a C++ staticlib (`libha_rusty_shim.a`). It subclasses
-  `handler` and forwards each virtual method to a `rust__handler__*`
-  callback.
-- **`src/`** is the `mysql-handler` rlib. It hosts the bindgen output
-  (`sys.rs`), the `StorageEngine` trait, the `ffi_boundary()`
-  `catch_unwind` wrappers, and one Rust callback per handler / handlerton
-  method.
-- **`examples/engine/`** is a downstream cdylib. It implements
-  `StorageEngine`, hosts the plugin manifest, and is what mysqld actually
-  loads.
-
 ## Pointer-based delegation
 
-`RustHandlerBase` lives in MySQL-owned memory (`new (mem_root)`). The Rust
-engine state lives on the Rust heap as an `EngineContext` wrapping
-`Box<dyn StorageEngine>`, reached through `void* rust_ctx_`. The C++
-constructor and destructor call `rust__create_engine` /
-`rust__destroy_engine` to keep the two lifetimes aligned, so neither side
-ever frees memory it does not own.
+`RustHandlerBase` lives in MySQL-owned memory (`new (mem_root)`); the
+Rust engine state lives on the Rust heap as an `EngineContext` wrapping
+`Box<dyn StorageEngine>`, reached through `void* rust_ctx_`.
+`rust__create_engine` / `rust__destroy_engine` keep the two lifetimes
+aligned.
 
 ## Plugin manifest in Rust
 
-mysqld looks up three data symbols at `INSTALL PLUGIN`:
-
-- `_mysql_plugin_interface_version_`
-- `_mysql_sizeof_struct_st_plugin_`
-- `_mysql_plugin_declarations_`
-
-These live in Rust (`examples/engine/src/lib.rs::plugin_manifest`) as
-`#[unsafe(no_mangle)] pub static`. On Linux ELF, Rust's auto-generated
-cdylib version script wraps every non-`pub no_mangle` symbol in
-`local: *;` — a C++ definition would be stripped from `.dynsym` and
-become invisible to `dlsym`. Hosting the manifest in Rust is the only
-export path that works on Linux without per-platform linker hacks.
+mysqld dlsyms three data symbols at `INSTALL PLUGIN`
+(`_mysql_plugin_interface_version_`, `_mysql_sizeof_struct_st_plugin_`,
+`_mysql_plugin_declarations_`). The `#[plugin]` macro emits them as
+`#[unsafe(no_mangle)] pub static` on the downstream cdylib plus the
+panic-safe `rust__plugin_init` the shim calls back into. Hosting them
+in Rust is the only Linux-ELF export path that survives the cdylib's
+auto-generated version script.
 
 ## Naming convention
 
@@ -60,41 +47,32 @@ export path that works on Linux without per-platform linker hacks.
 
 ## Hybrid bindgen
 
-bindgen is used for enums and constants only. FFI function declarations
-are hand-written. The committed `src/sys_bindings.rs` means `cargo check`
-and `cargo test` need no MySQL headers — the headers are only consumed
-by `build.rs` when `MYSQL_HANDLER_REGEN_BINDINGS=1` is set.
+bindgen handles enums and constants only; FFI function declarations are
+hand-written. `src/sys_bindings.rs` is committed, so `cargo check` /
+`cargo test` need no MySQL headers — headers are only consumed by
+`build.rs` under `MYSQL_HANDLER_REGEN_BINDINGS=1`.
 
 ## Build modes
 
-`cargo build --release -p engine` produces the final cdylib. The C++ shim
-selection is env-driven:
-
 | Trigger | Behaviour |
 | --- | --- |
-| `MYSQL_HANDLER_FROM_SOURCE=1` | cmake-build `libha_rusty_shim.a` from `shim/` against the `mysql-server/` submodule |
-| `MYSQL_HANDLER_ARCHIVE=<path>` | gunzip the named archive into `OUT_DIR/prebuilt/libha_rusty_shim.a` (local filesystem only) |
-| (unset) | No shim link — fine for `cargo check` / `cargo test`, not loadable into mysqld |
+| `MYSQL_HANDLER_FROM_SOURCE=1` | cmake-build `libha_rusty_shim.a` from `shim/` against `mysql-server/` |
+| `MYSQL_HANDLER_ARCHIVE=<path>` | gunzip the named archive into `OUT_DIR/prebuilt/libha_rusty_shim.a` |
+| (unset) | No shim link — `cargo check` / `cargo test` only, not loadable |
 
-`build.rs` never reaches the network — external assets come via the
-`mysql-server/` submodule, the Nix shell, or a local archive.
+`build.rs` never reaches the network.
 
 ## Safety invariants
 
-- Every `extern "C"` callback wraps its body in `ffi_boundary()`. A
-  panic across the FFI boundary would abort the entire MySQL server.
+- Every `extern "C"` callback wraps its body in `ffi_boundary()`; a
+  panic across the FFI boundary aborts mysqld.
 - MySQL-owned pointers (`TABLE*`, `Field*`, `THD*`) are never stored
-  beyond the scope of the callback that received them.
-- C++ classes are represented in Rust as opaque types
-  (`#[repr(C)] struct Foo([u8; 0])`).
-- Struct sizes and alignments are verified with `static_assert` in
-  `shim/binding.cc` for every shared layout.
+  beyond the callback that received them.
+- C++ classes are represented in Rust as `#[repr(C)] struct Foo([u8; 0])`.
+- Shared layouts are guarded by `static_assert` in `shim/binding.cc`.
 
 ## E2E smoke
 
-The Smoke CI job runs a two-stage Docker build. The builder produces
-`libengine.so` against a prebuilt MySQL 8.4 source tree; the runtime is
-`mysql:8.4.9` with the plugin staged into `plugin_dir`. The end-to-end
-SQL exercises the full plugin load path, schema creation, row CRUD with
-equality lookups, and the engine's sentinel return value. The runtime
-image runs on both x86_64 and arm64.
+Two-stage Docker build: the builder produces `libengine.so` against a
+prebuilt MySQL 8.4 source tree; the runtime is `mysql:8.4.9` with the
+plugin staged into `plugin_dir`. Runs on x86_64 and arm64.
