@@ -33,8 +33,8 @@ graph LR
   EC["EngineCapabilities"]
   SE["StorageEngine"]
   IE["IndexedEngine"]
-  EC -- "super-trait of" --> SE
-  IE -- "super-trait of" --> SE
+  EC -- "sub-trait of" --> SE
+  IE -- "sub-trait of" --> SE
   EC -- "as_indexed()" --> IE
 ```
 
