@@ -1,17 +1,29 @@
-*
+# Blocklist: the e2e plugin build pulls everything from the repo root
+# via `COPY . .`, so this file only lists what must NOT enter the build
+# context. Inverting the previous whitelist keeps the Dockerfile
+# self-maintaining when new workspace crates are added.
 
-!Cargo.toml
-!Cargo.lock
-!build.rs
-!rust-toolchain.toml
-!src
-!shim
-!mysql-handler-build
-!mysql-handler-macros
-!examples
-!benches
-!mysql-server
+# Local-only state / IDE / shell / CI metadata
+.cache/
+.claude/
+.git/
+.githooks/
+.github/
+.ignore/
+.vscode/
 
-mysql-server/.git
-mysql-server/build
-examples/*/target
+# Build outputs (regenerated inside the image)
+build/
+target/
+**/target/
+
+# MySQL source submodule's own build artefacts and history
+mysql-server/build/
+mysql-server/.git/
+
+# Repository docs (not consumed by `cargo build -p engine`)
+docs/
+
+# The e2e harness itself runs outside the image; the Dockerfile and
+# fixtures here are not needed inside the running container.
+tests/
