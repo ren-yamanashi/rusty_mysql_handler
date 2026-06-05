@@ -21,7 +21,6 @@ mysql-handler-build = "0.2"
 
 - Rust 1.85+
 - `mysql:8.4`
-- `MYSQL_HANDLER_FROM_SOURCE=1` (cmake-builds the shim from the bundled `mysql-server/` submodule) or `MYSQL_HANDLER_ARCHIVE=<path>` (prebuilt `.a.gz`)
 
 #### 1. `Cargo.toml`
 
@@ -82,11 +81,18 @@ impl IndexedEngine for MyEngine {}
 
 Drop `capabilities = [Indexed]` and the `IndexedEngine` impl for scan-only engines. See [`examples/engine/`](./examples/engine/) for a working reference.
 
-#### 4. Build & install
+#### 4. Build
+
+`build.rs` needs the C++ shim staticlib (`libha_rusty_shim.a`) — pick one source:
 
 ```bash
-MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release
+MYSQL_HANDLER_FROM_SOURCE=1 cargo build --release   # cmake-build from the mysql-server/ submodule
+MYSQL_HANDLER_ARCHIVE=<path> cargo build --release  # use a prebuilt .a.gz
 ```
+
+Without either env var, `cargo build` still passes but the resulting cdylib is not loadable.
+
+#### 5. Install
 
 ```sql
 INSTALL PLUGIN my_engine SONAME 'libmy_engine.so';
