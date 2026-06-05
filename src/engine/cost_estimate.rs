@@ -102,9 +102,9 @@ mod tests {
     #[test]
     fn accessors_return_constructor_components() {
         let cost = CostEstimate::new(1.5, 2.5, 3.5, 4.5);
-        assert_eq!(cost.io_cost(), 1.5);
-        assert_eq!(cost.cpu_cost(), 2.5);
-        assert_eq!(cost.import_cost(), 3.5);
-        assert_eq!(cost.mem_cost(), 4.5);
+        assert_eq!(cost.io_cost().to_bits(), 1.5_f64.to_bits());
+        assert_eq!(cost.cpu_cost().to_bits(), 2.5_f64.to_bits());
+        assert_eq!(cost.import_cost().to_bits(), 3.5_f64.to_bits());
+        assert_eq!(cost.mem_cost().to_bits(), 4.5_f64.to_bits());
     }
 }

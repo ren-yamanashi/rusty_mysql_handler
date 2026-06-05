@@ -146,10 +146,10 @@ mod tests {
     fn report_cost_writes_components_and_signals_handled() {
         let (mut io, mut cpu, mut import, mut mem) = (0.0, 0.0, 0.0, 0.0);
         let handled = report_cost(
-            &mut io,
-            &mut cpu,
-            &mut import,
-            &mut mem,
+            &raw mut io,
+            &raw mut cpu,
+            &raw mut import,
+            &raw mut mem,
             Some(CostEstimate::new(1.0, 2.0, 3.0, 4.0)),
         );
         assert!(handled);
@@ -159,7 +159,13 @@ mod tests {
     #[test]
     fn report_cost_none_leaves_buffers_and_signals_unhandled() {
         let (mut io, mut cpu, mut import, mut mem) = (9.0, 9.0, 9.0, 9.0);
-        let handled = report_cost(&mut io, &mut cpu, &mut import, &mut mem, None);
+        let handled = report_cost(
+            &raw mut io,
+            &raw mut cpu,
+            &raw mut import,
+            &raw mut mem,
+            None,
+        );
         assert!(!handled);
         assert_eq!((io, cpu, import, mem), (9.0, 9.0, 9.0, 9.0));
     }

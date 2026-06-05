@@ -157,14 +157,14 @@ mod tests {
     #[test]
     fn report_mv_capacity_writes_pair_and_signals_handled() {
         let (mut n, mut b) = (0, 0);
-        assert!(report_mv_capacity(&mut n, &mut b, Some((4, 1024))));
+        assert!(report_mv_capacity(&raw mut n, &raw mut b, Some((4, 1024))));
         assert_eq!((n, b), (4, 1024));
     }
 
     #[test]
     fn report_mv_capacity_none_leaves_buffers_and_signals_unhandled() {
         let (mut n, mut b) = (7, 9);
-        assert!(!report_mv_capacity(&mut n, &mut b, None));
+        assert!(!report_mv_capacity(&raw mut n, &raw mut b, None));
         assert_eq!((n, b), (7, 9));
     }
 
