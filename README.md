@@ -99,10 +99,6 @@ INSTALL PLUGIN my_engine SONAME 'libmy_engine.so';
 CREATE TABLE t (id INT) ENGINE=MY_ENGINE;
 ```
 
-## 🔁 Migrating from 0.1.0
-
-Breaking: plugin manifest moves into `#[plugin]`, index methods move to the `IndexedEngine` sub-trait reached through `EngineCapabilities`. New engines should target 0.2.
-
 ## 📊 Performance
 
 [`tests/sysbench/RESULTS.md`](./tests/sysbench/RESULTS.md).
