@@ -1,6 +1,6 @@
 [package]
 name = "mysql-handler-build"
-version = "0.1.0"
+version.workspace = true
 description = "Build-script helper for mysql-handler downstream engine cdylibs"
 readme = "README.md"
 authors = ["ren-yamanashi"]

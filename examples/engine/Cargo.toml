@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 workspace = true
 
 [dependencies]
-mysql-handler = { path = "../..", version = "0.1.0" }
+mysql-handler = { path = "../..", version = "0.2" }
 
 [build-dependencies]
-mysql-handler-build = { path = "../../mysql-handler-build", version = "0.1.0" }
+mysql-handler-build = { path = "../../mysql-handler-build", version = "0.2" }
