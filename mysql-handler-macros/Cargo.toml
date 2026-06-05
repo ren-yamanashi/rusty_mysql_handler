@@ -1,6 +1,6 @@
 [package]
 name = "mysql-handler-macros"
-version = "0.1.0"
+version.workspace = true
 description = "Procedural macros for mysql-handler engine cdylibs"
 readme = "README.md"
 authors = ["ren-yamanashi"]

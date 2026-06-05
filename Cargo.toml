@@ -1,6 +1,6 @@
 [package]
 name = "mysql-handler"
-version = "0.1.0"
+version.workspace = true
 description = "Rust bindings for the MySQL handler"
 readme = "README.md"
 authors = ["ren-yamanashi"]
@@ -34,8 +34,13 @@ rustdoc-args = ["--cfg", "docsrs"]
 [workspace]
 members = ["examples/engine", "mysql-handler-build", "mysql-handler-macros"]
 
+# Workspace-shared version, inherited by every published crate so a single
+# release-plz bump moves all three to the same number in lockstep.
+[workspace.package]
+version = "0.2.0"
+
 [dependencies]
-mysql-handler-macros = { path = "mysql-handler-macros", version = "0.1.0" }
+mysql-handler-macros = { path = "mysql-handler-macros", version = "0.2" }
 tracing = "0.1.41"
 
 [build-dependencies]
