@@ -20,15 +20,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-// Miscellaneous handlerton callbacks (handler.h #78-#93). is_dict_readonly,
-// rm_tmp_tables, replace_native_transaction_in_thd, post_ddl, post_recover,
-// push_to_engine, get_cost_constants, get_table_statistics,
-// get_index_column_cardinality are wired on every registered handlerton;
-// rotate_encryption_master_key is gated by ENCRYPTION; redo_log_set_state is
-// gated by ENGINE_LOG. get_tablespace_statistics keeps its handlerton pointer
-// NULL today — it still needs the same setter reverse callback over
-// `ha_tablespace_statistics` that the table-stats binding wired for
-// `ha_statistics`. Deferred, not impossible; tracked in docs/api/coverage.md.
+// Miscellaneous handlerton callbacks (handler.h #78-#93). Every callback
+// surfaced through this file is now wired: is_dict_readonly, rm_tmp_tables,
+// replace_native_transaction_in_thd, post_ddl, post_recover, push_to_engine,
+// get_cost_constants, get_table_statistics, get_index_column_cardinality,
+// get_tablespace_statistics on every registered handlerton;
+// rotate_encryption_master_key gated by ENCRYPTION; redo_log_set_state gated
+// by ENGINE_LOG. The five string fields of ha_tablespace_statistics
+// (m_type, m_logfile_group_name, m_row_format, m_status, m_extra) stay at
+// their default-empty values today — those need a separate dd::String_type
+// setter that has not been wired yet.
 
 #include <cstring>
 
@@ -117,6 +118,18 @@ bool rusty_hton_get_table_statistics(const char *db_name,
       static_cast<void *>(stats));
 }
 
+bool rusty_hton_get_tablespace_statistics(const char *tablespace_name,
+                                          const char *file_name,
+                                          const dd::Properties &,
+                                          ha_tablespace_statistics *stats) {
+  if (!tablespace_name || !file_name || !stats) return true;
+  return rust__hton__get_tablespace_statistics(
+      reinterpret_cast<const uint8_t *>(tablespace_name),
+      std::strlen(tablespace_name),
+      reinterpret_cast<const uint8_t *>(file_name), std::strlen(file_name),
+      static_cast<void *>(stats));
+}
+
 SE_cost_constants *rusty_hton_get_cost_constants(uint storage_category) {
   double mem_cost = 0.0;
   double io_cost = 0.0;
@@ -165,6 +178,29 @@ extern "C" void mysql__hton__set_table_statistics(
   stats->block_size = block_size;
 }
 
+// Reverse callback: copy each `TablespaceStatistics` field into the
+// matching `ha_tablespace_statistics` slot. Only the numeric fields cross
+// today; the five string fields keep their default-empty values until a
+// `dd::String_type` setter exists.
+extern "C" void mysql__hton__set_tablespace_statistics(
+    void *stats_void, uint64_t id, uint64_t logfile_group_number,
+    uint64_t free_extents, uint64_t total_extents, uint64_t extent_size,
+    uint64_t initial_size, uint64_t maximum_size, uint64_t autoextend_size,
+    uint64_t version, uint64_t data_free) {
+  if (!stats_void) return;
+  auto *stats = static_cast<ha_tablespace_statistics *>(stats_void);
+  stats->m_id = id;
+  stats->m_logfile_group_number = logfile_group_number;
+  stats->m_free_extents = free_extents;
+  stats->m_total_extents = total_extents;
+  stats->m_extent_size = extent_size;
+  stats->m_initial_size = initial_size;
+  stats->m_maximum_size = maximum_size;
+  stats->m_autoextend_size = autoextend_size;
+  stats->m_version = version;
+  stats->m_data_free = data_free;
+}
+
 void rusty_hton_wire_misc(handlerton *hton) {
   hton->is_dict_readonly = rusty_hton_is_dict_readonly;
   hton->rm_tmp_tables = rusty_hton_rm_tmp_tables;
@@ -197,6 +233,10 @@ void rusty_hton_wire_misc(handlerton *hton) {
   // which the thunk maps to `true` (failure), and MySQL handles the
   // failure as "engine has no cardinality for this column".
   hton->get_index_column_cardinality = rusty_hton_get_index_column_cardinality;
+  // Safe to wire unconditionally: same Option<T> / fail-closed pattern as
+  // get_table_statistics. The five string fields stay default-empty until
+  // a `dd::String_type` setter reverse callback exists.
+  hton->get_tablespace_statistics = rusty_hton_get_tablespace_statistics;
 }
 
 void rusty_hton_wire_encryption(handlerton *hton) {
