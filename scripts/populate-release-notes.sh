@@ -34,6 +34,8 @@ set -euo pipefail
 : "${GH_TOKEN:?GH_TOKEN must be set}"
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 
+git fetch --tags --force origin >/dev/null
+
 new_tag=$(git tag --sort=-creatordate --list 'mysql-handler-v*' | head -n 1)
 prev_tag=$(git tag --sort=-creatordate --list 'mysql-handler-v*' | sed -n 2p)
 
