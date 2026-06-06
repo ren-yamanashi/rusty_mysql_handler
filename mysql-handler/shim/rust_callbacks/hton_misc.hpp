@@ -51,7 +51,8 @@ bool rust__hton__redo_log_set_state(const void *thd, bool enable);
 bool rust__hton__get_table_statistics(const uint8_t *db_name, size_t db_name_len,
                                       const uint8_t *table_name,
                                       size_t table_name_len,
-                                      uint64_t se_private_id, uint32_t flags);
+                                      uint64_t se_private_id, uint32_t flags,
+                                      void *stats);
 bool rust__hton__get_index_column_cardinality(
     const uint8_t *db_name, size_t db_name_len, const uint8_t *table_name,
     size_t table_name_len, const uint8_t *index_name, size_t index_name_len,

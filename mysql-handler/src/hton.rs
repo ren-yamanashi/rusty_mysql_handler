@@ -80,7 +80,10 @@ mod secondary_engine_kind;
 mod stat_print_sink;
 mod stat_type;
 #[doc(hidden)]
+pub mod statistics_callbacks;
+#[doc(hidden)]
 pub mod status;
+mod table_statistics;
 #[doc(hidden)]
 pub mod tablespace;
 mod tablespace_kind;
@@ -110,6 +113,7 @@ pub use secondary_engine_kind::{
 };
 pub use stat_print_sink::StatPrintSink;
 pub use stat_type::HaStatType;
+pub use table_statistics::TableStatistics;
 pub use tablespace_kind::{TablespaceType, TsCommandType};
 pub use transaction::TxnSession;
 pub use xa_recover_collector::XaRecoverCollector;
@@ -1027,11 +1031,11 @@ pub trait Handlerton: Send + Sync {
         Ok(())
     }
 
-    /// Retrieve table statistics into MySQL's `ha_statistics`. The output
-    /// struct is opaque to Rust today, so this trait method is bound for
-    /// completeness but the FFI pointer stays NULL on the handlerton —
-    /// engines wanting to publish stats will need a follow-up that wires a
-    /// setter reverse-callback.
+    /// Retrieve engine-published statistics for the (`db_name`, `table_name`)
+    /// pair. Return `Ok(Some(stats))` to populate MySQL's `ha_statistics`,
+    /// `Ok(None)` when the engine knows nothing about the table, or `Err` on
+    /// a real retrieval failure. The shim copies each field of `stats` into
+    /// the matching `ha_statistics` slot before returning to MySQL.
     ///
     /// # Errors
     /// Returns an [`EngineError`](crate::engine::EngineError) on retrieval
@@ -1042,8 +1046,8 @@ pub trait Handlerton: Send + Sync {
         _table_name: &str,
         _se_private_id: u64,
         _flags: u32,
-    ) -> EngineResult {
-        Ok(())
+    ) -> EngineResult<Option<TableStatistics>> {
+        Ok(None)
     }
 
     /// Retrieve the cardinality of a single index column. Same opaque-output
