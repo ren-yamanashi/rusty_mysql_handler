@@ -20,3 +20,4 @@ compile_commands.json
 
 # sysbench harness output
 tests/sysbench/output/
+.ignore/
