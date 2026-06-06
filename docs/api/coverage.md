@@ -186,7 +186,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `mv_key_capacity` | 7201 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 | `get_partition_handler` | 7140 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 
-## handlerton — 91 bound, 2 deferred, 0 intentionally unbound (93 total)
+## handlerton — 92 bound, 1 deferred, 0 intentionally unbound (93 total)
 
 | Callback | T | C | S | Status | Bind path | Notes |
 | -------- | - | - | - | ------ | --------- | ----- |
@@ -279,7 +279,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `rotate_encryption_master_key` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 | `redo_log_set_state` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 | `get_table_statistics` | ✓ | ✓ | ✓ | bound | hton.rs,statistics_callbacks.rs,hton_misc.cc |  |
-| `get_index_column_cardinality` | ✓ | ✓ | ✗ | deferred | hton.rs,statistics_callbacks.rs | Deferred: needs a reverse callback to write the `ulonglong` cardinality through the out-pointer. Follow-up: p9-08. |
+| `get_index_column_cardinality` | ✓ | ✓ | ✓ | bound | hton.rs,statistics_callbacks.rs,hton_misc.cc |  |
 | `get_tablespace_statistics` | ✓ | ✓ | ✗ | deferred | hton.rs,statistics_callbacks.rs | Deferred: needs a setter reverse callback to populate `ha_tablespace_statistics` from the engine. Follow-up: p9-09. |
 | `post_ddl` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 | `post_recover` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
