@@ -1,7 +1,8 @@
 <!--
-Regenerate this file with `scripts/audit-bind-coverage.sh > docs/api/coverage.md`.
-Annotations in the "Notes" column are preserved manually after each rerun;
-the script overwrites everything else.
+Regenerate this file with `scripts/audit-bind-coverage.sh` (writes in place).
+The script preserves the "Notes" column from the previous version of this
+file via an internal snapshot, so human-applied annotations survive reruns;
+every other column is recomputed.
 -->
 
 # API Bind Coverage
@@ -15,11 +16,14 @@ surface (documented in [`handler.md`](handler.md) and
 
 - **T / C / S** — presence in trait (T), `rust__*` callback (C), and
   shim override (S). `✓` if found, `✗` if not.
-- **Status** — `bound` when T + C + S are all present;
-  `partial` when 1 or 2 layers exist; `missing` when none do.
+- **Status** — final 2-category verdict: `bound` (auto-bound or asserted
+  by Notes via a renamed Rust trait / `Bound via …` / `FFI-only binding`)
+  or `intentionally unbound` (Notes starts with `Intentionally`). A
+  third value, `needs review`, surfaces when the auto-classifier and the
+  Notes column disagree.
 - **Bind path** — basenames of the files matched, for navigation.
 
-## handler — 147 / 158 bound
+## handler — 157 bound, 1 intentionally unbound (158 total)
 
 | Method | handler.h Line | T | C | S | Status | Bind path | Notes |
 | ------ | -------------- | - | - | - | ------ | --------- | ----- |
@@ -31,8 +35,8 @@ surface (documented in [`handler.md`](handler.md) and
 | `drop_table` | 7031 | ✓ | ✓ | ✓ | bound | engine.rs,table_lifecycle.rs,handler_lifecycle.cc |  |
 | `truncate` | 6960 | ✓ | ✓ | ✓ | bound | engine.rs,table_lifecycle.rs,handler_lifecycle.cc |  |
 | `change_table_ptr` | 5169 | ✓ | ✓ | ✓ | bound | engine.rs,table_lifecycle.rs,handler_lifecycle.cc |  |
-| `get_se_private_data` | 7055 | ✗ | ✓ | ✓ | partial | table_lifecycle.rs,handler_lifecycle.cc | Trait renamed `se_private_data` (Rust API drops `get_`); fully bound. |
-| `get_extra_columns_and_keys` | 7078 | ✗ | ✓ | ✓ | partial | table_lifecycle.rs,handler_lifecycle.cc | Trait renamed `extra_columns_and_keys`; fully bound. |
+| `get_se_private_data` | 7055 | ✗ | ✓ | ✓ | bound | table_lifecycle.rs,handler_lifecycle.cc | Trait renamed `se_private_data` (Rust API drops `get_`); fully bound. |
+| `get_extra_columns_and_keys` | 7078 | ✗ | ✓ | ✓ | bound | table_lifecycle.rs,handler_lifecycle.cc | Trait renamed `extra_columns_and_keys`; fully bound. |
 | `upgrade_table` | 6806 | ✓ | ✓ | ✓ | bound | engine.rs,table_lifecycle.rs,handler_lifecycle.cc |  |
 | `rnd_init` | 6679 | ✓ | ✓ | ✓ | bound | engine.rs,scan.rs,binding.cc |  |
 | `rnd_end` | 6680 | ✓ | ✓ | ✓ | bound | engine.rs,scan.rs,binding.cc |  |
@@ -104,12 +108,12 @@ surface (documented in [`handler.md`](handler.md) and
 | `is_crashed` | 6026 | ✓ | ✓ | ✓ | bound | engine.rs,caps.rs,handler_caps.cc |  |
 | `auto_repair` | 6035 | ✓ | ✓ | ✓ | bound | engine.rs,caps.rs,handler_caps.cc |  |
 | `primary_key_is_clustered` | 6094 | ✓ | ✓ | ✓ | bound | engine.rs,caps.rs,handler_caps.cc |  |
-| `get_real_row_type` | 5530 | ✗ | ✗ | ✓ | partial | handler_caps.cc | Trait renamed `real_row_type`; fully bound. |
-| `get_default_index_algorithm` | 5543 | ✗ | ✗ | ✓ | partial | handler_caps.cc | Trait renamed `default_index_algorithm`; fully bound. |
+| `get_real_row_type` | 5530 | ✗ | ✗ | ✓ | bound | handler_caps.cc | Trait renamed `real_row_type`; fully bound. |
+| `get_default_index_algorithm` | 5543 | ✗ | ✗ | ✓ | bound | handler_caps.cc | Trait renamed `default_index_algorithm`; fully bound. |
 | `is_index_algorithm_supported` | 5554 | ✓ | ✓ | ✓ | bound | engine.rs,caps_features.rs,handler_caps.cc |  |
 | `extra_rec_buf_length` | 5416 | ✓ | ✓ | ✓ | bound | engine.rs,limits.rs,handler_limits.cc |  |
-| `get_memory_buffer_size` | 5313 | ✗ | ✗ | ✓ | partial | handler_limits.cc | Trait renamed `memory_buffer_size`; fully bound. |
-| `is_record_buffer_wanted` | 6800 | ✗ | ✗ | ✓ | partial | handler_caps.cc | Trait renamed `record_buffer_wanted` (Rust API drops `is_`); fully bound. |
+| `get_memory_buffer_size` | 5313 | ✗ | ✗ | ✓ | bound | handler_limits.cc | Trait renamed `memory_buffer_size`; fully bound. |
+| `is_record_buffer_wanted` | 6800 | ✗ | ✗ | ✓ | bound | handler_caps.cc | Trait renamed `record_buffer_wanted` (Rust API drops `is_`); fully bound. |
 | `explain_extra` | 4842 | ✓ | ✓ | ✓ | bound | engine.rs,caps_features.rs,handler_caps.cc |  |
 | `indexes_are_disabled` | 5978 | ✓ | ✓ | ✓ | bound | engine.rs,caps.rs,handler_caps.cc |  |
 | `info` | 5774 | ✓ | ✓ | ✓ | bound | engine.rs,statistics.rs,binding.cc |  |
@@ -125,7 +129,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `records_from_index` | 5478 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
 | `estimate_rows_upper_bound` | 5522 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
 | `calculate_key_hash_value` | 5775 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
-| `store_lock` | 6083 | ✗ | ✗ | ✓ | partial | binding.cc | Intentionally unbound: shim drives `thr_lock` directly so the engine never sees the lock data structure. |
+| `store_lock` | 6083 | ✗ | ✗ | ✓ | intentionally unbound | binding.cc | Intentionally unbound: shim drives `thr_lock` directly so the engine never sees the lock data structure. |
 | `external_lock` | 6763 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |
 | `lock_count` | 6050 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |
 | `unlock_row` | 5908 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |
@@ -137,15 +141,15 @@ surface (documented in [`handler.md`](handler.md) and
 | `get_auto_increment` | 5927 | ✓ | ✓ | ✓ | bound | engine.rs,read_removal_autoinc.rs,handler_read_removal_autoinc.cc |  |
 | `release_auto_increment` | 6767 | ✓ | ✓ | ✓ | bound | engine.rs,read_removal_autoinc.rs,handler_read_removal_autoinc.cc |  |
 | `print_error` | 5135 | ✓ | ✓ | ✓ | bound | engine.rs,error_handling.rs,handler_error_handling.cc |  |
-| `get_error_message` | 5136 | ✗ | ✓ | ✓ | partial | error_handling.rs,handler_error_handling.cc | Trait renamed `error_message`; fully bound. |
-| `get_foreign_dup_key` | 5156 | ✗ | ✓ | ✓ | partial | error_handling.rs,handler_error_handling.cc | Trait renamed `foreign_dup_key`; fully bound. |
+| `get_error_message` | 5136 | ✗ | ✓ | ✓ | bound | error_handling.rs,handler_error_handling.cc | Trait renamed `error_message`; fully bound. |
+| `get_foreign_dup_key` | 5156 | ✗ | ✓ | ✓ | bound | error_handling.rs,handler_error_handling.cc | Trait renamed `foreign_dup_key`; fully bound. |
 | `is_ignorable_error` | 5437 | ✓ | ✓ | ✓ | bound | engine.rs,error_handling.rs,handler_error_handling.cc |  |
 | `is_fatal_error` | 5454 | ✓ | ✓ | ✓ | bound | engine.rs,error_handling.rs,handler_error_handling.cc |  |
 | `extra` | 5802 | ✓ | ✓ | ✓ | bound | engine.rs,hints.rs,handler_hints.cc |  |
 | `extra_opt` | 5807 | ✓ | ✓ | ✓ | bound | engine.rs,hints.rs,handler_hints.cc |  |
 | `reset` | 6727 | ✓ | ✓ | ✓ | bound | engine.rs,hints.rs,handler_hints.cc |  |
 | `column_bitmaps_signal` | 5565 | ✓ | ✓ | ✓ | bound | engine.rs,hints.rs,handler_hints.cc |  |
-| `init_table_handle_for_HANDLER` | 5980 | ✗ | ✗ | ✓ | partial | handler_hints.cc | Trait renamed `init_table_handle_for_handler` (snake_case); fully bound. |
+| `init_table_handle_for_HANDLER` | 5980 | ✗ | ✗ | ✓ | bound | handler_hints.cc | Trait renamed `init_table_handle_for_handler` (snake_case); fully bound. |
 | `check_if_supported_inplace_alter` | 6378 | ✓ | ✓ | ✓ | bound | engine.rs,inplace_alter.rs,handler_inplace_alter.cc |  |
 | `prepare_inplace_alter_table` | 6460 | ✓ | ✓ | ✓ | bound | engine.rs,inplace_alter.rs,handler_inplace_alter.cc |  |
 | `inplace_alter_table` | 6497 | ✓ | ✓ | ✓ | bound | engine.rs,inplace_alter.rs,handler_inplace_alter.cc |  |
@@ -178,37 +182,37 @@ surface (documented in [`handler.md`](handler.md) and
 | `cmp_ref` | 6107 | ✓ | ✓ | ✓ | bound | engine.rs,metadata.rs,handler_metadata.cc |  |
 | `set_external_table_offload_error` | 7187 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 | `external_table_offload_error` | 7193 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
-| `clone` | 4847 | ✗ | ✓ | ✓ | partial | misc.rs,handler_misc.cc | Trait renamed `clone_handler` to avoid clashing with `std::clone::Clone`; fully bound. |
+| `clone` | 4847 | ✗ | ✓ | ✓ | bound | misc.rs,handler_misc.cc | Trait renamed `clone_handler` to avoid clashing with `std::clone::Clone`; fully bound. |
 | `mv_key_capacity` | 7201 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 | `get_partition_handler` | 7140 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 
-## handlerton — 78 / 93 bound
+## handlerton — 86 bound, 7 intentionally unbound (93 total)
 
 | Callback | T | C | S | Status | Bind path | Notes |
 | -------- | - | - | - | ------ | --------- | ----- |
-| `create` | ✗ | ✗ | ✗ | missing |  | Bound via the shim factory `rusty_create_handler` in `hton_init.cc`; no engine-side override needed. |
+| `create` | ✗ | ✗ | ✗ | bound |  | Bound via the shim factory `rusty_create_handler` in `hton_init.cc`; no engine-side override needed. |
 | `close_connection` | ✓ | ✓ | ✓ | bound | hton.rs,lifecycle.rs,hton_lifecycle.cc |  |
 | `kill_connection` | ✓ | ✓ | ✓ | bound | hton.rs,lifecycle.rs,hton_lifecycle.cc |  |
 | `pre_dd_shutdown` | ✓ | ✓ | ✓ | bound | hton.rs,lifecycle.rs,hton_lifecycle.cc |  |
 | `reset_plugin_vars` | ✓ | ✓ | ✓ | bound | hton.rs,lifecycle.rs,hton_lifecycle.cc |  |
-| `commit` | ✓ | ✗ | ✗ | partial | hton.rs,savepoint_ffi.rs,transaction.rs,txn_context.rs,txn_ffi.rs,txn_row_ffi.rs | Bound via `Transaction::commit` + `rust__hton__txn_commit` (renamed at FFI for txn-context disambiguation). |
-| `rollback` | ✓ | ✗ | ✗ | partial | hton.rs,savepoint_ffi.rs,transaction.rs,txn_context.rs,txn_ffi.rs,txn_row_ffi.rs | Bound via `Transaction::rollback` + `rust__hton__txn_rollback`. |
-| `prepare` | ✓ | ✗ | ✗ | partial | transaction.rs | Bound via `Transaction::prepare` + `rust__hton__txn_prepare`. |
-| `recover` | ✗ | ✗ | ✗ | missing |  | Intentionally NULL: the MySQL-owned XID array fill-out is not wired yet (see `hton_xa.cc:24`). |
-| `recover_prepared_in_tc` | ✗ | ✗ | ✗ | missing |  | Intentionally NULL: same MySQL-owned XID array constraint as `recover`. |
+| `commit` | ✓ | ✗ | ✗ | bound | hton.rs,savepoint_ffi.rs,transaction.rs,txn_context.rs,txn_ffi.rs,txn_row_ffi.rs | Bound via `Transaction::commit` + `rust__hton__txn_commit` (renamed at FFI for txn-context disambiguation). |
+| `rollback` | ✓ | ✗ | ✗ | bound | hton.rs,savepoint_ffi.rs,transaction.rs,txn_context.rs,txn_ffi.rs,txn_row_ffi.rs | Bound via `Transaction::rollback` + `rust__hton__txn_rollback`. |
+| `prepare` | ✓ | ✗ | ✗ | bound | transaction.rs | Bound via `Transaction::prepare` + `rust__hton__txn_prepare`. |
+| `recover` | ✗ | ✗ | ✗ | intentionally unbound |  | Intentionally NULL: the MySQL-owned XID array fill-out is not wired yet (see `hton_xa.cc:24`). |
+| `recover_prepared_in_tc` | ✗ | ✗ | ✗ | intentionally unbound |  | Intentionally NULL: same MySQL-owned XID array constraint as `recover`. |
 | `commit_by_xid` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `rollback_by_xid` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `set_prepared_in_tc` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `set_prepared_in_tc_by_xid` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `savepoint_set` | ✓ | ✓ | ✓ | bound | savepoint_ffi.rs,transaction.rs,savepoint_ffi.rs,hton_savepoint.cc |  |
 | `savepoint_rollback` | ✓ | ✓ | ✓ | bound | savepoint_ffi.rs,transaction.rs,savepoint_ffi.rs,hton_savepoint.cc |  |
-| `savepoint_rollback_can_release_mdl` | ✓ | ✗ | ✗ | partial | savepoint_ffi.rs,transaction.rs | Bound via `Transaction::savepoint_rollback_can_release_mdl`, routed through the `txn_*` callback family. |
+| `savepoint_rollback_can_release_mdl` | ✓ | ✗ | ✗ | bound | savepoint_ffi.rs,transaction.rs | Bound via `Transaction::savepoint_rollback_can_release_mdl`, routed through the `txn_*` callback family. |
 | `savepoint_release` | ✓ | ✓ | ✓ | bound | transaction.rs,savepoint_ffi.rs,hton_savepoint.cc |  |
 | `drop_database` | ✓ | ✓ | ✓ | bound | hton.rs,database.rs,hton_tablespace.cc |  |
 | `is_valid_tablespace_name` | ✓ | ✓ | ✓ | bound | hton.rs,tablespace.rs,hton_tablespace.cc |  |
 | `get_tablespace` | ✓ | ✓ | ✓ | bound | hton.rs,tablespace.rs,hton_tablespace.cc |  |
 | `alter_tablespace` | ✓ | ✓ | ✓ | bound | hton.rs,tablespace.rs,hton_tablespace.cc |  |
-| `get_tablespace_filename_ext` | ✗ | ✗ | ✗ | missing |  | Trait renamed `tablespace_filename_ext` (Rust API drops `get_`); fully bound. |
+| `get_tablespace_filename_ext` | ✗ | ✗ | ✗ | bound |  | Trait renamed `tablespace_filename_ext` (Rust API drops `get_`); fully bound. |
 | `upgrade_tablespace` | ✓ | ✓ | ✓ | bound | hton.rs,tablespace.rs,hton_tablespace.cc |  |
 | `upgrade_space_version` | ✓ | ✓ | ✓ | bound | hton.rs,tablespace.rs,hton_tablespace.cc |  |
 | `get_tablespace_type` | ✓ | ✓ | ✓ | bound | hton.rs,tablespace.rs,hton_tablespace.cc |  |
@@ -252,8 +256,8 @@ surface (documented in [`handler.md`](handler.md) and
 | `compare_secondary_engine_cost` | ✓ | ✓ | ✓ | bound | hton.rs,secondary_engine.rs,hton_secondary_engine.cc |  |
 | `external_engine_explain_check` | ✓ | ✓ | ✓ | bound | hton.rs,secondary_engine.rs,hton_secondary_engine.cc |  |
 | `secondary_engine_modify_access_path_cost` | ✓ | ✓ | ✓ | bound | hton.rs,secondary_engine.rs,hton_secondary_engine.cc |  |
-| `get_secondary_engine_offload_or_exec_fail_reason` | ✗ | ✓ | ✓ | partial | secondary_engine_fail_reason.rs,hton_secondary_engine.cc | FFI-only binding: engine-side hook is exposed through the secondary-engine fail-reason FFI buffer, not a trait method. |
-| `find_secondary_engine_offload_fail_reason` | ✗ | ✓ | ✓ | partial | secondary_engine_fail_reason.rs,hton_secondary_engine.cc | FFI-only binding: same fail-reason buffer path as the `get_*` variant above. |
+| `get_secondary_engine_offload_or_exec_fail_reason` | ✗ | ✓ | ✓ | bound | secondary_engine_fail_reason.rs,hton_secondary_engine.cc | FFI-only binding: engine-side hook is exposed through the secondary-engine fail-reason FFI buffer, not a trait method. |
+| `find_secondary_engine_offload_fail_reason` | ✗ | ✓ | ✓ | bound | secondary_engine_fail_reason.rs,hton_secondary_engine.cc | FFI-only binding: same fail-reason buffer path as the `get_*` variant above. |
 | `set_secondary_engine_offload_fail_reason` | ✓ | ✓ | ✓ | bound | hton.rs,secondary_engine_fail_reason.rs,hton_secondary_engine.cc |  |
 | `secondary_engine_check_optimizer_request` | ✓ | ✓ | ✓ | bound | hton.rs,secondary_engine.rs,hton_secondary_engine.cc |  |
 | `secondary_engine_pre_prepare_hook` | ✓ | ✓ | ✓ | bound | hton.rs,secondary_engine.rs,hton_secondary_engine.cc |  |
@@ -263,10 +267,10 @@ surface (documented in [`handler.md`](handler.md) and
 | `notify_after_select` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `notify_create_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `notify_drop_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
-| `push_to_engine` | ✓ | ✓ | ✗ | partial | hton.rs,misc_optimizer.rs | Intentionally NULL at handlerton: opaque pass-through cannot synthesise the engine-owned output (`hton_misc.cc:27`). |
+| `push_to_engine` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_optimizer.rs | Intentionally NULL at handlerton: opaque pass-through cannot synthesise the engine-owned output (`hton_misc.cc:27`). |
 | `is_dict_readonly` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
 | `rm_tmp_tables` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
-| `get_cost_constants` | ✓ | ✓ | ✗ | partial | hton.rs,misc_optimizer.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
+| `get_cost_constants` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_optimizer.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
 | `replace_native_transaction_in_thd` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
 | `notify_exclusive_mdl` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `notify_alter_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
@@ -274,9 +278,9 @@ surface (documented in [`handler.md`](handler.md) and
 | `notify_truncate_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `rotate_encryption_master_key` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 | `redo_log_set_state` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
-| `get_table_statistics` | ✓ | ✓ | ✗ | partial | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
-| `get_index_column_cardinality` | ✓ | ✓ | ✗ | partial | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
-| `get_tablespace_statistics` | ✓ | ✓ | ✗ | partial | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
+| `get_table_statistics` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
+| `get_index_column_cardinality` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
+| `get_tablespace_statistics` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
 | `post_ddl` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 | `post_recover` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 
