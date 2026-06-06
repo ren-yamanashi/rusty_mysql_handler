@@ -36,7 +36,7 @@ mysql-handler-macros = { path = "../mysql-handler-macros", version = "0.1.1" }
 tracing = "0.1.41"
 
 [build-dependencies]
-bindgen = "0.71.1"
+bindgen = "0.72.1"
 cmake = "0.1.58"
 flate2 = "1.1.9"
 
