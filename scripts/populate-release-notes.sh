@@ -34,11 +34,6 @@ set -euo pipefail
 : "${GH_TOKEN:?GH_TOKEN must be set}"
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 
-# release-plz pushes the new umbrella tag to `origin` during this same
-# workflow run, so the tag set the initial `actions/checkout` snapshotted
-# is already stale. Without this fetch the script picks the previous
-# release as `new_tag` and overwrites *its* notes instead of populating
-# the one release-plz just cut.
 git fetch --tags --force origin >/dev/null
 
 new_tag=$(git tag --sort=-creatordate --list 'mysql-handler-v*' | head -n 1)
