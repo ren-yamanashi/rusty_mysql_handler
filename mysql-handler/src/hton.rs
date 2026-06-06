@@ -989,17 +989,22 @@ pub trait Handlerton: Send + Sync {
     /// defaults to no-op.
     fn replace_native_transaction_in_thd(&self, _thd: Option<&sys::THD>) {}
 
-    /// Optimizer pushdown at the handlerton layer. The `AccessPath` / `JOIN`
-    /// pointers are opaque to Rust today and are dropped at the FFI
-    /// boundary; this trait method is bound for completeness but the FFI
-    /// pointer stays NULL on the handlerton (a non-NULL `push_to_engine`
-    /// signals MySQL that the engine handles pushdown).
+    /// Optimizer pushdown at the handlerton layer. The `AccessPath` /
+    /// `JOIN` pointers stay opaque (dropped at the FFI boundary today —
+    /// the engine sees only the `THD`). The handlerton pointer is wired
+    /// unconditionally; MySQL only invokes it after the handler-level
+    /// [`StorageEngine::hton_supporting_engine_pushdown`] reports the
+    /// engine wants pushdown. The default returns
+    /// [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
+    /// so an engine that opts into pushdown but forgets to implement
+    /// this method gets a loud error instead of silently broken
+    /// query results.
     ///
     /// # Errors
     /// Returns an [`EngineError`](crate::engine::EngineError) if pushdown
-    /// fails.
+    /// fails or is unsupported.
     fn push_to_engine(&self, _thd: Option<&sys::THD>) -> EngineResult {
-        Ok(())
+        Err(crate::engine::EngineError::Unsupported)
     }
 
     /// Rotate the encryption master key. Wired only under

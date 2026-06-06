@@ -21,13 +21,13 @@
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 // Miscellaneous handlerton callbacks (handler.h #78-#93). is_dict_readonly,
-// rm_tmp_tables, replace_native_transaction_in_thd, post_ddl, post_recover
-// are wired on every registered handlerton; rotate_encryption_master_key is
-// gated by ENCRYPTION; redo_log_set_state is gated by ENGINE_LOG. The five
-// output-shaped callbacks (push_to_engine, get_cost_constants and the three
-// statistics callbacks) keep their handlerton pointers NULL today — the
-// engine-owned outputs they return need setter reverse callbacks that are
-// not wired yet. They are deferred, not impossible; the bind path is
+// rm_tmp_tables, replace_native_transaction_in_thd, post_ddl, post_recover,
+// push_to_engine are wired on every registered handlerton;
+// rotate_encryption_master_key is gated by ENCRYPTION; redo_log_set_state is
+// gated by ENGINE_LOG. The remaining four output-shaped callbacks
+// (get_cost_constants and the three statistics callbacks) keep their
+// handlerton pointers NULL today — they need setter reverse callbacks that
+// are not wired yet. They are deferred, not impossible; the bind path is
 // tracked in docs/api/coverage.md.
 
 #include "binding.hpp"
@@ -60,6 +60,12 @@ void rusty_hton_post_ddl(THD *thd) {
 }
 
 void rusty_hton_post_recover() { rust__hton__post_recover(); }
+
+int rusty_hton_push_to_engine(THD *thd, AccessPath *query, JOIN *join) {
+  return rust__hton__push_to_engine(static_cast<const void *>(thd),
+                                    static_cast<const void *>(query),
+                                    static_cast<const void *>(join));
+}
 }  // namespace
 
 void rusty_hton_wire_misc(handlerton *hton) {
@@ -73,6 +79,11 @@ void rusty_hton_wire_misc(handlerton *hton) {
   // MySQL's null-checked path skip the swap entirely.
   hton->post_ddl = rusty_hton_post_ddl;
   hton->post_recover = rusty_hton_post_recover;
+  // Safe to wire unconditionally: the optimizer in sql_optimizer.cc only
+  // dereferences `hton->push_to_engine` after the handler-level
+  // `hton_supporting_engine_pushdown()` returns non-NULL, so engines that
+  // do not opt into pushdown never see this callback fire.
+  hton->push_to_engine = rusty_hton_push_to_engine;
 }
 
 void rusty_hton_wire_encryption(handlerton *hton) {
