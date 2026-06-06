@@ -100,20 +100,4 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          new_tag=$(git tag --sort=-creatordate --list 'mysql-handler-v*' | head -n 1)
-          prev_tag=$(git tag --sort=-creatordate --list 'mysql-handler-v*' | sed -n 2p)
-          if [ -z "$new_tag" ]; then
-            echo "no mysql-handler-v* tag found; nothing to populate"
-            exit 0
-          fi
-          notes_args=(-f tag_name="$new_tag")
-          if [ -n "$prev_tag" ]; then
-            notes_args+=(-f previous_tag_name="$prev_tag")
-          fi
-          notes=$(gh api -X POST \
-            "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
-            "${notes_args[@]}" \
-            --jq '.body')
-          gh release edit "$new_tag" --notes "$notes"
+        run: bash scripts/populate-release-notes.sh
