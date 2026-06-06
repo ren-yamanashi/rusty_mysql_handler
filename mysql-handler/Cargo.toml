@@ -1,0 +1,55 @@
+[package]
+name = "mysql-handler"
+version.workspace = true
+description = "Rust bindings for the MySQL handler"
+readme = "README.md"
+authors = ["ren-yamanashi"]
+license = "GPL-2.0-only"
+edition = "2024"
+repository = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+homepage = "https://github.com/ren-yamanashi/rusty_mysql_handler"
+documentation = "https://docs.rs/mysql-handler"
+keywords = ["mysql", "ffi", "plugin", "storage-engine", "handler"]
+categories = ["api-bindings", "database", "external-ffi-bindings"]
+rust-version = "1.85"
+links = "ha_rusty_shim"
+# Whitelist what ships to crates.io; excludes mysql-server submodule,
+# examples, tests, docs, and dev infra.
+include = [
+  "/src/**/*.rs",
+  "/shim/**/*.cc",
+  "/shim/**/*.hpp",
+  "/shim/**/*.h",
+  "/shim/CMakeLists.txt",
+  "/build.rs",
+  "/Cargo.toml",
+  "/README.md",
+  "/LICENSE",
+]
+
+[package.metadata.docs.rs]
+# `--cfg docsrs` lets future doc-only items gate on it.
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+mysql-handler-macros = { path = "../mysql-handler-macros", version = "0.1.1" }
+tracing = "0.1.41"
+
+[build-dependencies]
+bindgen = "0.71.1"
+cmake = "0.1.58"
+flate2 = "1.1.9"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "ffi_overhead"
+harness = false
+
+[[bench]]
+name = "callback_overhead"
+harness = false
+
+[lints]
+workspace = true

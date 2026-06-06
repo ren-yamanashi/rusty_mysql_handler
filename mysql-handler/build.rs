@@ -48,6 +48,7 @@ fn main() {
 
 struct BuildScript {
     manifest_dir: String,
+    workspace_root: String,
     mysql_src: String,
     mysql_build: String,
     out_dir: PathBuf,
@@ -57,17 +58,22 @@ impl BuildScript {
     fn new() -> Self {
         let manifest_dir =
             env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is always set by cargo");
+        // mysql-server submodule, the cmake build dir, and the license header
+        // live at the workspace root (one level above this crate); fall back to
+        // those paths when the env overrides are unset.
+        let workspace_root = format!("{manifest_dir}/..");
         let mysql_src = match env::var("MYSQL_SOURCE_DIR") {
             Ok(v) => v,
-            Err(_) => format!("{manifest_dir}/mysql-server"),
+            Err(_) => format!("{workspace_root}/mysql-server"),
         };
         let mysql_build = match env::var("MYSQL_BUILD_DIR") {
             Ok(v) => v,
-            Err(_) => format!("{manifest_dir}/build/mysql"),
+            Err(_) => format!("{workspace_root}/build/mysql"),
         };
         let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is always set by cargo"));
         Self {
             manifest_dir,
+            workspace_root,
             mysql_src,
             mysql_build,
             out_dir,
@@ -103,9 +109,11 @@ impl BuildScript {
         println!("cargo:rerun-if-env-changed=MYSQL_SOURCE_DIR");
         println!("cargo:rerun-if-env-changed=MYSQL_BUILD_DIR");
 
-        let license =
-            fs::read_to_string(format!("{}/scripts/license-header.txt", self.manifest_dir))
-                .expect("read scripts/license-header.txt");
+        let license = fs::read_to_string(format!(
+            "{}/scripts/license-header.txt",
+            self.workspace_root
+        ))
+        .expect("read scripts/license-header.txt");
         let mut builder = bindgen::Builder::default();
         for line in license.lines() {
             let prefixed = if line.is_empty() {
