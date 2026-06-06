@@ -11,4 +11,3 @@
 mysql-server/.git
 mysql-server/build
 examples/*/target
-mysql-handler/benches
