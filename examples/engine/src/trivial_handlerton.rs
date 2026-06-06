@@ -23,10 +23,13 @@
 //! Minimal engine-level handlerton for the reference engine.
 
 use mysql_handler::engine::EngineResult;
-use mysql_handler::hton::{HaStatType, Handlerton, HtonCapabilities, StatPrintSink, TxnSession};
+use mysql_handler::hton::{
+    HaStatType, Handlerton, HtonCapabilities, StatPrintSink, TableStatistics, TxnSession,
+};
 use mysql_handler::sys;
 
 use crate::TrivialTxn;
+use crate::store;
 
 /// The reference engine's handlerton. Declares the `TRANSACTIONS` capability and
 /// hands out a [`TrivialTxn`] per connection so the commit / rollback callbacks
@@ -65,5 +68,17 @@ impl Handlerton for TrivialHandlerton {
             let _ = sink.emit("RUSTY", "state", "ok");
         }
         Ok(())
+    }
+
+    fn get_table_statistics(
+        &self,
+        _db_name: &str,
+        table_name: &str,
+        _se_private_id: u64,
+        _flags: u32,
+    ) -> EngineResult<Option<TableStatistics>> {
+        Ok(Some(
+            TableStatistics::new().with_records(store::row_count(table_name)),
+        ))
     }
 }
