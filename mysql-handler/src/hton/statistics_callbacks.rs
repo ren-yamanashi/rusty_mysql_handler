@@ -179,10 +179,8 @@ pub unsafe extern "C" fn rust__hton__get_index_column_cardinality(
     })
 }
 
-/// `get_tablespace_statistics`. Same opaque-output limitation as
-/// [`rust__hton__get_table_statistics`] used to have before the setter
-/// reverse callback landed; this one still does and the handlerton
-/// pointer stays NULL until a tablespace-stats setter exists.
+/// `get_tablespace_statistics`. The handlerton pointer stays NULL until
+/// a setter reverse callback for `ha_tablespace_statistics` exists.
 ///
 /// # Safety
 /// `tablespace_name` / `file_name` non-null and cover their stated lengths.
