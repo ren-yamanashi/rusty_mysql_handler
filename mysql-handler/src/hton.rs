@@ -92,6 +92,7 @@ pub mod txn_ffi;
 pub mod txn_row_ffi;
 #[doc(hidden)]
 pub mod xa;
+mod xa_recover_collector;
 mod xa_state_list_collector;
 
 pub use binlog_kind::{BinlogCommand, BinlogFunc};
@@ -109,6 +110,7 @@ pub use stat_print_sink::StatPrintSink;
 pub use stat_type::HaStatType;
 pub use tablespace_kind::{TablespaceType, TsCommandType};
 pub use transaction::TxnSession;
+pub use xa_recover_collector::XaRecoverCollector;
 pub use xa_state_list_collector::XaStateListCollector;
 
 use crate::engine::EngineResult;
@@ -264,6 +266,18 @@ pub trait Handlerton: Send + Sync {
     fn recover_prepared_in_tc(&self, collector: &mut XaStateListCollector) -> EngineResult {
         let _ = collector;
         Ok(())
+    }
+
+    /// Recover every prepared XA transaction the engine knows about. Push
+    /// each one into `collector` up to its `capacity`; the shim writes
+    /// each pushed entry into MySQL's `XA_recover_txn[]` array. Returning
+    /// from this method, the shim hands `collector.filled()` back to
+    /// MySQL as the recovered-transaction count.
+    ///
+    /// Wired only under [`HtonCapabilities::XA`]; the default reports
+    /// nothing recovered, matching the previous NULL handlerton pointer.
+    fn recover(&self, collector: &mut XaRecoverCollector) {
+        let _ = collector;
     }
 
     /// Shutdown notification: the server is invoking `ha_panic` to wind every

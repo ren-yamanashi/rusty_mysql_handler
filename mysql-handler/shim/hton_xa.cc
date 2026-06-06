@@ -23,10 +23,9 @@
 // XA recovery handlerton callbacks (handler.h #9-#14). The four by-xid /
 // set_prepared callbacks pass XID through as an opaque pointer; the Rust side
 // returns 0 on success or an HA_ERR code, mapped to xa_status_code here.
-// recover_prepared_in_tc passes an opaque Xa_state_list pointer that the
-// engine pushes entries into via the mysql__xa_state_list__add reverse
-// callback defined below. recover remains deferred — it needs the same
-// push-entry pattern over XA_recover_txn[].
+// recover_prepared_in_tc and recover pass opaque Xa_state_list / XA_recover_txn
+// pointers that the engine fills through mysql__xa_state_list__add and
+// mysql__xa_recover__set_entry below.
 
 #include <algorithm>
 #include <cstddef>
@@ -60,6 +59,16 @@ xa_status_code rusty_hton_set_prepared_in_tc_by_xid(handlerton *, XID *xid) {
 int rusty_hton_recover_prepared_in_tc(handlerton *, Xa_state_list &xa_list) {
   return rust__hton__recover_prepared_in_tc(static_cast<void *>(&xa_list));
 }
+
+int rusty_hton_recover(handlerton *, XA_recover_txn *xid_list, uint len,
+                       MEM_ROOT *) {
+  // MEM_ROOT is for the per-entry `mod_tables` list (a server-internal
+  // List<st_handler_tablename>). The engine does not populate it through
+  // the binding today, so the reverse callback below sets each entry's
+  // mod_tables pointer to nullptr and we never touch the MEM_ROOT.
+  return static_cast<int>(
+      rust__hton__recover(static_cast<void *>(xid_list), len));
+}
 }  // namespace
 
 // Reverse callback: copy (gtrid, bqual, format_id, state) into a fresh XID
@@ -83,10 +92,30 @@ extern "C" void mysql__xa_state_list__add(void *xa_list_void, int64_t format_id,
   xa_list->add(xid, static_cast<enum_ha_recover_xa_state>(state));
 }
 
+// Reverse callback: copy (gtrid, bqual, format_id) into xid_list[index].id
+// and null out mod_tables. Same XA-spec gtrid/bqual clamp as the
+// recover_prepared_in_tc counterpart above.
+extern "C" void mysql__xa_recover__set_entry(
+    void *xid_list_void, uint32_t index, int64_t format_id,
+    const uint8_t *gtrid_ptr, size_t gtrid_len, const uint8_t *bqual_ptr,
+    size_t bqual_len) {
+  if (!xid_list_void) return;
+  size_t g = std::min<size_t>(gtrid_len, 64);
+  size_t b = std::min<size_t>(bqual_len, 64);
+  auto *xid_list = static_cast<XA_recover_txn *>(xid_list_void);
+  xid_list[index].id.set(static_cast<long>(format_id),
+                         reinterpret_cast<const char *>(gtrid_ptr),
+                         static_cast<long>(g),
+                         reinterpret_cast<const char *>(bqual_ptr),
+                         static_cast<long>(b));
+  xid_list[index].mod_tables = nullptr;
+}
+
 void rusty_hton_wire_xa(handlerton *hton) {
   hton->commit_by_xid = rusty_hton_commit_by_xid;
   hton->rollback_by_xid = rusty_hton_rollback_by_xid;
   hton->set_prepared_in_tc = rusty_hton_set_prepared_in_tc;
   hton->set_prepared_in_tc_by_xid = rusty_hton_set_prepared_in_tc_by_xid;
   hton->recover_prepared_in_tc = rusty_hton_recover_prepared_in_tc;
+  hton->recover = rusty_hton_recover;
 }
