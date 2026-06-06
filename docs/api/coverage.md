@@ -186,7 +186,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `mv_key_capacity` | 7201 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 | `get_partition_handler` | 7140 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 
-## handlerton — 89 bound, 4 deferred, 0 intentionally unbound (93 total)
+## handlerton — 90 bound, 3 deferred, 0 intentionally unbound (93 total)
 
 | Callback | T | C | S | Status | Bind path | Notes |
 | -------- | - | - | - | ------ | --------- | ----- |
@@ -270,7 +270,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `push_to_engine` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
 | `is_dict_readonly` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
 | `rm_tmp_tables` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
-| `get_cost_constants` | ✓ | ✓ | ✗ | deferred | hton.rs,misc_optimizer.rs | Deferred: needs a setter reverse callback to allocate the `SE_cost_constants` MySQL takes ownership of. Follow-up: p9-06. |
+| `get_cost_constants` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
 | `replace_native_transaction_in_thd` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
 | `notify_exclusive_mdl` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `notify_alter_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |

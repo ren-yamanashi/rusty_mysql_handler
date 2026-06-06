@@ -42,7 +42,9 @@ void rust__hton__replace_native_transaction_in_thd(const void *thd,
                                                    void **ptr_trx_arg);
 int32_t rust__hton__push_to_engine(const void *thd, const void *query,
                                    const void *join);
-void rust__hton__get_cost_constants(uint32_t storage_category);
+bool rust__hton__get_cost_constants(uint32_t storage_category,
+                                    double *memory_block_read_cost_out,
+                                    double *io_block_read_cost_out);
 
 bool rust__hton__rotate_encryption_master_key();
 bool rust__hton__redo_log_set_state(const void *thd, bool enable);

@@ -22,17 +22,18 @@
 
 // Miscellaneous handlerton callbacks (handler.h #78-#93). is_dict_readonly,
 // rm_tmp_tables, replace_native_transaction_in_thd, post_ddl, post_recover,
-// push_to_engine are wired on every registered handlerton;
-// rotate_encryption_master_key is gated by ENCRYPTION; redo_log_set_state is
-// gated by ENGINE_LOG. The remaining four output-shaped callbacks
-// (get_cost_constants and the three statistics callbacks) keep their
-// handlerton pointers NULL today — they need setter reverse callbacks that
-// are not wired yet. They are deferred, not impossible; the bind path is
-// tracked in docs/api/coverage.md.
+// push_to_engine, get_cost_constants are wired on every registered
+// handlerton; rotate_encryption_master_key is gated by ENCRYPTION;
+// redo_log_set_state is gated by ENGINE_LOG. The three statistics callbacks
+// (get_table_statistics, get_index_column_cardinality,
+// get_tablespace_statistics) keep their handlerton pointers NULL today — they
+// need setter reverse callbacks that are not wired yet. They are deferred,
+// not impossible; the bind path is tracked in docs/api/coverage.md.
 
 #include "binding.hpp"
 #include "rust_callbacks.hpp"
 #include "sql/handler.h"
+#include "sql/opt_costconstants.h"
 
 namespace {
 bool rusty_hton_is_dict_readonly() { return rust__hton__is_dict_readonly(); }
@@ -66,6 +67,37 @@ int rusty_hton_push_to_engine(THD *thd, AccessPath *query, JOIN *join) {
                                     static_cast<const void *>(query),
                                     static_cast<const void *>(join));
 }
+
+// Subclass of SE_cost_constants that lets us push values through the
+// upstream-protected update() setter. update() looks the name up
+// case-insensitively, so the bare lowercase form is enough.
+class RustySECostConstants : public SE_cost_constants {
+ public:
+  RustySECostConstants(Optimizer opt, double mem_cost, double io_cost)
+      : SE_cost_constants(opt) {
+    update({"memory_block_read_cost", 22}, mem_cost);
+    update({"io_block_read_cost", 18}, io_cost);
+  }
+};
+
+SE_cost_constants *rusty_hton_get_cost_constants(uint storage_category) {
+  double mem_cost = 0.0;
+  double io_cost = 0.0;
+  if (!rust__hton__get_cost_constants(static_cast<uint32_t>(storage_category),
+                                      &mem_cost, &io_cost)) {
+    return nullptr;
+  }
+  if (mem_cost <= 0.0 || io_cost <= 0.0) {
+    // Match SE_cost_constants::set's INVALID_COST_VALUE guard rather than
+    // silently passing a zero/negative cost through to the optimizer.
+    return nullptr;
+  }
+  // The optimizer kind is not threaded through the handlerton callback by
+  // upstream, and the only constructor option that does not reference
+  // private state we cannot see is kOriginal. The kHypergraph case applies
+  // the same defaults anyway today, so this is safe.
+  return new RustySECostConstants(Optimizer::kOriginal, mem_cost, io_cost);
+}
 }  // namespace
 
 void rusty_hton_wire_misc(handlerton *hton) {
@@ -84,6 +116,12 @@ void rusty_hton_wire_misc(handlerton *hton) {
   // `hton_supporting_engine_pushdown()` returns non-NULL, so engines that
   // do not opt into pushdown never see this callback fire.
   hton->push_to_engine = rusty_hton_push_to_engine;
+  // Safe to wire unconditionally: the optimizer falls back to
+  // `new SE_cost_constants(optimizer)` when the callback returns nullptr,
+  // and the default trait method returns None which the thunk turns into
+  // nullptr — so engines that do not override see the same defaults they
+  // saw before the wire.
+  hton->get_cost_constants = rusty_hton_get_cost_constants;
 }
 
 void rusty_hton_wire_encryption(handlerton *hton) {
