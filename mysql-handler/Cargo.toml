@@ -32,7 +32,7 @@ include = [
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-mysql-handler-macros = { path = "../mysql-handler-macros", version = "0.1.1" }
+mysql-handler-macros = { path = "../mysql-handler-macros", version = "0.2.0" }
 tracing = "0.1.41"
 
 [build-dependencies]
