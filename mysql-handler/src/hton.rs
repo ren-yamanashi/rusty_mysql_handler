@@ -65,6 +65,7 @@ pub mod notifications;
 #[doc(hidden)]
 pub mod page_track;
 mod panic_function;
+mod recover_xa_state;
 mod result;
 #[doc(hidden)]
 pub mod savepoint_ffi;
@@ -91,6 +92,7 @@ pub mod txn_ffi;
 pub mod txn_row_ffi;
 #[doc(hidden)]
 pub mod xa;
+mod xa_state_list_collector;
 
 pub use binlog_kind::{BinlogCommand, BinlogFunc};
 pub use capabilities::HtonCapabilities;
@@ -99,6 +101,7 @@ pub use dict_kind::{DictInitMode, DictRecoveryMode};
 pub use flags::HtonFlags;
 pub use notification_kind::{HaNotificationType, SelectExecutedIn};
 pub use panic_function::HaPanicFunction;
+pub use recover_xa_state::RecoverXaState;
 pub use secondary_engine_kind::{
     SecondaryEngineGraphSimplificationRequest, SecondaryEngineOptimizerRequest,
 };
@@ -106,6 +109,7 @@ pub use stat_print_sink::StatPrintSink;
 pub use stat_type::HaStatType;
 pub use tablespace_kind::{TablespaceType, TsCommandType};
 pub use transaction::TxnSession;
+pub use xa_state_list_collector::XaStateListCollector;
 
 use crate::engine::EngineResult;
 use crate::sys;
@@ -243,6 +247,23 @@ pub trait Handlerton: Send + Sync {
     fn set_prepared_in_tc_by_xid(&self, xid: Option<&sys::XID>) -> EngineResult {
         let _ = xid;
         Err(crate::engine::EngineError::Unsupported)
+    }
+
+    /// Report every externally-coordinated XA transaction the engine considers
+    /// prepared, along with its [`RecoverXaState`]. Push each entry into
+    /// `collector`; the shim forwards them to MySQL's `Xa_state_list::add`.
+    /// Wired only under [`HtonCapabilities::XA`]; the default reports nothing.
+    ///
+    /// The receiver is `&self` to match the other handlerton accessors;
+    /// engines that mutate state during recovery should use interior
+    /// mutability (e.g. a `Mutex`).
+    ///
+    /// # Errors
+    /// Returns an [`EngineError`](crate::engine::EngineError) if the engine
+    /// cannot enumerate its prepared transactions.
+    fn recover_prepared_in_tc(&self, collector: &mut XaStateListCollector) -> EngineResult {
+        let _ = collector;
+        Ok(())
     }
 
     /// Shutdown notification: the server is invoking `ha_panic` to wind every

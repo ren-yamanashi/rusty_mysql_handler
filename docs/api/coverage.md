@@ -186,7 +186,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `mv_key_capacity` | 7201 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 | `get_partition_handler` | 7140 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 
-## handlerton — 86 bound, 7 deferred, 0 intentionally unbound (93 total)
+## handlerton — 87 bound, 6 deferred, 0 intentionally unbound (93 total)
 
 | Callback | T | C | S | Status | Bind path | Notes |
 | -------- | - | - | - | ------ | --------- | ----- |
@@ -199,7 +199,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `rollback` | ✓ | ✗ | ✗ | bound | hton.rs,savepoint_ffi.rs,transaction.rs,txn_context.rs,txn_ffi.rs,txn_row_ffi.rs | Bound via `Transaction::rollback` + `rust__hton__txn_rollback`. |
 | `prepare` | ✓ | ✗ | ✗ | bound | transaction.rs | Bound via `Transaction::prepare` + `rust__hton__txn_prepare`. |
 | `recover` | ✗ | ✗ | ✗ | deferred |  | Deferred: filling the MySQL-owned `XA_recover_txn` array needs a push-entry reverse callback. Follow-up: p9-04. |
-| `recover_prepared_in_tc` | ✗ | ✗ | ✗ | deferred |  | Deferred: filling `Xa_state_list` needs a push-entry reverse callback. Follow-up: p9-04. |
+| `recover_prepared_in_tc` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `commit_by_xid` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `rollback_by_xid` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `set_prepared_in_tc` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |

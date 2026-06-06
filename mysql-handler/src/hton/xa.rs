@@ -22,15 +22,19 @@
 
 //! `rust__hton__*` XA recovery callbacks delegating to the engine-level
 //! handlerton singleton. The shim wires these only under the XA capability.
-//! `recover` and `recover_prepared_in_tc` are deferred (not impossible):
-//! they fill MySQL-owned output structures and need push-entry reverse
-//! callbacks the shim does not yet provide. A NULL pointer currently
-//! reports "nothing to recover", which is correct only because no engine
-//! reaches this code path yet. The shim maps the `EngineResult` returned
-//! here to the `xa_status_code` MySQL expects for the by-xid callbacks.
+//! `recover_prepared_in_tc` is now bound through a writer handle
+//! ([`XaStateListCollector`](crate::hton::XaStateListCollector)) that the
+//! engine pushes (XID, state) pairs into; the shim copies each pair into a
+//! local `XID` and calls `Xa_state_list::add`. `recover` is still deferred —
+//! it needs the same push-entry pattern over `XA_recover_txn[]`. The shim
+//! maps the `EngineResult` returned here to the `xa_status_code` MySQL
+//! expects for the by-xid callbacks.
 
 #![allow(unsafe_code)]
 
+use core::ffi::c_void;
+
+use crate::hton::XaStateListCollector;
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
 use crate::sys;
@@ -83,6 +87,24 @@ pub unsafe extern "C" fn rust__hton__set_prepared_in_tc_by_xid(xid: *const sys::
     FfiBoundary::run(|| match runtime::handlerton() {
         // SAFETY: xid is null or valid for read for this call.
         Some(h) => h.set_prepared_in_tc_by_xid(unsafe { xid.as_ref() }),
+        None => Ok(()),
+    })
+}
+
+/// Report every transaction the engine considers prepared in the TC by
+/// pushing it into the `Xa_state_list` `xa_list` references.
+///
+/// # Safety
+/// `xa_list` is a valid `Xa_state_list *` for the call's duration; not
+/// retained. The engine writes into it only through the safe
+/// `XaStateListCollector` wrapper.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__recover_prepared_in_tc(xa_list: *mut c_void) -> i32 {
+    FfiBoundary::run(|| match runtime::handlerton() {
+        Some(h) => {
+            let mut collector = XaStateListCollector::new(xa_list);
+            h.recover_prepared_in_tc(&mut collector)
+        }
         None => Ok(()),
     })
 }
