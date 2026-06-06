@@ -64,6 +64,20 @@ pub unsafe extern "C" fn rust__handler__lock_count(ctx: *mut EngineContext) -> u
     })
 }
 
+/// Choose the engine's preferred `THR_LOCK_DATA` type for the proposed
+/// `requested` value. The default returns `requested` unchanged.
+///
+/// # Safety
+/// `ctx` non-null.
+#[doc(hidden)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__handler__store_lock(ctx: *mut EngineContext, requested: i32) -> i32 {
+    FfiBoundary::run_default(requested, || {
+        // SAFETY: caller guarantees ctx is non-null and exclusively owned.
+        unsafe { &mut *ctx }.engine_mut().store_lock(requested)
+    })
+}
+
 /// Release the lock on the most recently read row
 ///
 /// # Safety

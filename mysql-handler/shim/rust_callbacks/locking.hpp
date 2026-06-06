@@ -25,12 +25,14 @@
 
 #include <cstdint>
 
-// Locking methods (handler.h #104-#109). The handler base default of each is
+// Locking methods (handler.h #103-#109). The handler base default of each is
 // trivial, so these delegate straight to the engine (no base fallback). THD
-// crosses as an opaque `const void *`.
+// crosses as an opaque `const void *`. store_lock passes the raw
+// `enum thr_lock_type` as an int32_t and expects the engine's chosen type back.
 extern "C" {
 int rust__handler__external_lock(void *ctx, const void *thd, int32_t lock_type);
 uint32_t rust__handler__lock_count(void *ctx);
+int32_t rust__handler__store_lock(void *ctx, int32_t requested);
 void rust__handler__unlock_row(void *ctx);
 int rust__handler__start_stmt(void *ctx, const void *thd, int32_t lock_type);
 bool rust__handler__was_semi_consistent_read(void *ctx);

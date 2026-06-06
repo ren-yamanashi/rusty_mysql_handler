@@ -1158,6 +1158,17 @@ pub trait StorageEngine: Send {
         1
     }
 
+    /// Choose the `THR_LOCK_DATA` lock type for this handler given the server's
+    /// proposal. `requested` is the raw `enum thr_lock_type` (`TL_READ`,
+    /// `TL_WRITE`, …). Returning the request unchanged is the default,
+    /// matching the canonical upgrade the shim performs for engines that do
+    /// not override. Engines that need different priorities (e.g. always
+    /// `TL_WRITE_LOW_PRIORITY`) can return their own choice; returning the
+    /// `TL_IGNORE` sentinel keeps the current lock type as-is.
+    fn store_lock(&mut self, requested: i32) -> i32 {
+        requested
+    }
+
     /// Release the lock held on the most recently read row. The default is a
     /// no-op, matching the handler base.
     fn unlock_row(&mut self) {}
