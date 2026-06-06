@@ -2,5 +2,22 @@
 # Commits and maintain a rolling release PR.
 
 [workspace]
-# Skip CHANGELOG.md; the GitHub Release body carries the changelog.
+# Skip CHANGELOG.md; the GitHub Release body is populated by a
+# follow-up workflow step that calls `gh api generate-notes`.
 changelog_update = false
+
+# Name the GitHub release "vX.Y.Z" instead of the per-crate default
+# "<crate>-vX.Y.Z". Workspace inheritance keeps every published crate
+# on the same version, so a single human-friendly name covers them all.
+git_release_name = "v{{ version }}"
+
+# Only mysql-handler creates a GitHub release; the two helper crates
+# share the same version via workspace inheritance and would otherwise
+# spawn redundant per-crate releases under the umbrella tag.
+[[package]]
+name = "mysql-handler-build"
+git_release_enable = false
+
+[[package]]
+name = "mysql-handler-macros"
+git_release_enable = false
