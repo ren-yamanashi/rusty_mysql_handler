@@ -23,12 +23,12 @@
 // Miscellaneous handlerton callbacks (handler.h #78-#93). is_dict_readonly,
 // rm_tmp_tables, replace_native_transaction_in_thd, post_ddl, post_recover
 // are wired on every registered handlerton; rotate_encryption_master_key is
-// gated by ENCRYPTION; redo_log_set_state is gated by ENGINE_LOG. The
-// five output-shaped callbacks (push_to_engine, get_cost_constants, the
-// three statistics callbacks) keep their handlerton pointers NULL — the
-// engine-owned outputs they return cannot be synthesised through the opaque
-// pass-through. get_index_column_cardinality round-trips `ulonglong *` via
-// a local uint64_t for LP64 safety.
+// gated by ENCRYPTION; redo_log_set_state is gated by ENGINE_LOG. The five
+// output-shaped callbacks (push_to_engine, get_cost_constants and the three
+// statistics callbacks) keep their handlerton pointers NULL today — the
+// engine-owned outputs they return need setter reverse callbacks that are
+// not wired yet. They are deferred, not impossible; the bind path is
+// tracked in docs/api/coverage.md.
 
 #include "binding.hpp"
 #include "rust_callbacks.hpp"

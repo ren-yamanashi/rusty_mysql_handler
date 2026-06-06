@@ -22,10 +22,11 @@
 
 //! `rust__hton__*` XA recovery callbacks delegating to the engine-level
 //! handlerton singleton. The shim wires these only under the XA capability.
-//! `recover` and `recover_prepared_in_tc` are intentionally left NULL: they
-//! fill MySQL-owned output structures that the opaque pass-through cannot
-//! populate, so a NULL pointer correctly reports "nothing to recover" until a
-//! setter reverse-callback exists. The shim maps the `EngineResult` returned
+//! `recover` and `recover_prepared_in_tc` are deferred (not impossible):
+//! they fill MySQL-owned output structures and need push-entry reverse
+//! callbacks the shim does not yet provide. A NULL pointer currently
+//! reports "nothing to recover", which is correct only because no engine
+//! reaches this code path yet. The shim maps the `EngineResult` returned
 //! here to the `xa_status_code` MySQL expects for the by-xid callbacks.
 
 #![allow(unsafe_code)]

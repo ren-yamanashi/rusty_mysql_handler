@@ -16,14 +16,14 @@ surface (documented in [`handler.md`](handler.md) and
 
 - **T / C / S** — presence in trait (T), `rust__*` callback (C), and
   shim override (S). `✓` if found, `✗` if not.
-- **Status** — final 2-category verdict: `bound` (auto-bound or asserted
-  by Notes via a renamed Rust trait / `Bound via …` / `FFI-only binding`)
-  or `intentionally unbound` (Notes starts with `Intentionally`). A
-  third value, `needs review`, surfaces when the auto-classifier and the
-  Notes column disagree.
+- **Status** — verdict produced by combining the auto T/C/S detection
+  with the Notes column. Possible values: `bound`,
+  `intentionally unbound` (genuinely unbindable, not a placeholder),
+  `deferred` (bind path known, follow-up tracked in the Notes), or
+  `needs review` (annotation missing or ambiguous).
 - **Bind path** — basenames of the files matched, for navigation.
 
-## handler — 157 bound, 1 intentionally unbound (158 total)
+## handler — 157 bound, 1 deferred, 0 intentionally unbound (158 total)
 
 | Method | handler.h Line | T | C | S | Status | Bind path | Notes |
 | ------ | -------------- | - | - | - | ------ | --------- | ----- |
@@ -129,7 +129,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `records_from_index` | 5478 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
 | `estimate_rows_upper_bound` | 5522 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
 | `calculate_key_hash_value` | 5775 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
-| `store_lock` | 6083 | ✗ | ✗ | ✓ | intentionally unbound | binding.cc | Intentionally unbound: shim drives `thr_lock` directly so the engine never sees the lock data structure. |
+| `store_lock` | 6083 | ✗ | ✗ | ✓ | deferred | binding.cc | Deferred: shim hard-codes the canonical `update_lock_type` dance today; the planned binding is a trait method that lets the engine return its preferred `THR_LOCK_DATA` type. Follow-up: p9-03. |
 | `external_lock` | 6763 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |
 | `lock_count` | 6050 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |
 | `unlock_row` | 5908 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |
@@ -186,7 +186,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `mv_key_capacity` | 7201 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 | `get_partition_handler` | 7140 | ✓ | ✓ | ✓ | bound | engine.rs,misc.rs,handler_misc.cc |  |
 
-## handlerton — 86 bound, 7 intentionally unbound (93 total)
+## handlerton — 86 bound, 7 deferred, 0 intentionally unbound (93 total)
 
 | Callback | T | C | S | Status | Bind path | Notes |
 | -------- | - | - | - | ------ | --------- | ----- |
@@ -198,8 +198,8 @@ surface (documented in [`handler.md`](handler.md) and
 | `commit` | ✓ | ✗ | ✗ | bound | hton.rs,savepoint_ffi.rs,transaction.rs,txn_context.rs,txn_ffi.rs,txn_row_ffi.rs | Bound via `Transaction::commit` + `rust__hton__txn_commit` (renamed at FFI for txn-context disambiguation). |
 | `rollback` | ✓ | ✗ | ✗ | bound | hton.rs,savepoint_ffi.rs,transaction.rs,txn_context.rs,txn_ffi.rs,txn_row_ffi.rs | Bound via `Transaction::rollback` + `rust__hton__txn_rollback`. |
 | `prepare` | ✓ | ✗ | ✗ | bound | transaction.rs | Bound via `Transaction::prepare` + `rust__hton__txn_prepare`. |
-| `recover` | ✗ | ✗ | ✗ | intentionally unbound |  | Intentionally NULL: the MySQL-owned XID array fill-out is not wired yet (see `hton_xa.cc:24`). |
-| `recover_prepared_in_tc` | ✗ | ✗ | ✗ | intentionally unbound |  | Intentionally NULL: same MySQL-owned XID array constraint as `recover`. |
+| `recover` | ✗ | ✗ | ✗ | deferred |  | Deferred: filling the MySQL-owned `XA_recover_txn` array needs a push-entry reverse callback. Follow-up: p9-04. |
+| `recover_prepared_in_tc` | ✗ | ✗ | ✗ | deferred |  | Deferred: filling `Xa_state_list` needs a push-entry reverse callback. Follow-up: p9-04. |
 | `commit_by_xid` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `rollback_by_xid` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
 | `set_prepared_in_tc` | ✓ | ✓ | ✓ | bound | hton.rs,xa.rs,hton_xa.cc |  |
@@ -267,10 +267,10 @@ surface (documented in [`handler.md`](handler.md) and
 | `notify_after_select` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `notify_create_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `notify_drop_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
-| `push_to_engine` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_optimizer.rs | Intentionally NULL at handlerton: opaque pass-through cannot synthesise the engine-owned output (`hton_misc.cc:27`). |
+| `push_to_engine` | ✓ | ✓ | ✗ | deferred | hton.rs,misc_optimizer.rs | Deferred: shim wire is missing; `AccessPath` / `JOIN` can pass through as opaque pointers and the engine returns 0 to decline pushdown. Follow-up: p9-05. |
 | `is_dict_readonly` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
 | `rm_tmp_tables` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
-| `get_cost_constants` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_optimizer.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
+| `get_cost_constants` | ✓ | ✓ | ✗ | deferred | hton.rs,misc_optimizer.rs | Deferred: needs a setter reverse callback to allocate the `SE_cost_constants` MySQL takes ownership of. Follow-up: p9-06. |
 | `replace_native_transaction_in_thd` | ✓ | ✓ | ✓ | bound | hton.rs,misc_optimizer.rs,hton_misc.cc |  |
 | `notify_exclusive_mdl` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `notify_alter_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
@@ -278,9 +278,9 @@ surface (documented in [`handler.md`](handler.md) and
 | `notify_truncate_table` | ✓ | ✓ | ✓ | bound | hton.rs,notifications.rs,hton_notifications.cc |  |
 | `rotate_encryption_master_key` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 | `redo_log_set_state` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
-| `get_table_statistics` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
-| `get_index_column_cardinality` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
-| `get_tablespace_statistics` | ✓ | ✓ | ✗ | intentionally unbound | hton.rs,misc_stats.rs | Intentionally NULL at handlerton: same opaque-output limitation as `push_to_engine`. |
+| `get_table_statistics` | ✓ | ✓ | ✗ | deferred | hton.rs,misc_stats.rs | Deferred: needs a setter reverse callback to populate `ha_statistics` from the engine. Follow-up: p9-07. |
+| `get_index_column_cardinality` | ✓ | ✓ | ✗ | deferred | hton.rs,misc_stats.rs | Deferred: needs a reverse callback to write the `ulonglong` cardinality through the out-pointer. Follow-up: p9-08. |
+| `get_tablespace_statistics` | ✓ | ✓ | ✗ | deferred | hton.rs,misc_stats.rs | Deferred: needs a setter reverse callback to populate `ha_tablespace_statistics` from the engine. Follow-up: p9-09. |
 | `post_ddl` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 | `post_recover` | ✓ | ✓ | ✓ | bound | hton.rs,misc_stats.rs,hton_misc.cc |  |
 

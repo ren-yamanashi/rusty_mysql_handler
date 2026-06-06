@@ -23,28 +23,13 @@
 
 # Cross-reference docs/api/{handler,handlerton}.md against the bind surface
 # in mysql-handler/src and mysql-handler/shim. Writes docs/api/coverage.md
-# in place, preserving any human-applied Notes annotations from the
-# previous run.
+# in place, preserving the human-applied Notes column from the previous run.
+# See docs/api/coverage.md for the rendered table and the per-status legend
+# (bound / intentionally unbound / deferred / needs review).
 #
 # Usage: scripts/audit-bind-coverage.sh
-#
-# A row is "bound" only when all three layers carry the method name:
-#   T (trait)    — fn <name>( in src/engine.rs or src/hton{.rs,/*.rs}
-#   C (callback) — rust__handler__<name>( in src/handler/*.rs
-#                  rust__hton__<name>(    in src/hton/*.rs
-#   S (shim)     — RustHandlerBase::<name>( in shim/handler_*.cc
-#                  rust__hton__<name>(      in shim/hton_*.cc
-#
-# Status resolves to one of:
-#   bound                  — T + C + S all present, OR the Notes column
-#                            asserts an explicit alternate binding path
-#                            (renamed Rust trait, `Bound via …`, `FFI-only
-#                            binding …`).
-#   intentionally unbound  — Notes starts with `Intentionally`.
-#   needs review           — auto-classifier and Notes disagree (rare; flag
-#                            for a follow-up annotation).
-#
-# Exits non-zero only when any "needs review" row remains.
+# Exits 0 when every row is bound or intentionally unbound, 1 when any row
+# is still deferred or needs review.
 
 set -euo pipefail
 
@@ -54,7 +39,7 @@ SHIM="$ROOT/mysql-handler/shim"
 
 mark() { [[ -n $1 ]] && printf '%s' '✓' || printf '%s' '✗'; }
 
-# Resolve the final 2-category status from (T, C, S marks, note text).
+# Resolve the final status from (T, C, S marks, note text).
 classify_final() {
   local t=$1 c=$2 s=$3 note=$4
   if [[ -n $t && -n $c && -n $s ]]; then
@@ -62,12 +47,11 @@ classify_final() {
     return
   fi
   case "$note" in
-    *"Intentionally"*)
-      printf 'intentionally unbound' ;;
+    "Deferred:"*)               printf 'deferred' ;;
+    *"Intentionally"*)          printf 'intentionally unbound' ;;
     *"fully bound"*|"Bound via"*|"FFI-only binding"*|"Trait renamed"*)
-      printf 'bound' ;;
-    *)
-      printf 'needs review' ;;
+                                printf 'bound' ;;
+    *)                          printf 'needs review' ;;
   esac
 }
 
@@ -123,7 +107,7 @@ audit_rows() {
     cb_prefix="rust__hton__"
     shim_prefix="rust__hton__"
   fi
-  local total=0 bound=0 unbound=0 review=0
+  local total=0 bound=0 unbound=0 deferred=0 review=0
   while IFS=$'\t' read -r name line pv; do
     [[ -z $name ]] && continue
     total=$((total + 1))
@@ -139,9 +123,10 @@ audit_rows() {
     note=$(lookup_note "$kind" "$name")
     status=$(classify_final "$t" "$c" "$s" "$note")
     case "$status" in
-      bound) bound=$((bound + 1)) ;;
+      bound)                  bound=$((bound + 1)) ;;
       "intentionally unbound") unbound=$((unbound + 1)) ;;
-      *) review=$((review + 1)) ;;
+      deferred)               deferred=$((deferred + 1)) ;;
+      *)                      review=$((review + 1)) ;;
     esac
     path_col=$(IFS=,; printf '%s' "${paths[*]:-}")
     local line_col=""
@@ -150,7 +135,7 @@ audit_rows() {
       "$name" "$line_col" "$(mark "$t")" "$(mark "$c")" "$(mark "$s")" \
       "$status" "$path_col" "$note"
   done < <(parse_rows "$doc")
-  printf '%d %d %d %d\n' "$total" "$bound" "$unbound" "$review" > "$stats_out"
+  printf '%d %d %d %d %d\n' "$total" "$bound" "$unbound" "$deferred" "$review" > "$stats_out"
 }
 
 # Build TAB-separated (section, name, note) records from $1 (a snapshot of
@@ -189,10 +174,10 @@ main() {
   audit_rows "$handler_stats" "$ROOT/docs/api/handler.md" handler > "$handler_table"
   audit_rows "$hton_stats" "$ROOT/docs/api/handlerton.md" hton > "$hton_table"
 
-  local handler_total handler_bound handler_unbound handler_review
-  local hton_total hton_bound hton_unbound hton_review
-  read -r handler_total handler_bound handler_unbound handler_review < "$handler_stats"
-  read -r hton_total hton_bound hton_unbound hton_review < "$hton_stats"
+  local handler_total handler_bound handler_unbound handler_deferred handler_review
+  local hton_total hton_bound hton_unbound hton_deferred hton_review
+  read -r handler_total handler_bound handler_unbound handler_deferred handler_review < "$handler_stats"
+  read -r hton_total hton_bound hton_unbound hton_deferred hton_review < "$hton_stats"
 
   {
   cat <<'EOF'
@@ -214,22 +199,22 @@ surface (documented in [`handler.md`](handler.md) and
 
 - **T / C / S** — presence in trait (T), `rust__*` callback (C), and
   shim override (S). `✓` if found, `✗` if not.
-- **Status** — final 2-category verdict: `bound` (auto-bound or asserted
-  by Notes via a renamed Rust trait / `Bound via …` / `FFI-only binding`)
-  or `intentionally unbound` (Notes starts with `Intentionally`). A
-  third value, `needs review`, surfaces when the auto-classifier and the
-  Notes column disagree.
+- **Status** — verdict produced by combining the auto T/C/S detection
+  with the Notes column. Possible values: `bound`,
+  `intentionally unbound` (genuinely unbindable, not a placeholder),
+  `deferred` (bind path known, follow-up tracked in the Notes), or
+  `needs review` (annotation missing or ambiguous).
 - **Bind path** — basenames of the files matched, for navigation.
 
 EOF
-  printf '## handler — %d bound, %d intentionally unbound (%d total)\n\n' \
-    "$handler_bound" "$handler_unbound" "$handler_total"
+  printf '## handler — %d bound, %d deferred, %d intentionally unbound (%d total)\n\n' \
+    "$handler_bound" "$handler_deferred" "$handler_unbound" "$handler_total"
   echo "| Method | handler.h Line | T | C | S | Status | Bind path | Notes |"
   echo "| ------ | -------------- | - | - | - | ------ | --------- | ----- |"
   cat "$handler_table"
   echo ""
-  printf '## handlerton — %d bound, %d intentionally unbound (%d total)\n\n' \
-    "$hton_bound" "$hton_unbound" "$hton_total"
+  printf '## handlerton — %d bound, %d deferred, %d intentionally unbound (%d total)\n\n' \
+    "$hton_bound" "$hton_deferred" "$hton_unbound" "$hton_total"
   echo "| Callback | T | C | S | Status | Bind path | Notes |"
   echo "| -------- | - | - | - | ------ | --------- | ----- |"
   cat "$hton_table"
@@ -237,10 +222,10 @@ EOF
 
   } > "$target"
 
-  local review=$((handler_review + hton_review))
-  if [[ $review -gt 0 ]]; then
-    printf '_%d rows need review. Add a Notes annotation that asserts ' "$review" >&2
-    printf 'the binding or marks the row as intentionally unbound._\n' >&2
+  local open=$((handler_deferred + hton_deferred + handler_review + hton_review))
+  if [[ $open -gt 0 ]]; then
+    printf '_%d rows are still open (deferred + needs review). ' "$open" >&2
+    printf 'Bind them or refine the Notes annotation._\n' >&2
     return 1
   fi
 }
