@@ -23,7 +23,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -32,7 +32,7 @@ jobs:
         with:
           shared-key: release-plz
       - name: release-plz release-pr
-        uses: MarcoIeni/release-plz-action@4a08fbe6cb1bb0e4d066058e6efcf50f352db236 # v0.5.129
+        uses: MarcoIeni/release-plz-action@064f4d1e36c843611ddf013be726beaa4ad804db # v0.5.129
         with:
           command: release-pr
         env:
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
@@ -58,7 +58,7 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
-      - uses: EmbarkStudios/cargo-deny-action@8a45e1c7c9a95dfae3276e89a553705e40ae45a2 # v2.0.20
+      - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2.0.20
         with:
           command: check
           arguments: --workspace --all-features
@@ -74,7 +74,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -87,7 +87,7 @@ jobs:
       - uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
         id: auth
       - name: release-plz release
-        uses: MarcoIeni/release-plz-action@4a08fbe6cb1bb0e4d066058e6efcf50f352db236 # v0.5.129
+        uses: MarcoIeni/release-plz-action@064f4d1e36c843611ddf013be726beaa4ad804db # v0.5.129
         with:
           command: release
         env:
