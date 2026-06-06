@@ -2,13 +2,10 @@
 
 !Cargo.toml
 !Cargo.lock
-!build.rs
 !rust-toolchain.toml
-!src
-!shim
+!mysql-handler
 !mysql-handler-*
 !examples
-!benches
 !mysql-server
 
 mysql-server/.git
