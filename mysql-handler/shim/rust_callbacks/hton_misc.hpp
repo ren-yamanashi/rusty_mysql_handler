@@ -29,11 +29,12 @@
 // Miscellaneous handlerton callbacks. Wiring split: always-wire for
 // is_dict_readonly / rm_tmp_tables / replace_native_transaction_in_thd /
 // post_ddl / post_recover / push_to_engine / get_cost_constants /
-// get_table_statistics / get_index_column_cardinality; capability-gated
-// for rotate_encryption_master_key (ENCRYPTION) and redo_log_set_state
-// (ENGINE_LOG). get_tablespace_statistics is bound here for completeness
-// but its handlerton pointer stays NULL until the setter reverse callback
-// for ha_tablespace_statistics lands.
+// get_table_statistics / get_index_column_cardinality /
+// get_tablespace_statistics; capability-gated for
+// rotate_encryption_master_key (ENCRYPTION) and redo_log_set_state
+// (ENGINE_LOG). The five string fields of ha_tablespace_statistics
+// (m_type, m_logfile_group_name, m_row_format, m_status, m_extra) stay
+// default-empty today — a `dd::String_type` setter is the missing piece.
 extern "C" {
 bool rust__hton__is_dict_readonly();
 bool rust__hton__rm_tmp_tables(const void *thd);
@@ -61,7 +62,8 @@ bool rust__hton__get_index_column_cardinality(
 bool rust__hton__get_tablespace_statistics(const uint8_t *tablespace_name,
                                            size_t tablespace_name_len,
                                            const uint8_t *file_name,
-                                           size_t file_name_len);
+                                           size_t file_name_len,
+                                           void *stats);
 void rust__hton__post_ddl(const void *thd);
 void rust__hton__post_recover();
 }

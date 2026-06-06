@@ -87,6 +87,7 @@ mod table_statistics;
 #[doc(hidden)]
 pub mod tablespace;
 mod tablespace_kind;
+mod tablespace_statistics;
 mod transaction;
 #[doc(hidden)]
 pub mod txn_context;
@@ -115,6 +116,7 @@ pub use stat_print_sink::StatPrintSink;
 pub use stat_type::HaStatType;
 pub use table_statistics::TableStatistics;
 pub use tablespace_kind::{TablespaceType, TsCommandType};
+pub use tablespace_statistics::TablespaceStatistics;
 pub use transaction::TxnSession;
 pub use xa_recover_collector::XaRecoverCollector;
 pub use xa_state_list_collector::XaStateListCollector;
@@ -1069,14 +1071,22 @@ pub trait Handlerton: Send + Sync {
         Ok(None)
     }
 
-    /// Retrieve tablespace statistics into MySQL's `ha_tablespace_statistics`.
-    /// Same opaque-output situation as [`Self::get_table_statistics`].
+    /// Retrieve engine-published statistics for the (`tablespace_name`,
+    /// `file_name`) pair. Return `Ok(Some(stats))` to populate MySQL's
+    /// `ha_tablespace_statistics`, `Ok(None)` when the engine knows nothing
+    /// about the tablespace, or `Err` on a real retrieval failure. Only the
+    /// numeric fields cross the FFI boundary today; the five string fields
+    /// keep their default-empty values.
     ///
     /// # Errors
     /// Returns an [`EngineError`](crate::engine::EngineError) on retrieval
     /// failure.
-    fn get_tablespace_statistics(&self, _tablespace_name: &str, _file_name: &str) -> EngineResult {
-        Ok(())
+    fn get_tablespace_statistics(
+        &self,
+        _tablespace_name: &str,
+        _file_name: &str,
+    ) -> EngineResult<Option<TablespaceStatistics>> {
+        Ok(None)
     }
 
     /// Notification fired after a DDL completes. Always wired on a registered

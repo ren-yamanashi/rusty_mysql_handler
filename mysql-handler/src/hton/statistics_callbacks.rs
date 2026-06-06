@@ -57,6 +57,19 @@ unsafe extern "C" {
         update_time: u64,
         block_size: u32,
     );
+    fn mysql__hton__set_tablespace_statistics(
+        stats: *mut c_void,
+        id: u64,
+        logfile_group_number: u64,
+        free_extents: u64,
+        total_extents: u64,
+        extent_size: u64,
+        initial_size: u64,
+        maximum_size: u64,
+        autoextend_size: u64,
+        version: u64,
+        data_free: u64,
+    );
 }
 
 /// Fill `stats` with engine-published statistics for the
@@ -179,17 +192,21 @@ pub unsafe extern "C" fn rust__hton__get_index_column_cardinality(
     })
 }
 
-/// `get_tablespace_statistics`. The handlerton pointer stays NULL until
-/// a setter reverse callback for `ha_tablespace_statistics` exists.
+/// Fill `stats` with engine-published tablespace statistics for the
+/// (`tablespace_name`, `file_name`) pair when the engine has any. Returns
+/// `true` (failure) when the engine reports nothing or fails.
 ///
 /// # Safety
-/// `tablespace_name` / `file_name` non-null and cover their stated lengths.
+/// `tablespace_name` / `file_name` non-null and cover their stated lengths;
+/// `stats` is a valid `ha_tablespace_statistics *` writable for the call's
+/// duration.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust__hton__get_tablespace_statistics(
     tablespace_name: *const u8,
     tablespace_name_len: usize,
     file_name: *const u8,
     file_name_len: usize,
+    stats: *mut c_void,
 ) -> bool {
     FfiBoundary::run_default(true, || {
         // SAFETY: tablespace_name is non-null and covers its length.
@@ -203,8 +220,31 @@ pub unsafe extern "C" fn rust__hton__get_tablespace_statistics(
             Err(_) => return true,
         };
         match runtime::handlerton() {
-            Some(h) => crate::hton::result::result_to_error(h.get_tablespace_statistics(ts, file)),
-            None => false,
+            Some(h) => match h.get_tablespace_statistics(ts, file) {
+                Ok(Some(tss)) => {
+                    // SAFETY: stats is a valid `ha_tablespace_statistics *`
+                    // for this callback only; the shim copies each field
+                    // into the matching slot before returning to MySQL.
+                    unsafe {
+                        mysql__hton__set_tablespace_statistics(
+                            stats,
+                            tss.id(),
+                            tss.logfile_group_number(),
+                            tss.free_extents(),
+                            tss.total_extents(),
+                            tss.extent_size(),
+                            tss.initial_size(),
+                            tss.maximum_size(),
+                            tss.autoextend_size(),
+                            tss.version(),
+                            tss.data_free(),
+                        );
+                    }
+                    false
+                }
+                Ok(None) | Err(_) => true,
+            },
+            None => true,
         }
     })
 }
