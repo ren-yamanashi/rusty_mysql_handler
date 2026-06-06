@@ -22,11 +22,11 @@
 
 //! `rust__hton__*` XA recovery callbacks delegating to the engine-level
 //! handlerton singleton. The shim wires these only under the XA capability.
-//! `recover_prepared_in_tc` is now bound through a writer handle
-//! ([`XaStateListCollector`](crate::hton::XaStateListCollector)) that the
-//! engine pushes (XID, state) pairs into; the shim copies each pair into a
-//! local `XID` and calls `Xa_state_list::add`. `recover` is still deferred —
-//! it needs the same push-entry pattern over `XA_recover_txn[]`. The shim
+//! `recover_prepared_in_tc` and `recover` are bound through writer handles
+//! ([`XaStateListCollector`](crate::hton::XaStateListCollector) and
+//! [`XaRecoverCollector`](crate::hton::XaRecoverCollector)) that the engine
+//! pushes prepared XA transactions into; the shim copies each entry into
+//! a `XID` and forwards it to the corresponding MySQL container. The shim
 //! maps the `EngineResult` returned here to the `xa_status_code` MySQL
 //! expects for the by-xid callbacks.
 
@@ -34,7 +34,7 @@
 
 use core::ffi::c_void;
 
-use crate::hton::XaStateListCollector;
+use crate::hton::{XaRecoverCollector, XaStateListCollector};
 use crate::panic_guard::FfiBoundary;
 use crate::runtime;
 use crate::sys;
@@ -106,5 +106,24 @@ pub unsafe extern "C" fn rust__hton__recover_prepared_in_tc(xa_list: *mut c_void
             h.recover_prepared_in_tc(&mut collector)
         }
         None => Ok(()),
+    })
+}
+
+/// Fill `xid_list[0..len]` with prepared XA transactions; returns the
+/// count actually written (0 when no engine is registered).
+///
+/// # Safety
+/// `xid_list` is a valid `XA_recover_txn *` array of length `len`, valid
+/// for the call's duration; the engine writes only via the safe
+/// `XaRecoverCollector` wrapper.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rust__hton__recover(xid_list: *mut c_void, len: u32) -> u32 {
+    FfiBoundary::run_default(0, || match runtime::handlerton() {
+        Some(h) => {
+            let mut collector = XaRecoverCollector::new(xid_list, len);
+            h.recover(&mut collector);
+            collector.filled()
+        }
+        None => 0,
     })
 }
