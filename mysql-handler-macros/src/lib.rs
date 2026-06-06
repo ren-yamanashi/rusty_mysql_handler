@@ -51,12 +51,12 @@ use crate::args::PluginArgs;
 ///   `c_uint` (commonly `env!("CARGO_PKG_VERSION")` parsed elsewhere
 ///   or a literal like `0x0001`).
 /// - `license`: any const expression of type
-///   [`mysql_handler::license::License`]. The discriminant is folded
+///   `mysql_handler::license::License`. The discriminant is folded
 ///   into the static initialiser at compile time.
 /// - `author`: author or organisation name (string literal).
 /// - `handlerton` (optional): path to a `Default`-constructible
 ///   handlerton struct (typically a unit struct) implementing
-///   [`mysql_handler::hton::Handlerton`]. When supplied the generated
+///   `mysql_handler::hton::Handlerton`. When supplied the generated
 ///   `rust__plugin_init` additionally registers the handlerton so
 ///   engine-level callbacks (transactions, savepoints, discovery)
 ///   route through it. Omit when the engine only needs the per-handler

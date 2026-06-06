@@ -999,8 +999,8 @@ pub trait Handlerton: Send + Sync {
     /// `JOIN` pointers stay opaque (dropped at the FFI boundary today —
     /// the engine sees only the `THD`). The handlerton pointer is wired
     /// unconditionally; MySQL only invokes it after the handler-level
-    /// [`StorageEngine::hton_supporting_engine_pushdown`] reports the
-    /// engine wants pushdown. The default returns
+    /// [`crate::engine::StorageEngine::hton_supporting_engine_pushdown`]
+    /// reports the engine wants pushdown. The default returns
     /// [`EngineError::Unsupported`](crate::engine::EngineError::Unsupported)
     /// so an engine that opts into pushdown but forgets to implement
     /// this method gets a loud error instead of silently broken

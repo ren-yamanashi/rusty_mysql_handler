@@ -23,9 +23,9 @@
 //! Reference storage engine for `mysql-handler`. [`TrivialEngine`] is the
 //! `StorageEngine` impl orchestrator under `engine/`,
 //! [`trivial_handlerton`] holds the engine-level [`TrivialHandlerton`],
-//! and the [`mysql_handler::plugin`] macro on [`TrivialEngine`] supplies
-//! the plugin manifest plus the `rust__plugin_init` that registers both
-//! the engine factory and the handlerton.
+//! and the `mysql_handler::prelude::plugin` macro on [`TrivialEngine`]
+//! supplies the plugin manifest plus the `rust__plugin_init` that
+//! registers both the engine factory and the handlerton.
 
 #![allow(unsafe_code)]
 

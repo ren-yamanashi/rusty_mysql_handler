@@ -73,11 +73,28 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --workspace --all-targets
 
+  docs:
+    name: Docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
+        with:
+          shared-key: docs
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo doc --workspace --no-deps
+
   quality:
     name: Quality
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [lint, check-test, msrv]
+    needs: [lint, check-test, msrv, docs]
     if: ${{ always() }}
     steps:
       - name: Verify required jobs
@@ -85,10 +102,11 @@ jobs:
           LINT: ${{ needs.lint.result }}
           CHECK_TEST: ${{ needs.check-test.result }}
           MSRV: ${{ needs.msrv.result }}
+          DOCS: ${{ needs.docs.result }}
         run: |
           set -euo pipefail
           fail=0
-          for entry in "lint=$LINT" "check-test=$CHECK_TEST" "msrv=$MSRV"; do
+          for entry in "lint=$LINT" "check-test=$CHECK_TEST" "msrv=$MSRV" "docs=$DOCS"; do
             name="${entry%%=*}"
             result="${entry#*=}"
             echo "$name: $result"

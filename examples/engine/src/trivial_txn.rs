@@ -22,7 +22,7 @@
 
 //! Per-connection transaction state for the reference engine.
 //!
-//! Writes, updates, and deletes accumulate as an [`Op`] log under their
+//! Writes, updates, and deletes accumulate as an `Op` log under their
 //! target table. `commit(all=true)` replays the log against the committed
 //! [`crate::store::TableStore`]; `rollback(all=true)` discards it.
 //! Savepoints snapshot the whole op log so `ROLLBACK TO SAVEPOINT` can
@@ -32,7 +32,7 @@
 //! engines that need richer semantics should diverge here):
 //!
 //! - **No read-your-own-writes.** Scans always go through
-//!   [`crate::store::pairs_sorted`], which only sees committed rows.
+//!   `crate::store::pairs_sorted`, which only sees committed rows.
 //!   A second statement within the same transaction observes the
 //!   pre-transaction state, so a sequence like
 //!   `BEGIN; UPDATE t SET x=2 WHERE id=1; UPDATE t SET x=3 WHERE x=2;`
