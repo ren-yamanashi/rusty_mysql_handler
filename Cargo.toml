@@ -10,7 +10,7 @@ members = [
 # Workspace-shared version, inherited by every published crate so a single
 # release-plz bump moves all three to the same number in lockstep.
 [workspace.package]
-version = "0.1.1"
+version = "0.2.0"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
