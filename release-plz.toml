@@ -1,6 +1,16 @@
-# release-plz configuration. Defaults bump version from Conventional
-# Commits and maintain a rolling release PR.
-
 [workspace]
-# Skip CHANGELOG.md; the GitHub Release body carries the changelog.
+# Release body is populated by scripts/populate-release-notes.sh.
 changelog_update = false
+
+# Workspace inheritance keeps every published crate on the same version,
+# so a single umbrella release name (no `<crate>-` prefix) covers them.
+git_release_name = "v{{ version }}"
+
+# Helper crates ride the mysql-handler umbrella release.
+[[package]]
+name = "mysql-handler-build"
+git_release_enable = false
+
+[[package]]
+name = "mysql-handler-macros"
+git_release_enable = false
