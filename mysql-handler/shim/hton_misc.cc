@@ -118,9 +118,8 @@ void rusty_hton_wire_misc(handlerton *hton) {
   hton->push_to_engine = rusty_hton_push_to_engine;
   // Safe to wire unconditionally: the optimizer falls back to
   // `new SE_cost_constants(optimizer)` when the callback returns nullptr,
-  // and the default trait method returns None which the thunk turns into
-  // nullptr — so engines that do not override see the same defaults they
-  // saw before the wire.
+  // and the default trait method returns None → nullptr, so engines that
+  // do not override observe MySQL's stock cost defaults.
   hton->get_cost_constants = rusty_hton_get_cost_constants;
 }
 

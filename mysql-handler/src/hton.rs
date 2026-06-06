@@ -976,13 +976,9 @@ pub trait Handlerton: Send + Sync {
         Ok(())
     }
 
-    /// Provide engine-specific optimizer cost constants for `storage_category`
-    /// (raw MySQL `Cost_constants_storage_category` value). Returning [`None`]
-    /// keeps MySQL's defaults — the shim never allocates an
-    /// `SE_cost_constants` on the engine's behalf. Returning [`Some`]
-    /// constructs one through a thin subclass that calls the protected
-    /// `update("memory_block_read_cost", ...)` / `update("io_block_read_cost",
-    /// ...)` setters with the engine's values and hands ownership to MySQL.
+    /// Provide engine-specific optimizer cost constants for
+    /// `storage_category` (raw MySQL `Cost_constants_storage_category` value).
+    /// Return [`None`] to keep MySQL's defaults; return [`Some`] to override.
     fn get_cost_constants(&self, _storage_category: u32) -> Option<CostConstants> {
         None
     }
