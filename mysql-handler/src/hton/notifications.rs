@@ -155,7 +155,7 @@ pub unsafe extern "C" fn rust__hton__notify_alter_table(
 ///
 /// # Safety
 /// Each byte pointer is non-null (the shim substitutes a non-null empty
-/// sentinel for a NULL input, matching [`FfiPtr::bytes_to_str`]'s non-null
+/// sentinel for a NULL input, matching `FfiPtr::bytes_to_str`'s non-null
 /// contract) and covers its stated length readable for the call.
 /// `thd` / `mdl_key` null or valid for the call.
 #[unsafe(no_mangle)]

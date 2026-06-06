@@ -112,9 +112,8 @@ impl TableMeta {
     }
 
     /// Byte offset of the first visible column referenced by the index
-    /// whose [`IndexMeta::index_type`] is [`IndexType::Primary`], or the
-    /// first index when no primary key exists. `None` when the table has
-    /// no indexes.
+    /// whose `index_type` is [`IndexType::Primary`], or the first index
+    /// when no primary key exists. `None` when the table has no indexes.
     #[must_use]
     pub fn primary_key_offset(&self) -> Option<usize> {
         let (offset, _) = self.primary_key_column()?;

@@ -54,7 +54,7 @@ pub unsafe extern "C" fn rust__hton__binlog_func(thd: *const sys::THD, func: u32
 ///
 /// # Safety
 /// Each byte pointer is non-null (the shim substitutes a non-null empty
-/// sentinel when MySQL hands in NULL, matching [`FfiPtr::bytes_to_str`]'s
+/// sentinel when MySQL hands in NULL, matching `FfiPtr::bytes_to_str`'s
 /// non-null contract) and covers its stated length readable for the call.
 /// `thd` is null or valid for the call.
 #[unsafe(no_mangle)]

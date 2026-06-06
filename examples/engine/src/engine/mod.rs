@@ -27,9 +27,9 @@
 //! for TrivialEngine` in this file dispatches each trait method into
 //! a thin helper on a sibling module:
 //!
-//! - [`scan`] — cursor / snapshot / range / index lookup machinery.
-//! - [`crud`] — non-transactional `update_row` / `delete_row`.
-//! - [`stats`] — `index_flags`, `records_in_range`, auto-increment.
+//! - `scan` — cursor / snapshot / range / index lookup machinery.
+//! - `crud` — non-transactional `update_row` / `delete_row`.
+//! - `stats` — `index_flags`, `records_in_range`, auto-increment.
 //!
 //! `update_row` / `delete_row` route through the per-connection
 //! [`TrivialTxn`](crate::trivial_txn::TrivialTxn) op log whenever the
@@ -41,7 +41,7 @@
 //! **Line-limit note.** This file exceeds the 250-line ceiling because
 //! its single responsibility is the `impl StorageEngine for
 //! TrivialEngine` block (one `impl Trait for Type` per the coding-style
-//! exemption). Helper code lives in [`scan`], [`crud`], and [`stats`];
+//! exemption). Helper code lives in `scan`, `crud`, and `stats`;
 //! splitting the trait impl itself by method group would force every
 //! virtual to grow a public re-export across two modules.
 
