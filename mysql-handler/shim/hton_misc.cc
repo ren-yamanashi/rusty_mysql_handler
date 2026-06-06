@@ -22,13 +22,13 @@
 
 // Miscellaneous handlerton callbacks (handler.h #78-#93). is_dict_readonly,
 // rm_tmp_tables, replace_native_transaction_in_thd, post_ddl, post_recover,
-// push_to_engine, get_cost_constants, get_table_statistics are wired on every
-// registered handlerton; rotate_encryption_master_key is gated by ENCRYPTION;
-// redo_log_set_state is gated by ENGINE_LOG. The remaining two statistics
-// callbacks (get_index_column_cardinality, get_tablespace_statistics) keep
-// their handlerton pointers NULL today — they need setter reverse callbacks
-// that are not wired yet. They are deferred, not impossible; the bind path
-// is tracked in docs/api/coverage.md.
+// push_to_engine, get_cost_constants, get_table_statistics,
+// get_index_column_cardinality are wired on every registered handlerton;
+// rotate_encryption_master_key is gated by ENCRYPTION; redo_log_set_state is
+// gated by ENGINE_LOG. get_tablespace_statistics keeps its handlerton pointer
+// NULL today — it still needs the same setter reverse callback over
+// `ha_tablespace_statistics` that the table-stats binding wired for
+// `ha_statistics`. Deferred, not impossible; tracked in docs/api/coverage.md.
 
 #include <cstring>
 
@@ -81,6 +81,27 @@ class RustySECostConstants : public SE_cost_constants {
     update({"io_block_read_cost", 18}, io_cost);
   }
 };
+
+bool rusty_hton_get_index_column_cardinality(
+    const char *db_name, const char *table_name, const char *index_name,
+    uint index_ordinal_position, uint column_ordinal_position,
+    dd::Object_id se_private_id, ulonglong *cardinality) {
+  if (!db_name || !table_name || !index_name || !cardinality) return true;
+  // LP64 safety: round-trip through a local uint64_t so the Rust callback
+  // never sees the platform-dependent `ulonglong` width directly.
+  uint64_t card = 0;
+  if (rust__hton__get_index_column_cardinality(
+          reinterpret_cast<const uint8_t *>(db_name), std::strlen(db_name),
+          reinterpret_cast<const uint8_t *>(table_name), std::strlen(table_name),
+          reinterpret_cast<const uint8_t *>(index_name), std::strlen(index_name),
+          static_cast<uint32_t>(index_ordinal_position),
+          static_cast<uint32_t>(column_ordinal_position),
+          static_cast<uint64_t>(se_private_id), &card)) {
+    return true;
+  }
+  *cardinality = static_cast<ulonglong>(card);
+  return false;
+}
 
 bool rusty_hton_get_table_statistics(const char *db_name,
                                      const char *table_name,
@@ -171,6 +192,11 @@ void rusty_hton_wire_misc(handlerton *hton) {
   // "engine has no stats for this table". Engines that override fill the
   // `ha_statistics` slot through the setter reverse callback above.
   hton->get_table_statistics = rusty_hton_get_table_statistics;
+  // Safe to wire unconditionally: MySQL consults this callback only when
+  // it actually needs a cardinality, the default trait returns `Ok(None)`
+  // which the thunk maps to `true` (failure), and MySQL handles the
+  // failure as "engine has no cardinality for this column".
+  hton->get_index_column_cardinality = rusty_hton_get_index_column_cardinality;
 }
 
 void rusty_hton_wire_encryption(handlerton *hton) {
