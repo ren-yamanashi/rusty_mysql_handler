@@ -27,13 +27,16 @@
 
 // XA recovery callbacks. XID / THD cross as opaque `const void *`. Each returns
 // 0 on success or an HA_ERR code; the shim maps that to xa_status_code for the
-// by-xid callbacks. recover / recover_prepared_in_tc are deliberately not bound
-// (they fill MySQL-owned output the opaque pass-through cannot populate).
+// by-xid callbacks. recover_prepared_in_tc receives the Xa_state_list as an
+// opaque `void *` and uses the mysql__xa_state_list__add reverse callback
+// (declared in core.hpp) to push entries. recover remains deferred — it needs
+// the same push-entry pattern over XA_recover_txn[].
 extern "C" {
 int32_t rust__hton__commit_by_xid(const void *xid);
 int32_t rust__hton__rollback_by_xid(const void *xid);
 int32_t rust__hton__set_prepared_in_tc(const void *thd);
 int32_t rust__hton__set_prepared_in_tc_by_xid(const void *xid);
+int32_t rust__hton__recover_prepared_in_tc(void *xa_list);
 }
 
 #endif
