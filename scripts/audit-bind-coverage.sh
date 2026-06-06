@@ -22,18 +22,14 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 # Cross-reference docs/api/{handler,handlerton}.md against the bind surface
-# in mysql-handler/src and mysql-handler/shim. Emits docs/api/coverage.md.
+# in mysql-handler/src and mysql-handler/shim. Writes docs/api/coverage.md
+# in place, preserving the human-applied Notes column from the previous run.
+# See docs/api/coverage.md for the rendered table and the per-status legend
+# (bound / intentionally unbound / deferred / needs review).
 #
-# Usage: scripts/audit-bind-coverage.sh > docs/api/coverage.md
-#
-# A row is "bound" only when all three layers carry the method name:
-#   T (trait)    — fn <name>( in src/engine.rs or src/hton{.rs,/*.rs}
-#   C (callback) — rust__handler__<name>( in src/handler/*.rs
-#                  rust__hton__<name>(    in src/hton/*.rs
-#   S (shim)     — RustHandlerBase::<name>( in shim/handler_*.cc
-#                  rust__hton__<name>(      in shim/hton_*.cc
-#
-# Exits non-zero when any "missing" or "partial" row remains.
+# Usage: scripts/audit-bind-coverage.sh
+# Exits 0 when every row is bound or intentionally unbound, 1 when any row
+# is still deferred or needs review.
 
 set -euo pipefail
 
@@ -42,6 +38,22 @@ SRC="$ROOT/mysql-handler/src"
 SHIM="$ROOT/mysql-handler/shim"
 
 mark() { [[ -n $1 ]] && printf '%s' '✓' || printf '%s' '✗'; }
+
+# Resolve the final status from (T, C, S marks, note text).
+classify_final() {
+  local t=$1 c=$2 s=$3 note=$4
+  if [[ -n $t && -n $c && -n $s ]]; then
+    printf 'bound'
+    return
+  fi
+  case "$note" in
+    "Deferred:"*)               printf 'deferred' ;;
+    *"Intentionally"*)          printf 'intentionally unbound' ;;
+    *"fully bound"*|"Bound via"*|"FFI-only binding"*|"Trait renamed"*)
+                                printf 'bound' ;;
+    *)                          printf 'needs review' ;;
+  esac
+}
 
 # Look up the human-applied Notes column ($1=section, $2=method) from the
 # existing coverage.md so a rerun does not strip annotations.
@@ -76,81 +88,63 @@ parse_rows() {
   ' "$1"
 }
 
-# Walk handler rows, emit table rows to stdout; emit "total bound" to $1.
-audit_handler_rows() {
-  local stats_out=$1
-  local trait_file="$SRC/engine.rs"
-  local cb_files=( "$SRC/handler"/*.rs )
-  local shim_files=( "$SHIM"/handler_*.cc "$SHIM"/binding.cc )
-  local total=0 bound=0
-  while IFS=$'\t' read -r name line pv; do
-    [[ -z $name ]] && continue
-    total=$((total + 1))
-    local t c s
-    t=$(matches_in "fn $name(" "$trait_file")
-    c=$(matches_in "rust__handler__${name}(" "${cb_files[@]}")
-    s=$(matches_in "RustHandlerBase::${name}(" "${shim_files[@]}")
-    local count=0 paths=()
-    [[ -n $t ]] && { count=$((count + 1)); paths+=("$t"); }
-    [[ -n $c ]] && { count=$((count + 1)); paths+=("$c"); }
-    [[ -n $s ]] && { count=$((count + 1)); paths+=("$s"); }
-    local status
-    case $count in
-      3) status="bound"; bound=$((bound + 1)) ;;
-      0) status="missing" ;;
-      *) status="partial" ;;
-    esac
-    local path_col note
-    path_col=$(IFS=,; printf '%s' "${paths[*]:-}")
-    note=$(lookup_note handler "$name")
-    printf '| `%s` | %s | %s | %s | %s | %s | %s | %s |\n' \
-      "$name" "$line" "$(mark "$t")" "$(mark "$c")" "$(mark "$s")" \
-      "$status" "$path_col" "$note"
-  done < <(parse_rows "$ROOT/docs/api/handler.md")
-  printf '%d %d\n' "$total" "$bound" > "$stats_out"
-}
-
-# Walk handlerton rows, emit table rows to stdout; emit "total bound" to $1.
-audit_hton_rows() {
-  local stats_out=$1
-  local trait_files=( "$SRC/hton.rs" "$SRC/hton"/*.rs )
-  local cb_files=( "$SRC/hton"/*.rs )
-  local shim_files=( "$SHIM"/hton_*.cc )
-  local total=0 bound=0
+# Walk rows from $2 (a docs/api/*.md path); emit table rows to stdout and
+# "total bound unbound needs_review" to $1. $3 selects handler vs hton
+# globs and the row format (handler keeps the source-line column).
+audit_rows() {
+  local stats_out=$1 doc=$2 kind=$3
+  local trait_files cb_files shim_files cb_prefix shim_prefix
+  if [[ $kind == handler ]]; then
+    trait_files=( "$SRC/engine.rs" )
+    cb_files=( "$SRC/handler"/*.rs )
+    shim_files=( "$SHIM"/handler_*.cc "$SHIM"/binding.cc )
+    cb_prefix="rust__handler__"
+    shim_prefix="RustHandlerBase::"
+  else
+    trait_files=( "$SRC/hton.rs" "$SRC/hton"/*.rs )
+    cb_files=( "$SRC/hton"/*.rs )
+    shim_files=( "$SHIM"/hton_*.cc )
+    cb_prefix="rust__hton__"
+    shim_prefix="rust__hton__"
+  fi
+  local total=0 bound=0 unbound=0 deferred=0 review=0
   while IFS=$'\t' read -r name line pv; do
     [[ -z $name ]] && continue
     total=$((total + 1))
     local t c s
     t=$(matches_in "fn $name(" "${trait_files[@]}")
-    c=$(matches_in "rust__hton__${name}(" "${cb_files[@]}")
-    s=$(matches_in "rust__hton__${name}(" "${shim_files[@]}")
-    local count=0 paths=()
-    [[ -n $t ]] && { count=$((count + 1)); paths+=("$t"); }
-    [[ -n $c ]] && { count=$((count + 1)); paths+=("$c"); }
-    [[ -n $s ]] && { count=$((count + 1)); paths+=("$s"); }
-    local status
-    case $count in
-      3) status="bound"; bound=$((bound + 1)) ;;
-      0) status="missing" ;;
-      *) status="partial" ;;
+    c=$(matches_in "${cb_prefix}${name}(" "${cb_files[@]}")
+    s=$(matches_in "${shim_prefix}${name}(" "${shim_files[@]}")
+    local paths=()
+    [[ -n $t ]] && paths+=("$t")
+    [[ -n $c ]] && paths+=("$c")
+    [[ -n $s ]] && paths+=("$s")
+    local note status path_col
+    note=$(lookup_note "$kind" "$name")
+    status=$(classify_final "$t" "$c" "$s" "$note")
+    case "$status" in
+      bound)                  bound=$((bound + 1)) ;;
+      "intentionally unbound") unbound=$((unbound + 1)) ;;
+      deferred)               deferred=$((deferred + 1)) ;;
+      *)                      review=$((review + 1)) ;;
     esac
-    local path_col note
     path_col=$(IFS=,; printf '%s' "${paths[*]:-}")
-    note=$(lookup_note hton "$name")
-    printf '| `%s` | %s | %s | %s | %s | %s | %s |\n' \
-      "$name" "$(mark "$t")" "$(mark "$c")" "$(mark "$s")" \
+    local line_col=""
+    [[ $kind == handler ]] && line_col=" $line |"
+    printf '| `%s` |%s %s | %s | %s | %s | %s | %s |\n' \
+      "$name" "$line_col" "$(mark "$t")" "$(mark "$c")" "$(mark "$s")" \
       "$status" "$path_col" "$note"
-  done < <(parse_rows "$ROOT/docs/api/handlerton.md")
-  printf '%d %d\n' "$total" "$bound" > "$stats_out"
+  done < <(parse_rows "$doc")
+  printf '%d %d %d %d %d\n' "$total" "$bound" "$unbound" "$deferred" "$review" > "$stats_out"
 }
 
-# Build TAB-separated (section, name, note) records from the existing
-# coverage.md so future runs preserve human annotations.
+# Build TAB-separated (section, name, note) records from $1 (a snapshot of
+# the previous coverage.md). Empty/non-existent snapshot is fine.
 build_notes_file() {
-  local existing="$ROOT/docs/api/coverage.md"
+  local snapshot=$1
   NOTES_FILE="$TMPDIR_AUDIT/notes.tsv"
   : > "$NOTES_FILE"
-  [[ -f $existing ]] || return 0
+  [[ -s $snapshot ]] || return 0
   awk -F '|' '
     /^## handler — / { section="handler"; next }
     /^## handlerton — / { section="hton"; next }
@@ -159,7 +153,7 @@ build_notes_file() {
       notes = $(NF-1); sub(/^[ \t]+/, "", notes); sub(/[ \t]+$/, "", notes)
       print section "\t" name "\t" notes
     }
-  ' "$existing" > "$NOTES_FILE"
+  ' "$snapshot" > "$NOTES_FILE"
 }
 
 TMPDIR_AUDIT=""
@@ -169,24 +163,29 @@ trap cleanup EXIT
 main() {
   TMPDIR_AUDIT=$(mktemp -d)
   local tmpdir=$TMPDIR_AUDIT
-  local handler_table hton_table handler_stats hton_stats
-  handler_table="$tmpdir/handler.tbl"
-  hton_table="$tmpdir/hton.tbl"
-  handler_stats="$tmpdir/handler.stats"
-  hton_stats="$tmpdir/hton.stats"
-  build_notes_file
-  audit_handler_rows "$handler_stats" > "$handler_table"
-  audit_hton_rows "$hton_stats" > "$hton_table"
+  local target="$ROOT/docs/api/coverage.md"
+  local snapshot="$tmpdir/existing.md"
+  [[ -f $target ]] && cp "$target" "$snapshot"
+  local handler_table="$tmpdir/handler.tbl"
+  local hton_table="$tmpdir/hton.tbl"
+  local handler_stats="$tmpdir/handler.stats"
+  local hton_stats="$tmpdir/hton.stats"
+  build_notes_file "$snapshot"
+  audit_rows "$handler_stats" "$ROOT/docs/api/handler.md" handler > "$handler_table"
+  audit_rows "$hton_stats" "$ROOT/docs/api/handlerton.md" hton > "$hton_table"
 
-  local handler_total handler_bound hton_total hton_bound
-  read -r handler_total handler_bound < "$handler_stats"
-  read -r hton_total hton_bound < "$hton_stats"
+  local handler_total handler_bound handler_unbound handler_deferred handler_review
+  local hton_total hton_bound hton_unbound hton_deferred hton_review
+  read -r handler_total handler_bound handler_unbound handler_deferred handler_review < "$handler_stats"
+  read -r hton_total hton_bound hton_unbound hton_deferred hton_review < "$hton_stats"
 
+  {
   cat <<'EOF'
 <!--
-Regenerate this file with `scripts/audit-bind-coverage.sh > docs/api/coverage.md`.
-Annotations in the "Notes" column are preserved manually after each rerun;
-the script overwrites everything else.
+Regenerate this file with `scripts/audit-bind-coverage.sh` (writes in place).
+The script preserves the "Notes" column from the previous version of this
+file via an internal snapshot, so human-applied annotations survive reruns;
+every other column is recomputed.
 -->
 
 # API Bind Coverage
@@ -200,26 +199,33 @@ surface (documented in [`handler.md`](handler.md) and
 
 - **T / C / S** — presence in trait (T), `rust__*` callback (C), and
   shim override (S). `✓` if found, `✗` if not.
-- **Status** — `bound` when T + C + S are all present;
-  `partial` when 1 or 2 layers exist; `missing` when none do.
+- **Status** — verdict produced by combining the auto T/C/S detection
+  with the Notes column. Possible values: `bound`,
+  `intentionally unbound` (genuinely unbindable, not a placeholder),
+  `deferred` (bind path known, follow-up tracked in the Notes), or
+  `needs review` (annotation missing or ambiguous).
 - **Bind path** — basenames of the files matched, for navigation.
 
 EOF
-  printf '## handler — %d / %d bound\n\n' "$handler_bound" "$handler_total"
+  printf '## handler — %d bound, %d deferred, %d intentionally unbound (%d total)\n\n' \
+    "$handler_bound" "$handler_deferred" "$handler_unbound" "$handler_total"
   echo "| Method | handler.h Line | T | C | S | Status | Bind path | Notes |"
   echo "| ------ | -------------- | - | - | - | ------ | --------- | ----- |"
   cat "$handler_table"
   echo ""
-  printf '## handlerton — %d / %d bound\n\n' "$hton_bound" "$hton_total"
+  printf '## handlerton — %d bound, %d deferred, %d intentionally unbound (%d total)\n\n' \
+    "$hton_bound" "$hton_deferred" "$hton_unbound" "$hton_total"
   echo "| Callback | T | C | S | Status | Bind path | Notes |"
   echo "| -------- | - | - | - | ------ | --------- | ----- |"
   cat "$hton_table"
   echo ""
 
-  local missing=$((handler_total - handler_bound + hton_total - hton_bound))
-  if [[ $missing -gt 0 ]]; then
-    printf '_%d rows are not fully bound. Review each row above and ' "$missing" >&2
-    printf 'either close the gap or annotate Notes._\n' >&2
+  } > "$target"
+
+  local open=$((handler_deferred + hton_deferred + handler_review + hton_review))
+  if [[ $open -gt 0 ]]; then
+    printf '_%d rows are still open (deferred + needs review). ' "$open" >&2
+    printf 'Bind them or refine the Notes annotation._\n' >&2
     return 1
   fi
 }
