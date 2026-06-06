@@ -114,18 +114,34 @@ pub unsafe extern "C" fn rust__hton__push_to_engine(
     })
 }
 
-/// `get_cost_constants`. The C signature returns an engine-allocated
-/// `SE_cost_constants*` that MySQL takes ownership of. The shim cannot
-/// safely allocate one through the opaque pass-through today; this FFI
-/// symbol is bound for completeness but the handlerton pointer stays NULL.
+/// Engine-specific optimizer cost constants for `storage_category`. The
+/// engine writes `memory_block_read_cost` / `io_block_read_cost` through
+/// the out pointers and returns `true` when it wants the shim to allocate
+/// a `SE_cost_constants` subclass on its behalf; returning `false` (or
+/// no handlerton) keeps MySQL's defaults.
 ///
 /// # Safety
-/// Takes no MySQL-owned pointer.
+/// `memory_out` / `io_out` are non-null `double *` writable for one f64
+/// each; the shim provides stack-local slots for the duration of one
+/// `get_cost_constants` callback.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rust__hton__get_cost_constants(storage_category: u32) {
-    FfiBoundary::run_void(|| {
-        if let Some(h) = runtime::handlerton() {
-            h.get_cost_constants(storage_category);
-        }
-    });
+pub unsafe extern "C" fn rust__hton__get_cost_constants(
+    storage_category: u32,
+    memory_out: *mut f64,
+    io_out: *mut f64,
+) -> bool {
+    FfiBoundary::run_default(false, || match runtime::handlerton() {
+        Some(h) => match h.get_cost_constants(storage_category) {
+            Some(cc) => {
+                // SAFETY: shim guarantees memory_out / io_out are writable.
+                unsafe {
+                    *memory_out = cc.memory_block_read_cost();
+                    *io_out = cc.io_block_read_cost();
+                }
+                true
+            }
+            None => false,
+        },
+        None => false,
+    })
 }

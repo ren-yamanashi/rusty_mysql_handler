@@ -39,6 +39,7 @@ pub mod capability_ffi;
 #[doc(hidden)]
 pub mod clone;
 mod clone_kind;
+mod cost_constants;
 #[doc(hidden)]
 pub mod database;
 #[doc(hidden)]
@@ -98,6 +99,7 @@ mod xa_state_list_collector;
 pub use binlog_kind::{BinlogCommand, BinlogFunc};
 pub use capabilities::HtonCapabilities;
 pub use clone_kind::{HaCloneMode, HaCloneType};
+pub use cost_constants::CostConstants;
 pub use dict_kind::{DictInitMode, DictRecoveryMode};
 pub use flags::HtonFlags;
 pub use notification_kind::{HaNotificationType, SelectExecutedIn};
@@ -974,14 +976,12 @@ pub trait Handlerton: Send + Sync {
         Ok(())
     }
 
-    /// Provide engine-specific optimizer cost constants. The C signature
-    /// returns an engine-allocated `SE_cost_constants*` that MySQL takes
-    /// ownership of; today the shim cannot allocate one safely through the
-    /// opaque pass-through, so this trait method is bound for completeness
-    /// but the FFI pointer stays NULL on the handlerton. Engines wanting
-    /// custom costs will need a follow-up that allocates through a setter
-    /// reverse-callback.
-    fn get_cost_constants(&self, _storage_category: u32) {}
+    /// Provide engine-specific optimizer cost constants for
+    /// `storage_category` (raw MySQL `Cost_constants_storage_category` value).
+    /// Return [`None`] to keep MySQL's defaults; return [`Some`] to override.
+    fn get_cost_constants(&self, _storage_category: u32) -> Option<CostConstants> {
+        None
+    }
 
     /// Notification that MySQL is swapping the connection's native engine
     /// transaction. The `void *` / `void **` arguments are opaque to Rust
