@@ -102,11 +102,12 @@ CREATE TABLE t (id INT) ENGINE=MY_ENGINE;
 
 ## 📊 Performance
 
-[`tests/sysbench/RESULTS.md`](./tests/sysbench/RESULTS.md).
+See [peformance result](./tests/sysbench/RESULTS.md).
 
 ## ❗ Issue
 
 [Open an issue](https://github.com/ren-yamanashi/rusty_mysql_handler/issues).
+
 
 ## ©️ License
 
