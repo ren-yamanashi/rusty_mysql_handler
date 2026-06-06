@@ -23,7 +23,7 @@ surface (documented in [`handler.md`](handler.md) and
   `needs review` (annotation missing or ambiguous).
 - **Bind path** — basenames of the files matched, for navigation.
 
-## handler — 157 bound, 1 deferred, 0 intentionally unbound (158 total)
+## handler — 158 bound, 0 deferred, 0 intentionally unbound (158 total)
 
 | Method | handler.h Line | T | C | S | Status | Bind path | Notes |
 | ------ | -------------- | - | - | - | ------ | --------- | ----- |
@@ -129,7 +129,7 @@ surface (documented in [`handler.md`](handler.md) and
 | `records_from_index` | 5478 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
 | `estimate_rows_upper_bound` | 5522 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
 | `calculate_key_hash_value` | 5775 | ✓ | ✓ | ✓ | bound | engine.rs,records.rs,handler_records.cc |  |
-| `store_lock` | 6083 | ✗ | ✗ | ✓ | deferred | binding.cc | Deferred: shim hard-codes the canonical `update_lock_type` dance today; the planned binding is a trait method that lets the engine return its preferred `THR_LOCK_DATA` type. Follow-up: p9-03. |
+| `store_lock` | 6083 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,binding.cc |  |
 | `external_lock` | 6763 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |
 | `lock_count` | 6050 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |
 | `unlock_row` | 5908 | ✓ | ✓ | ✓ | bound | engine.rs,locking.rs,handler_locking.cc |  |

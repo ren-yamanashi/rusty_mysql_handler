@@ -182,8 +182,13 @@ int RustHandlerBase::info(uint flag) {
 
 THR_LOCK_DATA **RustHandlerBase::store_lock(THD *, THR_LOCK_DATA **to,
                                             enum thr_lock_type lock_type) {
-  if (lock_type != TL_IGNORE && lock_data_.type == TL_UNLOCK)
-    lock_data_.type = lock_type;
+  enum thr_lock_type chosen = lock_type;
+  if (rust_ctx_) {
+    chosen = static_cast<enum thr_lock_type>(
+        rust__handler__store_lock(rust_ctx_, static_cast<int32_t>(lock_type)));
+  }
+  if (chosen != TL_IGNORE && lock_data_.type == TL_UNLOCK)
+    lock_data_.type = chosen;
   *to++ = &lock_data_;
   return to;
 }
